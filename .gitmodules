@@ -1,0 +1,6 @@
+[submodule "easy-pdk-programmer-software"]
+	path = easy-pdk-programmer-software
+	url = https://github.com/free-pdk/easy-pdk-programmer-software.git
+[submodule "easy-pdk-programmer-hardware"]
+	path = easy-pdk-programmer-hardware
+	url = https://github.com/free-pdk/easy-pdk-programmer-hardware.git

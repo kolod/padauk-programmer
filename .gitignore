@@ -1,0 +1,11 @@
+# PADAUK datasheets: copyrighted by PADAUK, kept locally only (see docs/README.md)
+docs/*.pdf
+
+# Personal editor / tool state
+.vscode/
+.remember/
+
+# Build output
+build/
+*.o
+*.elf
