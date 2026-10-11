@@ -1,0 +1,9 @@
+# Line endings: LF in the repository and in every working copy, whatever core.autocrlf says.
+# Test vectors hash file bytes (e.g. source_crc32 of *.ihx), so they must not depend on the OS.
+* text=auto eol=lf
+
+*.bin binary
+*.pdf binary
+*.png binary
+*.jpg binary
+*.zip binary
