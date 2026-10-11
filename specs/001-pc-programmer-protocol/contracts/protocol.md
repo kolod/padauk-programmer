@@ -1,0 +1,448 @@
+# Contract: протокол PC ⇄ програматор (protocol version 1.0)
+
+Транспорт — USB CDC ACM. Швидкість порту ігнорується. Усі багатобайтові поля — little-endian.
+CRC — CRC-32/ISO-HDLC (`zlib.crc32`). Формат пакета прошивки — [package-format.md](package-format.md).
+
+## 1. Кадр
+
+На лінії кожен кадр — це COBS-кодований блок, за яким іде байт `0x00`. Після декодування COBS:
+
+| Off | Тип | Поле | Опис |
+|---|---|---|---|
+| 0 | `u8` | `type` | `0x01` REQ (клієнт→програматор), `0x02` RSP, `0x03` EVT, `0x04` NAK |
+| 1 | `u8` | `flags` | 0 (зарезервовано) |
+| 2 | `u16` | `seq` | REQ/RSP — номер запиту; EVT — лічильник подій програматора; NAK — `0xFFFF` |
+| 4 | `u16` | `code` | ID команди (REQ/RSP) або події (EVT) |
+| 6 | `u16` | `status` | RSP — код результату (§6); REQ/EVT/NAK — 0 або `FRAME_ERROR` для NAK |
+| 8 | `u16` | `len` | довжина `payload`, ≤ `max_payload` |
+| 10 | `u8[len]` | `payload` | |
+| 10+len | `u32` | `crc32` | CRC байтів `0 … 9+len` |
+
+Розмір декодованого кадру: 14 + `len`. `max_payload` протоколу — 1024; програматор повідомляє власний
+(на F072 — 512), клієнт MUST використовувати менше з двох.
+
+**Ці поля кадру та команди `GET_INFO`/`HELLO` заморожені для всіх мажорних версій.**
+
+## 2. Надійність (stop-and-wait)
+
+1. Клієнт має щонайбільше один незавершений REQ. Кожен **новий** запит — `seq = (prev + 1) mod 65536`.
+2. Програматор приймає кадр, перевіряє COBS, довжину, CRC. Помилка → `NAK` (без виконання).
+3. Якщо `seq` == `seq` попереднього прийнятого запиту — програматор надсилає **збережену відповідь**
+   повторно, нічого не виконуючи.
+4. Клієнт повторює той самий REQ (з тим самим `seq`), якщо: отримав `NAK`; отримав пошкоджений RSP;
+   не отримав RSP за **300 мс**. Після **5** невдалих повторів сесія вважається втраченою.
+5. Програматор MUST відповісти на кожен REQ за ≤ **100 мс** від прийому (FR-024).
+6. Відкриття/закриття порту (зміна DTR) скидає кеш відповіді й сесію.
+7. Кадри EVT можуть з'являтися в будь-який момент між RSP; клієнт розрізняє їх за `type`.
+
+## 3. Сесія та версії
+
+- До успішного `HELLO` у поточній сесії порту дозволені лише `HELLO` і `GET_INFO`; інші → `NO_SESSION`.
+- `HELLO` з несумісною мажорною версією → `PROTO_VERSION` (у payload — інформація як у `GET_INFO`);
+  сесія не відкривається.
+- Невідомий `code` → `UNKNOWN_COMMAND`, сесія не розривається (нові мінорні команди).
+- Мінорна версія росте при додаванні команд/подій/полів у кінці payload; клієнт MUST ігнорувати зайві
+  байти в кінці payload відповіді. Мажорна — при несумісних змінах.
+
+## 4. Команди
+
+Позначення: `→` payload запиту, `←` payload відповіді при `status = OK`. При помилці payload відповіді
+порожній, якщо не сказано інше.
+
+### Сесія та інформація
+
+| Code | Ім'я | → | ← | Під час операції |
+|---|---|---|---|---|
+| `0x0001` | `HELLO` | `u8 proto_major, u8 proto_minor, char client[≤32]` | `INFO` | ✓ |
+| `0x0002` | `GET_INFO` | — | `INFO` | ✓ |
+| `0x0003` | `GET_STATUS` | — | `STATUS` | ✓ |
+| `0x0004` | `LIST_CHIPS` | `u8 first_index` | `u8 total, u8 count, CHIP_DESC[count]` | ✗ |
+
+**`INFO`**:
+
+| Тип | Поле |
+|---|---|
+| `u8, u8` | `proto_major`, `proto_minor` |
+| `u16` | `max_payload` |
+| `u32` | `max_package_size` — найбільший пакет для запису (ємність слота; F072 — 8192) |
+| `u16` | `max_read_words` — найбільше слів для `READ` (F072 — 4096) |
+| `u32` | `capabilities` (біт0 автономний режим, біт1 калібрування, біт2 RUN/UART, біт3 COPY, біт4 вимірювання VDD/VPP, біт5 `SELF_TEST`, біт6 `PATCH`) |
+| `char[16]` | `platform` (напр. `"stm32f072c8"`) |
+| `char[24]` | `firmware_version` |
+| `u8` | `chip_table_size` |
+
+**`STATUS`**:
+
+| Тип | Поле |
+|---|---|
+| `u8` | `state`: 0 idle, 1 upload, 2 operation, 3 running (RUN) |
+| `u16` | `op_id` поточної/останньої операції (0 — не було) |
+| `u8` | `op_type`, `u8 op_stage`, `u8 op_percent` |
+| `u8` | `pkg_state`: 0 empty, 1 valid, 2 corrupted |
+| `u32` | `pkg_crc32` (0, якщо empty) |
+| `u32, u32` | `ok_count`, `fail_count` |
+| `u8` | `flags`: біт0 `MASTER_RESTORE_PENDING` (еталон змінено й не відновлено), біт1 `LOCAL_START_BLOCKED` (локальний запуск запису замінюється самоперевіркою) |
+| `u8 × 3` | `copy_cfg` — режими калібрування для локального `COPY`: `mode_ihrc`, `mode_ilrc`, `bg_restore` (див. `CONFIG_SET`) |
+| `u8` | `selftest_state`: 0 не виконувалась, 1 виконується, 2 пройдено, 3 не пройдено, 4 мікросхему підключено |
+
+**`CHIP_DESC`** (48 байт):
+
+| Тип | Поле |
+|---|---|
+| `u8` | `index` |
+| `u16` | `chip_id12` |
+| `u8` | `family` (`0x12`,`0x21`,`0x22`,`0x31`,`0xF1`,`0xF2`) |
+| `u16` | `code_words` |
+| `u8` | `code_bits` |
+| `u16` | `ram_bytes` |
+| `u8` | `ops`: біт0 read, біт1 write, біт2 erase, біт3 calibrate |
+| `u16, u16` | `reserved_start`, `reserved_end` (включно; `0xFFFF` — немає) |
+| `u8` | `reserved_first_word` (1 — адреса 0 службова) |
+| `char[33]` | назви через `/`, напр. `"PMS150C/PMS15A"`, NUL-доповнені (≤ 32 символи + NUL) |
+
+### Пакет прошивки та сховище
+
+| Code | Ім'я | → | ← | Під час операції |
+|---|---|---|---|---|
+| `0x0010` | `PKG_BEGIN` | `Header` (128 Б) | `u32 package_size` | ✗ |
+| `0x0011` | `PKG_DATA` | `u32 offset, u8 data[]` | `u32 received` | ✗ |
+| `0x0012` | `PKG_COMMIT` | — | `u32 package_crc32, u8 calib_sites, u8 serial_sites, u16 effective_words` (`calib_sites = 0` → клієнт показує попередження, FR-050) | ✗ |
+| `0x0013` | `PKG_ABORT` | — | — | ✗ |
+| `0x0014` | `PKG_INFO` | — | `u8 pkg_state, u32 package_crc32, Header` | ✓ |
+| `0x0015` | `PKG_READ` | `u32 offset, u16 len` | `u8 data[len]` | ✗ |
+| `0x0016` | `PKG_DELETE` | — | — | ✗ |
+| `0x0017` | `PKG_CHECK` | — | `u8 pkg_state, u32 computed_crc32` | ✗ |
+| `0x0018` | `STATS_GET` | — | `u32 ok, u32 fail` | ✓ |
+| `0x0019` | `STATS_RESET` | — (обнулити ok/fail) | — | ✗ |
+| `0x001A` | `CONFIG_GET` | — | `u8 mode_ihrc, u8 mode_ilrc, u8 bg_restore` | ✓ |
+| `0x001B` | `CONFIG_SET` | `u8 mode_ihrc` (0 або 2), `u8 mode_ilrc` (0), `u8 bg_restore` (0/1); типово `0, 0, 1` | — | ✗ |
+
+Правила завантаження:
+
+- `PKG_BEGIN` починає завантаження в неактивний слот; попередній пакет лишається активним.
+- `PKG_BEGIN` містить копію заголовка лише для ранньої перевірки. Сам пакет **повністю** (з
+  заголовком) передається через `PKG_DATA`, починаючи з `offset = 0`. `PKG_DATA.offset` MUST
+  дорівнювати кількості вже прийнятих байтів; інше значення → `PKG_OFFSET`, у payload помилки —
+  `u32 expected`. Перші 128 байт даних MUST збігатися із заголовком з `PKG_BEGIN`, інакше
+  `PKG_HEADER_INVALID`.
+- `PKG_COMMIT` дозволений лише коли прийнято `package_size` байтів. При помилці валідації payload
+  відповіді — `u16 addr` (адреса проблемного слова або `0xFFFF`). Успіх робить пакет активним.
+- Будь-яка помилка або `PKG_ABORT`, обрив сесії — завантаження скасовується, активний пакет без змін.
+
+### Операції з мікросхемою
+
+| Code | Ім'я | → | ← | Під час операції |
+|---|---|---|---|---|
+| `0x0020` | `OP_START` | `u8 op_type, u8 op_flags, u16 chip_id12, u16 param, u8 ext[]` | `u16 op_id` | ✗ (`BUSY`) |
+| `0x0021` | `OP_CANCEL` | `u16 op_id` | — | ✓ |
+| `0x0022` | `OP_RESULT` | `u16 op_id` (0 — остання) | `RESULT` | ✓ |
+| `0x0023` | `RESULT_READ` | `u32 offset, u16 len` | `u8 data[len]` | ✗ |
+| `0x0030` | `UART_TX` | `u8 data[]` | — | ✓ (лише RUN) |
+
+`op_type`:
+
+| Код | Операція | `chip_id12` | `param` | Етапи (`op_stage`) |
+|---|---|---|---|---|
+| `0x01` | `PROBE` | — | — | `ID` |
+| `0x02` | `READ` | тип для читання (0 — з `PROBE`, якщо однозначно) | — | `ID`, `READ` |
+| `0x03` | `ERASE` | тип (0 — з активного пакета) | — | `ID`, `ERASE`, `BLANK_CHECK` |
+| `0x04` | `BLANK_CHECK` | тип (0 — з пакета) | — | `ID`, `BLANK_CHECK` |
+| `0x05` | `PROGRAM` | — (з пакета) | — | `PKG_CHECK`, `ID`, `ERASE`, `BLANK_CHECK`, `WRITE`, `VERIFY`, `CALIBRATE`, `FUSE`, `FINAL_VERIFY` |
+| `0x06` | `VERIFY` | — (з пакета) | — | `PKG_CHECK`, `ID`, `VERIFY` (з урахуванням вставок, див. нижче) |
+| `0x07` | `COPY` | тип еталона (0 — з `PROBE`) | — | `ID`, `READ`, `STORE`, [`MEASURE` × n, `RESTORE`, `STORE`] |
+| `0x08` | `RUN` | — | `vdd_mV` (0 — `run_vdd_mV` пакета або 5000) | `RUN` |
+| `0x09` | `RESTORE_MASTER` | — (з активного пакета-дампу) | — | `ID`, `ERASE`, `WRITE`, `VERIFY`, `FUSE` |
+| `0x0A` | `PATCH` | тип мікросхеми (обов'язково) | — | `ID`, `READ`, `WRITE`, `VERIFY` |
+| `0x0B` | `SELF_TEST` | — | — | `ID` (probe), `SELF_TEST` |
+
+`ext` для `COPY` (14 або 46 байт; якщо відсутній — `KEEP_VALUE, KEEP_VALUE, bg_restore = 0`):
+
+| Тип | Поле |
+|---|---|
+| `u8` | `mode_ihrc`: 0 `KEEP_VALUE`, 1 `TARGET_FROM_HOST`, 2 `SNAP_STANDARD`, 3 `MEASURE_MASTER` |
+| `u8` | `mode_ilrc`: 0 `KEEP_VALUE`, 1 `TARGET_FROM_HOST`, 3 `MEASURE_MASTER` (2 → `BAD_PAYLOAD`) |
+| `u8` | `bg_restore`: 0 — перенести значення еталона, 1 — відновити вставку з фіксованою ціллю |
+| `u8` | `copy_flags`: біт0 `ALLOW_MODIFY_MASTER` (обов'язковий, якщо хоч один режим = 3), біт1 `ALLOW_MASTER_LOOP` — дозволити копіювання еталона з вимірювальними циклами (лише з PC; для кожного типу, де знайдено цикл, режим MUST бути `TARGET_FROM_HOST`, інакше `BAD_PAYLOAD`) |
+| `u32` | `target_ihrc_hz` (режим 1 для IHRC) |
+| `u32` | `target_ilrc_hz` (режим 1 для ILRC) |
+| `u16` | `mV` — напруга калібрування копій і вимірювання еталона; 0 → 5000 |
+| `char[32]` | `name` — ім'я нового пакета (необов'язкове; відсутнє або порожнє → `"copy <chip_name> <crc>"`) |
+
+`MEASURE_MASTER` вимірює кожну вставку окремим перезаписом еталона: стирань еталона = кількість
+вставок у режимі 3 + 1. Вставка без сигналу на PA3 протягом 1 с → значення еталона, `site_status =
+COPIED`, попередження `CALIB_VALUE_COPIED`; решта вставок обробляється далі.
+
+Режим 3 для OTP-еталона → `MASTER_NOT_REWRITABLE`; без `ALLOW_MODIFY_MASTER` → `MASTER_MODIFY_NOT_ALLOWED`;
+`COPY` при `MASTER_RESTORE_PENDING` → `MASTER_RESTORE_PENDING` (спершу `RESTORE_MASTER`).
+`COPY` мікросхеми без операції запису в `CHIP_DESC.ops` → `OP_UNSUPPORTED`.
+
+**Вимірювальний цикл в еталоні (FR-051).** Після `READ` програматор шукає в дампі не лише сліди, а й
+вимірювальні цикли (ті самі опкоди, що пише програматор / `easypdkprog`, з довільним значенням у
+`MOV A,#…`). Знайдено хоч один і немає `ALLOW_MASTER_LOOP` → `COPY_MASTER_UNCALIBRATED`, етап `READ`,
+**жодного запису в сховище** (активний пакет без змін); `RESULT.calib[]` містить кожен цикл
+(`site_status = MASTER_LOOP`, `kind`, адреса — у `fail_addr` першого). Локальний запуск завершується
+цим кодом і сигналом неуспіху. Клієнт з PC показує список і питає користувача: «скасувати» або «задати
+ціль» → повторний `OP_START(COPY)` з `ALLOW_MASTER_LOOP` і `TARGET_FROM_HOST` для цих типів (еталон
+читається заново); на місці циклу відновлюється вставка з заданою ціллю, решта слідів — за своїми
+режимами.
+Алгоритм режимів — research R9. `RESTORE_MASTER` успішно знімає `MASTER_RESTORE_PENDING`.
+
+#### `SELF_TEST` (самоперевірка без мікросхеми)
+
+1. `PROBE` при VPP 4.5 В / VDD 2.0 В; мікросхема відповіла → `SELFTEST_CHIP_PRESENT`, вищі напруги не подаються.
+2. VDD (VPP = 0), потім VPP (VDD = 0): кожен рівень — усі різні значення відповідної шини з таблиці мікросхем у порядку зростання, наприкінці кожної шини — 0 В. Кожен рівень встановлюється за правилом §6.1.
+3. Будь-який рівень не досягнуто → `SELFTEST_FAILED` (решта рівнів не виконується, `safe_state`).
+4. `RESULT.levels[]` — по одному запису на рівень; `RESULT.status = OK`, якщо всі рівні пройдено.
+
+Результат зберігається в RAM і показується в `STATUS.selftest_state`; самоперевірка автоматично виконується при кожному старті (`source = 1`).
+
+`op_flags` (лише для `PROGRAM`, накладаються **OR** на прапорці пакета, лише в бік «пропустити»):
+біт0 `SKIP_ERASE`, біт1 `SKIP_BLANK_CHECK`, біт2 `SKIP_VERIFY`, біт3 — зарезервовано (0),
+біт4 `CALIB_FINALIZE_ON_FAIL` (лише з PC: при невдалому калібруванні завершити вставку найкращим
+знайденим значенням), біти 5–7 — зарезервовано (0). Пропустити калібрування наявної вставки не можна.
+
+**Повторна спроба (FR-044).** Залежить лише від вмісту мікросхеми й активного пакета — не від сесії,
+часу чи програматора. FLASH: звичайний `PROGRAM` (стирання + повний запис). OTP, яка не чиста: етап
+`BLANK_CHECK` перевіряє «чиста **або** сумісна з ефективним образом» — для кожного слова
+`(вміст AND ціль) == ціль`, де:
+- калібрувальна вставка: допустимі стани «чиста», «вимірювальний цикл», «завершена з довільним `k`»;
+- вставка серійного номера: усі 8 слів чисті → буде записано новий випадковий номер; усі 8 — `RET #imm` → серійний
+  номер **читається з мікросхеми** й лишається; інший стан → несумісна.
+
+Сумісна → дописати решту, відкалібрувати незавершені вставки, верифікувати; `warnings.RESUMED`,
+`RESULT.serial_written` — фактичний номер. Записувати нічого й калібрування завершені →
+`CHIP_ALREADY_PROGRAMMED`, лічильники не змінюються. Несумісна → `CHIP_NOT_BLANK` з
+`fail_addr/expected/actual`, без жодного запису.
+
+**Серійні номери (FR-046).** Для кожної мікросхеми програматор генерує випадкове 64-бітне число з
+апаратного джерела ентропії (research R18) і пише його у вставку серійного номера; лічильників і
+параметрів немає. Номер, узятий з мікросхеми при повторній спробі, зберігається. `COPY` серійний номер
+не обробляє (FR-052): `warnings.SERIAL_DUPLICATED` нагадує, що номер еталона, якщо він є, продубльовано.
+
+**Верифікація з урахуванням вставок (FR-047)** — для операції `VERIFY` і етапу `VERIFY` у `PROGRAM`:
+
+| Місце | Приймається |
+|---|---|
+| калібрувальна вставка | `VERIFY` (операція): завершена форма з будь-яким `k`; вимірювальний цикл або незавершена вставка → `VERIFY_FAILED` з `fail_addr` і `calib[].site_status = FAILED`. Етап `VERIFY` у `PROGRAM` (до калібрування): вимірювальний цикл |
+| вставка серійного номера | будь-які 8 `RET #imm`; номер повертається в `RESULT.serial_written` |
+| решта слів | точний збіг (біти вище `code_bits` ігноруються) |
+
+`RESULT.calib[]` для `VERIFY` містить фактичні `k` (`value`) з мікросхеми.
+
+**Фінальна перевірка (FR-048).** Етап `FINAL_VERIFY` — останній у `PROGRAM`, після `FUSE`: повне
+читання користувацької пам'яті й **точне** порівняння з ефективним образом, у який підставлено фактичні
+`k` кожної вставки, фактичний серійний номер і записаний fuse. Розбіжність → `VERIFY_FAILED` з
+`fail_addr/expected/actual`. `RESULT.image_crc_raw/norm` обчислюються з цього самого читання. Не
+виконується, якщо операція зупинилась раніше (наприклад, `CALIB_FAILED` без `CALIB_FINALIZE_ON_FAIL`).
+
+**Повторна перевірка пакета під час запису (FR-049).** Під час `WRITE` CRC пакета рахується потоково з
+тих самих даних, що читаються з flash для запису, і порівнюється з `package_crc32` після завершення
+`WRITE`; перед `FUSE` перевірка `PKG_CHECK` повторюється. Розбіжність → `STORE_CORRUPTED`, fuse не
+записується (для OTP мікросхема лишається придатною до повторної спроби, якщо пакет відновлено).
+
+**Невдале калібрування (FR-043).** `CALIB_FAILED` → далі нічого не записується: вставка лишається
+вимірювальним циклом, наступні калібрування й fuse не виконуються, `fail_count` +1 (серійний номер,
+якщо вже записаний, лишається витраченим). З `CALIB_FINALIZE_ON_FAIL` (лише `source = 0`) вставка завершується найкращим значенням,
+решта етапів виконується, `status = CALIB_FAILED`, `warnings.CALIB_FORCED`. Локальний запуск
+(`source = 1`) прапорець ігнорує.
+`SKIP_BLANK_CHECK` для OTP-мікросхеми → `PKG_OTP_BLANK_CHECK_REQUIRED` (запис не починається).
+Дописування в уже записану мікросхему — лише операцією `PATCH`.
+
+#### `PATCH` (дописування окремих слів)
+
+`ext` для `PATCH` (`chip_id12` обов'язковий, пакет не використовується):
+
+| Тип | Поле |
+|---|---|
+| `u8` | `patch_flags`: біт0 `CHECK_ONLY` (лише перевірити, не писати), біт1 `ALLOW_SECURITY_FUSE` |
+| `u8` | `expect_mode`: 0 `RAW` — `expected_crc32` точної суми; 1 `NORMALIZED` — `expected_crc32` нормалізованої суми; 2 `ACTIVE_PACKAGE` — програматор сам обчислює нормалізовану суму з активного пакета (`expected_crc32` ігнорується) |
+| `u32` | `expected_crc32` |
+| `u8` | `count` — 1…64 (для `CHECK_ONLY` може бути 0) |
+| `count` × `{u16 addr, u16 value}` | адреса слова й **нове повне значення** (біти вище розрядності ядра ігноруються) |
+
+Етапи: `ID` → `READ` (уся користувацька пам'ять) → перевірка суми й сумісності → `WRITE` → `VERIFY`.
+
+**Контрольні суми вмісту мікросхеми** (CRC-32 над словами `u16 LE` адрес `0 … code_words−1` у
+порядку зростання, біти вище `code_bits` обнулені, **службові області й `reserved_first_word`
+пропускаються**):
+
+- **точна** (`image_crc_raw`) — слова як є;
+- **нормалізована** (`image_crc_norm`) — перед обчисленням у кожному розпізнаному сліді калібрування
+  (research R9) безпосереднє значення `MOV A,#k` замінено на 0, а в кожній вставці серійного номера
+  (8 послідовних `RET #imm`) — `imm` замінено на 0. Однакова для всіх мікросхем, записаних тією самою
+  прошивкою, незалежно від індивідуального калібрування й серійного номера.
+- `ACTIVE_PACKAGE`: очікувана `image_crc_norm` обчислюється з ефективного образу активного пакета у
+  вигляді, який він матиме в мікросхемі після `PROGRAM` (незадані слова — усі одиниці або NOP при
+  `SECURE_FILL`; fuse; вставки калібрування — у формі сліду з довільним значенням; серійні номери — будь-які),
+  до якого застосовано **той самий** нормалізатор, що й до вмісту мікросхеми — тож суми збігаються
+  побітово. Немає активного пакета → `STORE_EMPTY`; інша мікросхема в пакеті → `CHIP_ID_MISMATCH`.
+- **Особливі випадки `ACTIVE_PACKAGE`** (усі — відмова `PATCH_IMAGE_MISMATCH` без запису, тобто
+  безпечні): мікросхема з незавершеним калібруванням (вимірювальний цикл після `CALIB_FAILED` чи обриву)
+  — спершу повторна спроба `PROGRAM`; мікросхема, записана іншим інструментом (наприклад, без
+  калібрування) — використовуйте `RAW`/`NORMALIZED` з сумою з `patch --check` еталонної мікросхеми.
+
+Правила:
+
+- Сума вмісту ≠ очікуваній → `PATCH_IMAGE_MISMATCH`; **нічого не записується**; `RESULT` містить
+  обидві фактичні суми.
+- Для кожного слова має виконуватися `(current AND value) == value`, тобто лише переходи 1→0. Перше
+  порушення → `PATCH_CONFLICT`, `RESULT.fail_addr/expected(=value)/actual(=current)`; **нічого не
+  записується**.
+- Обидві перевірки виконуються повністю до першого запису. `CHECK_ONLY` виконує їх і повертає
+  `RESULT` без запису (при `expect_mode = RAW/NORMALIZED` і `expected_crc32 = 0` — лише повертає
+  суми, без порівняння).
+- `VERIFY` перечитує всю користувацьку пам'ять: точна сума має дорівнювати сумі початкового вмісту
+  з застосованими `value`; інакше `VERIFY_FAILED`.
+- Слова, що вже дорівнюють `value`, не пишуться. Інші пишуться блоками мікросхеми, решта слів блоку —
+  усі одиниці (без змін).
+- `addr` у службовій області → `PKG_RESERVED_AREA` з `fail_addr`; `addr` ≥ `code_words` → `BAD_PAYLOAD`.
+- Слово fuse з увімкненням захисту без `ALLOW_SECURITY_FUSE` → `PKG_SECURITY_NOT_ALLOWED`.
+- Дозволено для OTP і FLASH (для FLASH — без стирання). Лише з PC; не запускається локально.
+- `RESULT.data_words` = кількість фактично записаних слів.
+
+Коди етапів: `0x01 PKG_CHECK, 0x02 ID, 0x03 ERASE, 0x04 BLANK_CHECK, 0x05 WRITE, 0x06 VERIFY,
+0x07 CALIBRATE, 0x08 FUSE, 0x09 READ, 0x0A STORE, 0x0B RUN, 0x0C MEASURE, 0x0D RESTORE, 0x0E SELF_TEST, 0x0F FINAL_VERIFY`.
+
+`OP_CANCEL` безпечно зупиняє операцію (напруги знімаються) і завершує її з `CANCELLED`; для `COPY` у
+`MEASURE` — спершу відновлення еталона. Для `RUN` `OP_CANCEL` — це штатна зупинка.
+
+**Обрив сесії (DTR ↓, USB reset/suspend) не перериває операцію (FR-023)**: усі дані вже в програматорі,
+операція виконується до кінця, результат — через `OP_RESULT(0)` після повторного підключення; події під
+час відсутності клієнта не буферизуються. Виняток — `RUN`: зупиняється з безпечним зняттям напруг і
+кодом `HOST_DISCONNECTED`.
+
+**`RESULT`**:
+
+| Тип | Поле |
+|---|---|
+| `u16` | `op_id` |
+| `u8` | `op_type` |
+| `u8` | `source`: 0 — клієнт, 1 — локальний запуск (орган керування, сигнал автомата або автозапуск при старті) |
+| `u16` | `status` (код §6) |
+| `u8` | `stage` — етап завершення / помилки |
+| `u16` | `chip_id_found` (`0` — не знайдено) |
+| `u8` | `family_found` |
+| `u16` | `fail_addr` (`0xFFFF` — н/д) |
+| `u16`, `u16` | `expected`, `actual` (для `VERIFY`/`BLANK_CHECK`) |
+| `u8` | `serial_valid`; `u64 serial_written` |
+| `u16` | `fuse_written` (`0xFFFF` — не писався) |
+| `u32` | `data_words`, `u32 data_crc32` (для `READ`/`COPY`) |
+| `u32` | `elapsed_ms` |
+| `u8` | `calib_count`, далі `calib_count` × `{u8 kind (1 IHRC, 2 ILRC, 3 BG), u8 value, u32 target_hz, u32 measured_hz, u8 mode, u8 master_value, u8 site_status}` (`site_status`: 0 OK, 1 FAILED — не завершено, 2 FORCED — завершено найкращим значенням, 4 COPIED — значення еталона, 5 MASTER_LOOP — в еталоні вимірювальний цикл; 3 — зарезервовано) — для `PROGRAM`: `value` = результат калібрування копії; для `COPY`: `master_value` = `k` еталона, `target_hz` = визначена ціль, `mode` = фактично застосований режим |
+| `u32, u32` | `image_crc_raw`, `image_crc_norm` — суми вмісту мікросхеми наприкінці операції (`READ`, `COPY`, `VERIFY`, `PROGRAM`, `PATCH`; для `PATCH` без запису — поточний вміст); 0 — не обчислювалось |
+| `u8` | `warnings`: біт0 `CALIB_VALUE_COPIED` (ціль не визначено, `k` перенесено), біт1 `CALIB_SNAPPED` (ціль округлено до стандартної), біт2 `MASTER_MODIFIED` (еталон тимчасово змінювався й відновлений), біт3 `RESUMED` (повторна спроба запису OTP), біт4 `CALIB_FORCED` (вставку завершено найкращим значенням після невдачі), біт5 `SERIAL_DUPLICATED` (`COPY`: серійний номер еталона не оброблявся й буде продубльований), біт6 `CALIB_UNRECOGNIZED` (`COPY`: у дампі є `MOV A,#k` безпосередньо перед `MOV IO(reg),A`, де `reg` — `IHRCR`/`ILRCR`/`BGTR` мікросхеми, поза розпізнаними слідами; адреса першого такого місця — у `fail_addr`; копії отримають значення еталона, FR-053) |
+| `u8` | `v_rail` (0 VDD, 1 VPP, `0xFF` — н/д), `u16 v_set_mV`, `u16 v_meas_mV` — для `VDD_FAULT`/`VPP_FAULT`: шина, задана й остання виміряна напруга |
+| `u8` | `level_count`, далі `level_count` × `{u8 rail, u16 set_mV, u16 meas_mV, u16 settle_us, u8 ok}` — для `SELF_TEST` |
+
+`RESULT_READ` читає слова результату останньої `READ` (`2 × data_words` байт; клієнт перевіряє
+`data_crc32`). Дані дійсні до наступного `PKG_BEGIN`, `READ` чи `COPY`.
+
+## 5. Події
+
+| Code | Ім'я | Payload |
+|---|---|---|
+| `0x8001` | `EVT_PROGRESS` | `u16 op_id, u8 op_type, u8 stage, u8 stage_index, u8 stage_count, u8 percent_total` |
+| `0x8002` | `EVT_OP_DONE` | `RESULT` |
+| `0x8003` | `EVT_OP_STARTED` | `u16 op_id, u8 op_type, u8 source` |
+| `0x8004` | `EVT_UART_RX` | `u8 data[]` |
+| `0x8005` | `EVT_UART_LINK` | `u32 baud` |
+| `0x8006` | `EVT_PKG_STATE` | `u8 pkg_state, u32 package_crc32` (після комміту, видалення, виявлення пошкодження) |
+
+`EVT_PROGRESS` надсилається при зміні етапу та не рідше ніж раз на 500 мс. Події не підтверджуються;
+пропуск помітний за розривом `seq` подій.
+
+## 6. Коди статусу
+
+| Код | Ім'я | Коли |
+|---|---|---|
+| `0x0000` | `OK` | |
+| `0x0101` | `FRAME_ERROR` | у `NAK`: COBS/довжина/CRC |
+| `0x0102` | `UNKNOWN_COMMAND` | |
+| `0x0103` | `BAD_PAYLOAD` | неправильна довжина/значення полів |
+| `0x0104` | `PROTO_VERSION` | несумісна мажорна версія |
+| `0x0105` | `NO_SESSION` | команда до `HELLO` |
+| `0x0106` | `BUSY` | триває операція / завантаження |
+| `0x0107` | `NOT_ALLOWED_NOW` | напр. `PKG_DATA` без `PKG_BEGIN`, `UART_TX` без `RUN` |
+| `0x0108` | `INTERNAL` | |
+| `0x0201` | `PKG_CHIP_UNSUPPORTED` | |
+| `0x0202` | `PKG_TOO_LARGE` | |
+| `0x0203` | `PKG_HEADER_INVALID` | |
+| `0x0204` | `PKG_OFFSET` | |
+| `0x0205` | `PKG_CRC_MISMATCH` | |
+| `0x0206` | `PKG_RESERVED_AREA` | |
+| `0x0207` | `PKG_FUSE_CONFLICT` | |
+| `0x0208` | `PKG_SECURITY_NOT_ALLOWED` | |
+| `0x0209` | `PKG_CALIB_UNKNOWN` | |
+| `0x020A` | — | зарезервовано |
+| `0x020B` | `PKG_CHIP_READ_ONLY` | |
+| `0x020C` | `PKG_OTP_BLANK_CHECK_REQUIRED` | `SKIP_BLANK_CHECK` для OTP у пакеті чи `op_flags` |
+| `0x0301` | `STORE_EMPTY` | немає активного пакета |
+| `0x0302` | `STORE_CORRUPTED` | CRC збереженого пакета не збігається |
+| `0x0303` | `STORE_WRITE_FAILED` | помилка програмування flash |
+| `0x0304` | — | зарезервовано |
+| `0x0401` | `CHIP_NOT_FOUND` | |
+| `0x0402` | `CHIP_ID_MISMATCH` | `RESULT.chip_id_found` містить фактичний ID |
+| `0x0403` | `CHIP_NOT_BLANK` | |
+| `0x0404` | `VERIFY_FAILED` | |
+| `0x0405` | `CALIB_FAILED` | частота поза допуском ±10 % або немає сигналу; після вимірювального циклу нічого не записано (крім `CALIB_FINALIZE_ON_FAIL`) |
+| `0x0406` | `CHIP_PROTECTED` | |
+| `0x0407` | `VDD_FAULT` | |
+| `0x0408` | `VPP_FAULT` | |
+| `0x0409` | `OP_UNSUPPORTED` | напр. `ERASE` для OTP |
+| `0x040A` | `CANCELLED` | |
+| `0x040B` | `HOST_DISCONNECTED` | лише `RUN`: зупинено через обрив сесії |
+| `0x040C` | `MASTER_NOT_REWRITABLE` | `MEASURE_MASTER` для OTP-еталона |
+| `0x040D` | `MASTER_RESTORE_PENDING` | є незавершене відновлення еталона |
+| `0x040E` | `MASTER_MODIFY_NOT_ALLOWED` | `MEASURE_MASTER` без `ALLOW_MODIFY_MASTER` |
+| `0x040F` | `PATCH_CONFLICT` | дописування потребує переходу 0→1 |
+| `0x0410` | `PATCH_IMAGE_MISMATCH` | сума вмісту мікросхеми не дорівнює очікуваній |
+| `0x0411` | `SELFTEST_CHIP_PRESENT` | самоперевірка: мікросхема підключена |
+| `0x0412` | `SELFTEST_FAILED` | самоперевірка: рівень напруги не досягнуто (деталі в `RESULT.levels[]`) |
+| `0x0413` | `CHIP_ALREADY_PROGRAMMED` | повторний запис OTP: вміст уже дорівнює ефективному образу, калібрування завершені |
+| `0x0414` | `COPY_MASTER_UNCALIBRATED` | `COPY`: в еталоні знайдено вимірювальний цикл; у сховище нічого не записано |
+
+### 6.1. Встановлення напруг (FR-040)
+
+Після кожної зміни VDD або VPP обмін із мікросхемою продовжується лише коли (а) минула мінімальна
+пауза етапу (100 мкс після VPP при вході в режим, 500 мкс після VDD, 1 мс при переході на напруги
+читання, 10 мс — запису/стирання) **і** (б) 3 послідовні виміри відрізняються від заданої не більше ніж
+на ±2 % або ±30 мВ (більше з двох). Не досягнуто за 20 мс → безпечний стан, `VDD_FAULT`/`VPP_FAULT`,
+`RESULT.v_rail/v_set_mV/v_meas_mV`. Те саме правило — для 0 В при знятті напруг.
+
+## 7. Відповідність командам `easypdkprog` (FR-030)
+
+| `easypdkprog` | Послідовність |
+|---|---|
+| `list` | `LIST_CHIPS` |
+| `probe` | `OP_START(PROBE)` → `EVT_OP_DONE` |
+| `-n X read f` | `OP_START(READ, id(X))` → `RESULT_READ` × k → файл |
+| `-n X write f [--fuse --allowsecfuse --securefill --noerase --noblankchk --noverify] [--name NAME] [--label TEXT]`; `--nocalibrate` клієнт відхиляє з поясненням «приберіть макрос калібрування з прошивки»; `--serial` — «серійний номер генерується автоматично (випадковий)» | побудова пакета з прапорцями (ім'я за замовчуванням — ім'я файлу) → `PKG_BEGIN/DATA/COMMIT` → `OP_START(PROGRAM)` |
+| `-n X erase` | `OP_START(ERASE, id(X))` |
+| `start [-r V]` | `OP_START(RUN, param=V)` → `EVT_UART_*` / `UART_TX` → `OP_CANCEL` |
+| *(розширення)* `copy [--ihrc keep\|target\|snap\|measure] [--ilrc keep\|target\|measure] [--bg keep\|restore] [--ihrc-freq HZ] [--ilrc-freq HZ] [--calib-mv MV] [--allow-modify-master]` | `OP_START(COPY, ext)` |
+| *(розширення)* `restore-master` | `OP_START(RESTORE_MASTER)` |
+| *(розширення)* `selftest` | підтвердження «панелька порожня» → `OP_START(SELF_TEST)` |
+| *(розширення)* `-n X patch ADDR=VALUE … (--expect-crc CRC [--normalized] \| --expect-package) [--check] [--allowsecfuse]` | `OP_START(PATCH, id(X), ext)`; `-n X patch --check` без очікуваної суми — лише показати суми мікросхеми |
+| `--noblankchk` для OTP | клієнт відмовляє ще до відправки; програматор — `PKG_OTP_BLANK_CHECK_REQUIRED` |
+
+## 8. Приклад обміну
+
+```
+C→P  REQ  seq=1  HELLO       01 00 "padauk-cli 0.1"
+P→C  RSP  seq=1  OK          INFO
+C→P  REQ  seq=2  PKG_BEGIN   <header 128 B>
+P→C  RSP  seq=2  OK          package_size=6660
+C→P  REQ  seq=3  PKG_DATA    offset=0, 500 B          (кадр пошкоджено на лінії)
+P→C  NAK                     FRAME_ERROR
+C→P  REQ  seq=3  PKG_DATA    offset=0, 500 B          (повтор)
+P→C  RSP  seq=3  OK          received=500
+ …
+C→P  REQ  seq=17 PKG_COMMIT
+P→C  RSP  seq=17 OK          crc=0x1234ABCD calib=1 serial=0 words=2047
+C→P  REQ  seq=18 OP_START    PROGRAM
+P→C  RSP  seq=18 OK          op_id=7
+P→C  EVT  #1     EVT_OP_STARTED op=7 PROGRAM source=host
+P→C  EVT  #2     EVT_PROGRESS   op=7 ERASE 3/8 20%
+ …
+P→C  EVT  #9     EVT_OP_DONE    RESULT{status=OK, calib: IHRC 0x5A 8000000→7998200 Hz}
+```
