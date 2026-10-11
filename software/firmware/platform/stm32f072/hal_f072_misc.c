@@ -6,6 +6,7 @@
 #include "hal_platform.h"
 #include "hal_time.h"
 #include "hal_ui.h"
+#include "tusb.h"
 
 /* ---------------- time: SysTick 1 ms + TIM2 (32 bit) at 1 MHz ---------------- */
 static volatile uint32_t ms_ticks;
@@ -146,4 +147,19 @@ void f072_ui_poll(void)
         if (stable)
             pdk_local_start(PDK_LOCAL_PROGRAM);
     }
+}
+
+/* ---------------- platform hooks ---------------- */
+void platform_ic_lines_hiz(void)
+{
+    GPIOB->MODER &= ~(0x3FFu << 6);   /* PB3..PB7 inputs */
+    GPIOB->PUPDR &= ~(0x3FFu << 6);
+}
+
+void USB_IRQHandler(void) { tud_int_handler(0); }
+
+void platform_usb_init(void)
+{
+    RCC->APB1ENR |= RCC_APB1ENR_USBEN;   /* PA11/PA12 need no alternate function on F072 */
+    tud_init(0);
 }

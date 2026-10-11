@@ -1,15 +1,16 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* Chip engine stub for the bring-up target: the bit-level PADAUK algorithms come with feature
- * 002-chip-engine. Every primitive answers OP_UNSUPPORTED and leaves the chip in the safe state. */
+/* Chip engine stub for MCU platforms without the engine yet: the bit-level PADAUK algorithms come
+ * with feature 002-chip-engine. Every primitive answers OP_UNSUPPORTED and leaves the chip in the
+ * safe state. */
 #include "chip_engine.h"
-#include "f072.h"
 #include "hal_power.h"
+#include "platform_common.h"
 #include "proto/proto_defs.h"
 
 void chip_engine_safe_state(void)
 {
     hal_power_off_all();
-    GPIOB->MODER &= ~(0x3FFu << 6);   /* PB3..PB7 inputs */
+    platform_ic_lines_hiz();
 }
 
 uint16_t chip_engine_probe(uint16_t *id12, uint8_t *family, chip_poll_fn poll)

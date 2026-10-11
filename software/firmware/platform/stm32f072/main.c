@@ -11,7 +11,7 @@ int main(void)
     f072_time_init();
     f072_power_init();
     f072_ui_init();
-    f072_usb_init();
+    platform_usb_init();
     pdk_core_init();
 
     for (;;) {

@@ -106,7 +106,9 @@ software/
 │   │   └── chips/                    # chip_table.c, calib_sites.c, calib_footprint.c, serial_sites.c
 │   ├── hal/                          # hal_flash.h, hal_crc.h, hal_transport.h, hal_power.h, hal_entropy.h, hal_ui.h, chip_engine.h
 │   ├── platform/
+│   │   ├── common/                   # спільне для STM32: USB CDC (TinyUSB), заглушка chip_engine
 │   │   ├── stm32f072/                # ціль налагодження: startup, linker (розмітка flash), LL, TinyUSB CDC, hal_*.c
+│   │   ├── stm32f411/                # кандидат: WeAct MiniSTM32F4x1 + W25Q64 (пакети й журнал у SPI flash); без схеми VDD/VPP
 │   │   ├── <main-mcu>/               # основна МК — наступна специфікація
 │   │   └── host/                     # mock flash з «обривом живлення», модель живлення (з несправностями), модель мікросхеми, pdk-sim (stdio/TCP)
 │   └── tests/                        # модульні тести ядра (CTest)

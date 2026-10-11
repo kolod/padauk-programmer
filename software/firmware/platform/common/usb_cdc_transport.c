@@ -1,16 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* USB CDC transport through TinyUSB; the port counts as open while the host asserts DTR. */
-#include "f072.h"
+/* USB CDC transport through TinyUSB, shared by the STM32 platforms. The port counts as open while
+ * the host asserts DTR. */
 #include "hal_transport.h"
 #include "tusb.h"
-
-void USB_IRQHandler(void) { tud_int_handler(0); }
-
-void f072_usb_init(void)
-{
-    RCC->APB1ENR |= RCC_APB1ENR_USBEN;
-    tud_init(0);
-}
 
 size_t hal_transport_read(uint8_t *buf, size_t max)
 {

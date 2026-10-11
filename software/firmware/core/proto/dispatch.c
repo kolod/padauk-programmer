@@ -6,6 +6,7 @@
 
 #include "chips/chip_table.h"
 #include "hal_flash.h"
+#include "hal_power.h"
 #include "hal_platform.h"
 #include "le.h"
 #include "ops/op_manager.h"
@@ -34,7 +35,12 @@ static const pdk_command_t commands[] = {
 static uint32_t capabilities(void)
 {
     /* Bits are set as the corresponding features are implemented. */
-    return PDK_CAP_MEASURE_POWER;
+    uint32_t caps = 0;
+    uint16_t vdd_max, vpp_max;
+    hal_power_limits(&vdd_max, &vpp_max);
+    if (vdd_max && vpp_max)   /* a board without the supply front end reports 0 V limits */
+        caps |= PDK_CAP_MEASURE_POWER;
+    return caps;
 }
 
 uint16_t dispatch_build_info(uint8_t *out)

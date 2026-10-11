@@ -14,6 +14,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "platform_common.h"
 #include "stm32f0xx.h"
 
 #define F072_HCLK_HZ 48000000u
@@ -26,6 +27,5 @@ void f072_time_init(void);     /* SysTick 1 ms, TIM2 1 MHz free-running */
 void f072_power_init(void);    /* DAC, ADC, −4.8 V pump, 15 V booster */
 void f072_ui_init(void);
 void f072_ui_poll(void);       /* button debounce → pdk_local_start() */
-void f072_usb_init(void);
 
 #endif
