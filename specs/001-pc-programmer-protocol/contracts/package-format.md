@@ -78,6 +78,7 @@ offset          size          поле
 | задане останнє слово (fuse) не суперечить `FUSE_PRESENT`/`fuse` | `PKG_FUSE_CONFLICT` |
 | fuse з образу із захистом без `ALLOW_SECURITY_FUSE` | `PKG_SECURITY_NOT_ALLOWED` |
 | усі вставки калібрування розпізнано | `PKG_CALIB_UNKNOWN` |
+| не більше 16 вставок калібрування (`addr` — 17-а) | `BAD_PAYLOAD` |
 
 Біти слова вище розрядності ядра мікросхеми ігноруються.
 

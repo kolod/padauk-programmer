@@ -98,7 +98,7 @@ CRC — CRC-32/ISO-HDLC (`zlib.crc32`). Формат пакета прошивк
 | `u8` | `ops`: біт0 read, біт1 write, біт2 erase, біт3 calibrate |
 | `u16, u16` | `reserved_start`, `reserved_end` (включно; `0xFFFF` — немає) |
 | `u8` | `reserved_first_word` (1 — адреса 0 службова) |
-| `char[34]` | назви через `/`, напр. `"PMS150C/PMS15A"` |
+| `char[33]` | назви через `/`, напр. `"PMS150C/PMS15A"`, NUL-доповнені (≤ 32 символи + NUL) |
 
 ### Пакет прошивки та сховище
 
