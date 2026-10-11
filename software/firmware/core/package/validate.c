@@ -7,20 +7,38 @@
 #include "proto/proto_defs.h"
 #include "storage/slots.h"
 
+void pkg_slot_reader_init(pkg_slot_reader_t *r, uint8_t slot, uint16_t image_words)
+{
+    r->slot = slot;
+    r->image_words = image_words;
+    r->mask_offset = pkg_mask_offset(image_words);
+    uint32_t mask_bytes = 2u * ((image_words + 15u) / 16u);
+    if (mask_bytes > PKG_READER_MASK_MAX)
+        mask_bytes = PKG_READER_MASK_MAX;
+    memset(r->mask, 0, sizeof r->mask);
+    slots_read(slot, r->mask_offset, r->mask, mask_bytes);
+    r->win_first = 0xFFFF;
+}
+
 uint16_t pkg_slot_word(void *reader, uint16_t addr, bool *defined)
 {
-    const pkg_slot_reader_t *r = reader;
+    pkg_slot_reader_t *r = reader;
     *defined = false;
-    if (addr >= r->image_words)
+    if (addr >= r->image_words || addr / 8u >= PKG_READER_MASK_MAX || !(r->mask[addr / 8u] & (1u << (addr % 8u))))
         return 0xFFFF;
-    uint8_t m;
-    slots_read(r->slot, r->mask_offset + addr / 8u, &m, 1);
-    if (!(m & (1u << (addr % 8u))))
-        return 0xFFFF;
-    uint8_t w[2];
-    slots_read(r->slot, PKG_HEADER_SIZE + 2u * addr, w, 2);
+    if (r->win_first == 0xFFFF || addr < r->win_first || addr >= r->win_first + PKG_READER_WINDOW) {
+        uint16_t first = (uint16_t)(addr - addr % PKG_READER_WINDOW);
+        uint32_t n = (uint32_t)r->image_words - first;
+        if (n > PKG_READER_WINDOW)
+            n = PKG_READER_WINDOW;
+        uint8_t buf[2u * PKG_READER_WINDOW];
+        slots_read(r->slot, PKG_HEADER_SIZE + 2u * first, buf, 2u * n);
+        for (uint32_t i = 0; i < n; i++)
+            r->win[i] = le16(buf + 2u * i);
+        r->win_first = first;
+    }
     *defined = true;
-    return le16(w);
+    return r->win[addr - r->win_first];
 }
 
 uint16_t pkg_validate(const pkg_header_t *h, const chip_info_t *c, word_get_fn get, void *ctx,

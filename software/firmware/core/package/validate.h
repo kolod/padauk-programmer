@@ -20,13 +20,22 @@ typedef struct {
     uint16_t effective_words;   /* words that will be written, without the fuse */
 } pkg_plan_t;
 
-/* Reads package words from a slot (words at offset 128, mask after them). */
+/* Reads package words from a slot (words at offset 128, mask after them). The whole mask and a
+ * window of words are cached: the checks visit every word several times and flash may be slow
+ * (SPI NOR). */
+#define PKG_READER_MASK_MAX 512u    /* 2 · ceil(4096 / 16) bytes */
+#define PKG_READER_WINDOW 128u      /* words */
+
 typedef struct {
     uint8_t slot;
     uint16_t image_words;
     uint32_t mask_offset;
+    uint8_t mask[PKG_READER_MASK_MAX];
+    uint16_t win_first;             /* first cached word, 0xFFFF = none */
+    uint16_t win[PKG_READER_WINDOW];
 } pkg_slot_reader_t;
 
+void pkg_slot_reader_init(pkg_slot_reader_t *r, uint8_t slot, uint16_t image_words);
 uint16_t pkg_slot_word(void *reader, uint16_t addr, bool *defined);
 
 /* Checks reserved areas, fuse conflict/security and placeholders. On error *bad_addr is the word

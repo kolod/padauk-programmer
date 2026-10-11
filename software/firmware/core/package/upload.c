@@ -118,7 +118,8 @@ uint16_t pkg_cmd_commit(const uint8_t *req, uint16_t len, uint8_t *rsp, uint16_t
         return PDK_PKG_HEADER_INVALID;
     }
 
-    pkg_slot_reader_t reader = {up.slot, up.header.image_words, pkg_mask_offset(up.header.image_words)};
+    static pkg_slot_reader_t reader;
+    pkg_slot_reader_init(&reader, up.slot, up.header.image_words);
     static pkg_plan_t plan;
     uint16_t bad = 0xFFFF;
     uint16_t st = pkg_validate(&up.header, up.chip, pkg_slot_word, &reader, &plan, &bad);

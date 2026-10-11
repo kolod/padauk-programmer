@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Winbond W25Q SPI NOR flash on SPI1 (mode 0, 24 MHz), standard single-line commands only.
- * A sector erase can run in the background; reads and page programs of other sectors meanwhile
- * suspend it (75h) and resume it (7Ah) afterwards. */
+ * A sector erase can run in the background. The first read or page program of another sector
+ * suspends it (75h); it stays suspended while the current command works with the flash and is
+ * resumed (7Ah) by the next status poll from the main loop, so a command pays for one suspend at
+ * most and the erase makes progress between commands. */
 #include "f411.h"
 #include "hal_time.h"
 
@@ -20,7 +22,7 @@
 #define SECTOR_ERASE_TIMEOUT_MS 500u   /* datasheet max 400 ms */
 #define PAGE_PROGRAM_TIMEOUT_MS 5u     /* max 3 ms */
 #define SUSPEND_TIMEOUT_MS 2u          /* tSUS max 20 us */
-#define MIN_RUN_AFTER_RESUME_US 500u   /* let the erase progress between suspends */
+#define MIN_RUN_AFTER_RESUME_US 200u   /* let the erase progress between suspends */
 
 static bool present;
 static bool erasing;          /* a background sector erase was started and not yet seen finished */
@@ -144,12 +146,15 @@ void w25q_read(uint32_t addr, uint8_t *buf, uint32_t len)
     while (len--)
         *buf++ = xfer(0xFF);
     end();
-    resume();
 }
 
 bool w25q_erase_done(void)
 {
-    if (erasing && !suspended) {
+    if (suspended) {
+        resume();
+        return false;
+    }
+    if (erasing) {
         if (!busy())
             erasing = false;
         else if (hal_time_ms() - erase_started_ms > SECTOR_ERASE_TIMEOUT_MS) {
@@ -211,6 +216,5 @@ bool w25q_program(uint32_t addr, const uint8_t *data, uint32_t len)
         data += n;
         len -= n;
     }
-    resume();
     return ok;
 }
