@@ -9,3 +9,8 @@ docs/*.pdf
 build/
 *.o
 *.elf
+
+# Python
+__pycache__/
+*.egg-info/
+.pytest_cache/
