@@ -4,12 +4,16 @@
 #include <string.h>
 
 #include "hal_flash.h"
+#include "housekeeping.h"
 #include "proto/crc32.h"
 #include "proto/le.h"
+#include "slots.h"
 
 static journal_state_t current;
 static uint8_t cur_page;       /* page of the latest record */
 static uint32_t next_index;    /* first free record index in cur_page */
+static bool spare_blank;       /* the other page is erased and ready for the next page switch */
+static bool current_here;      /* the current record is stored in cur_page (else in the spare) */
 
 static uint32_t records_per_page(void) { return hal_flash_geometry()->page_size / JOURNAL_RECORD_SIZE; }
 
@@ -87,6 +91,8 @@ void journal_init(void)
     if (!found)
         cur_page = 0;
     next_index = used[cur_page];
+    spare_blank = flash_page_blank(hal_flash_geometry()->journal_addr[cur_page ^ 1u]);
+    current_here = true;   /* cur_page is where the newest valid record was found (or none exists) */
 }
 
 const journal_state_t *journal_get(void) { return &current; }
@@ -99,10 +105,15 @@ bool journal_append(const journal_state_t *st)
 
     if (next_index >= records_per_page()) {
         uint8_t other = (uint8_t)(cur_page ^ 1u);
-        if (!hal_flash_erase_page(g->journal_addr[other]))
-            return false;
+        if (!spare_blank) {   /* normally erased in the background long before */
+            housekeeping_finish();
+            if (!spare_blank && !hal_flash_erase_page(g->journal_addr[other]))
+                return false;
+        }
         cur_page = other;
         next_index = 0;
+        spare_blank = false;    /* the old page becomes the spare: erased once a record lands here */
+        current_here = false;
     }
     uint8_t rec[JOURNAL_RECORD_SIZE];
     journal_record_encode(&rec_st, rec);
@@ -115,5 +126,22 @@ bool journal_append(const journal_state_t *st)
     if (memcmp(back, rec, sizeof rec) != 0)
         return false;
     current = rec_st;
+    current_here = true;
     return true;
+}
+
+/* The spare page holds only records older than the current one once the current page has a valid
+ * record (or when the journal is empty), so it may be erased at any time after that. */
+bool journal_spare_dirty(uint32_t *addr)
+{
+    if (spare_blank || !current_here)   /* never erase the page holding the current record */
+        return false;
+    *addr = hal_flash_geometry()->journal_addr[cur_page ^ 1u];
+    return true;
+}
+
+void journal_spare_erased(uint32_t addr, bool ok)
+{
+    if (ok && addr == hal_flash_geometry()->journal_addr[cur_page ^ 1u] && flash_page_blank(addr))
+        spare_blank = true;
 }

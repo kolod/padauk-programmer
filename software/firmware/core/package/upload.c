@@ -18,14 +18,17 @@ static struct {
     uint8_t slot;
     uint32_t expected;
     uint32_t received;
-    uint32_t erased;
     uint8_t header_raw[PKG_HEADER_SIZE];
     pkg_header_t header;
     const chip_info_t *chip;
 } up;
 
 void upload_init(void) { memset(&up, 0, sizeof up); }
-void upload_abort(void) { up.state = UP_IDLE; }
+void upload_abort(void)
+{
+    up.state = UP_IDLE;
+    slots_set_upload(SLOT_NONE);   /* pages written so far are erased in the background */
+}
 bool upload_active(void) { return up.state != UP_IDLE; }
 
 uint16_t pkg_cmd_begin(const uint8_t *req, uint16_t len, uint8_t *rsp, uint16_t *rsp_len)
@@ -39,10 +42,10 @@ uint16_t pkg_cmd_begin(const uint8_t *req, uint16_t len, uint8_t *rsp, uint16_t 
     if (st != PDK_OK)
         return st;
     memcpy(up.header_raw, req, PKG_HEADER_SIZE);
-    up.slot = package_store_inactive_slot();
+    up.slot = package_store_upload_slot();
+    slots_set_upload(up.slot);
     up.expected = up.header.package_size;
     up.received = 0;
-    up.erased = 0;
     up.state = UP_RECEIVING;
     put32(rsp, up.expected);
     *rsp_len = 4;
@@ -80,7 +83,7 @@ uint16_t pkg_cmd_data(const uint8_t *req, uint16_t len, uint8_t *rsp, uint16_t *
             return PDK_PKG_HEADER_INVALID;
         }
     }
-    if (!slots_write(up.slot, offset, data, n, &up.erased)) {
+    if (!slots_write(up.slot, offset, data, n)) {
         upload_abort();
         return PDK_STORE_WRITE_FAILED;
     }
@@ -96,7 +99,7 @@ uint16_t pkg_cmd_commit(const uint8_t *req, uint16_t len, uint8_t *rsp, uint16_t
 {
     if (up.state != UP_COMPLETE)
         return PDK_NOT_ALLOWED_NOW;
-    up.state = UP_IDLE;   /* any outcome ends the upload */
+    upload_abort();   /* any outcome ends the upload; on success commit makes the slot active */
 
     /* CRC over what is really in flash. */
     uint32_t crc = slots_crc(up.slot, up.expected - 4u);

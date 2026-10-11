@@ -31,6 +31,10 @@ void fake_flash_fail_after(uint32_t n);
 bool fake_flash_failed(void);
 /* Clears the failure state, keeping flash content (the next "power-on"). */
 void fake_flash_power_restored(void);
+/* Background erase model: hal_flash_erase_status() answers BUSY `n` times after each start. */
+void fake_flash_bg_busy_polls(uint32_t n);
+bool fake_flash_bg_violation(void);   /* a page was touched while erasing / overlapping erases */
+uint32_t fake_flash_bg_started(void);
 
 /* --- power --- */
 typedef enum { FAKE_POWER_OK = 0, FAKE_POWER_SLOW, FAKE_POWER_STUCK, FAKE_POWER_LOW } fake_power_mode_t;

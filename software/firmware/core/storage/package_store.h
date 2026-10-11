@@ -14,7 +14,8 @@ uint8_t package_store_state(void);
 uint32_t package_store_size(void);
 uint32_t package_store_crc(void);
 uint8_t package_store_active_slot(void);
-uint8_t package_store_inactive_slot(void);
+/* Slot for the next upload: a clean one other than the active slot when possible. */
+uint8_t package_store_upload_slot(void);
 uint16_t package_store_flags(void);
 
 /* Re-reads the active slot; returns the new state and the computed CRC. */

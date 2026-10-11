@@ -27,6 +27,11 @@ static struct {
     uint32_t ops, erases;
     uint32_t fail_after;
     bool fail_armed, failed;
+    uint32_t bg_busy_polls;      /* status() answers BUSY this many times after erase_start() */
+    uint32_t bg_left, bg_addr;
+    hal_erase_status_t bg_result;
+    bool bg_violation;           /* the core touched a page while it was erasing */
+    uint32_t bg_started;
 
     uint16_t set[2];
     uint16_t from[2];
@@ -40,6 +45,7 @@ static struct {
 
 static const hal_flash_geometry_t geometry = {
     .page_size = 2048u,
+    .slot_count = 2,
     .slot_addr = {0x0800B000u, 0x0800D000u},
     .slot_size = 8192u,
     .journal_addr = {0x0800F000u, 0x0800F800u},
@@ -140,6 +146,36 @@ void fake_flash_fail_after(uint32_t n)
     f.fail_after = n;
 }
 
+static bool touches_erasing(uint32_t addr, size_t len)
+{
+    return f.bg_left && addr < f.bg_addr + geometry.page_size && addr + len > f.bg_addr;
+}
+
+void fake_flash_bg_busy_polls(uint32_t n) { f.bg_busy_polls = n; }
+bool fake_flash_bg_violation(void) { return f.bg_violation; }
+uint32_t fake_flash_bg_started(void) { return f.bg_started; }
+
+bool hal_flash_erase_start(uint32_t addr)
+{
+    if (f.bg_left)
+        f.bg_violation = true;   /* only one background erase at a time */
+    f.bg_started++;
+    bool ok = hal_flash_erase_page(addr);
+    f.bg_result = ok ? HAL_ERASE_DONE : HAL_ERASE_FAILED;
+    f.bg_addr = addr;
+    f.bg_left = f.bg_busy_polls + 1u;
+    return ok;
+}
+
+hal_erase_status_t hal_flash_erase_status(void)
+{
+    if (!f.bg_left)
+        return HAL_ERASE_IDLE;
+    if (--f.bg_left)
+        return HAL_ERASE_BUSY;
+    return f.bg_result;
+}
+
 void fake_flash_power_restored(void)
 {
     f.fail_armed = false;
@@ -163,6 +199,8 @@ static int fail_check(void)
 
 bool hal_flash_erase_page(uint32_t addr)
 {
+    if (f.bg_left > 1)
+        f.bg_violation = true;   /* the core must wait for the background erase first */
     if (addr < FLASH_BASE || addr + geometry.page_size > FLASH_BASE + FLASH_SIZE || (addr - FLASH_BASE) % geometry.page_size)
         return false;
     int fc = fail_check();
@@ -176,6 +214,8 @@ bool hal_flash_erase_page(uint32_t addr)
 
 bool hal_flash_program(uint32_t addr, const uint8_t *data, size_t len)
 {
+    if (touches_erasing(addr, len))
+        f.bg_violation = true;
     if ((addr | len) & 1u || addr < FLASH_BASE || addr + len > FLASH_BASE + FLASH_SIZE)
         return false;
     int fc = fail_check();
@@ -195,6 +235,8 @@ bool hal_flash_program(uint32_t addr, const uint8_t *data, size_t len)
 
 void hal_flash_read(uint32_t addr, uint8_t *buf, size_t len)
 {
+    if (touches_erasing(addr, len))
+        f.bg_violation = true;
     memcpy(buf, fake_flash_mem(addr), len);
 }
 

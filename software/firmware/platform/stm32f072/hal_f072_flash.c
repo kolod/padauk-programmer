@@ -7,6 +7,7 @@
 
 static const hal_flash_geometry_t geometry = {
     .page_size = 2048u,
+    .slot_count = 2,
     .slot_addr = {0x0800B000u, 0x0800D000u},
     .slot_size = 8192u,
     .journal_addr = {0x0800F000u, 0x0800F800u},
@@ -76,3 +77,20 @@ bool hal_flash_program(uint32_t addr, const uint8_t *data, size_t len)
 }
 
 void hal_flash_read(uint32_t addr, uint8_t *buf, size_t len) { memcpy(buf, (const void *)addr, len); }
+
+/* No background erase on this flash: the erase completes inside erase_start(). */
+static hal_erase_status_t erase_result = HAL_ERASE_IDLE;
+
+bool hal_flash_erase_start(uint32_t addr)
+{
+    bool ok = hal_flash_erase_page(addr);
+    erase_result = ok ? HAL_ERASE_DONE : HAL_ERASE_FAILED;
+    return ok;
+}
+
+hal_erase_status_t hal_flash_erase_status(void)
+{
+    hal_erase_status_t st = erase_result;
+    erase_result = HAL_ERASE_IDLE;
+    return st;
+}

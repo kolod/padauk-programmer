@@ -134,22 +134,91 @@ TEST(session_drop_cancels_upload)
     ASSERT_EQ(active_crc(), trailer(a));
 }
 
-TEST(at_most_one_page_erased_per_data)
+/* Erases done inside commands (not by background housekeeping). */
+static uint32_t foreground_erases(void) { return fake_flash_erases() - fake_flash_bg_started(); }
+
+static void idle(int polls)
+{
+    while (polls--)
+        pdk_core_poll();
+}
+
+TEST(upload_into_clean_slot_erases_nothing)
 {
     const pkg_vector_t *v = find("ok_pfs154_fuse_word");   /* 4484 bytes: 3 pages */
+    ASSERT_EQ(tp_upload(v->data, v->len, &seq, 508, &r), TP_STAGE_OK);
+    ASSERT_EQ(fake_flash_erases(), 0);
+}
+
+TEST(back_to_back_uploads_never_erase_inside_a_command)
+{
+    const pkg_vector_t *a = find("ok_pfs154_fuse_word"), *b = find("ok_pfs154_ihrc");
+    for (int i = 0; i < 6; i++) {
+        const pkg_vector_t *v = (i & 1) ? b : a;
+        ASSERT_EQ(tp_upload(v->data, v->len, &seq, 508, &r), TP_STAGE_OK);
+        ASSERT_EQ(active_crc(), trailer(v));
+    }
+    ASSERT_EQ(foreground_erases(), 0);
+    ASSERT_TRUE(fake_flash_bg_started() > 0);   /* the previous package was wiped in the background */
+    ASSERT_TRUE(!fake_flash_bg_violation());
+}
+
+TEST(dirty_slot_is_erased_lazily_one_page_per_data)
+{
+    for (uint32_t a = 0x0800B000u; a < 0x0800F000u; a += 0x100u)   /* garbage in both slots */
+        *fake_flash_mem(a) = 0x00;
+    fake_flash_bg_busy_polls(100000);   /* background erase cannot keep up */
+    pdk_core_init();
+    tp_hello(seq++);
+    const pkg_vector_t *v = find("ok_pfs154_fuse_word");
     tp_call(seq++, PDK_CMD_PKG_BEGIN, v->data, 128, &r);
-    ASSERT_EQ(fake_flash_erases(), 0);   /* BEGIN itself does not erase */
-    uint32_t total = 0;
     for (uint32_t off = 0; off < v->len;) {
         uint16_t n = (uint16_t)(v->len - off < 508 ? v->len - off : 508);
-        uint32_t before = fake_flash_erases();
+        uint32_t before = foreground_erases();
         ASSERT_EQ(data(off, v->data + off, n), PDK_OK);
-        uint32_t d = fake_flash_erases() - before;
-        ASSERT_TRUE(d <= 1);
-        total += d;
+        ASSERT_TRUE(foreground_erases() - before <= 1);
         off += n;
     }
-    ASSERT_EQ(total, 3);
+    ASSERT_EQ(call(PDK_CMD_PKG_COMMIT), PDK_OK);
+    ASSERT_EQ(active_crc(), trailer(v));
+    ASSERT_TRUE(!fake_flash_bg_violation());
+}
+
+TEST(upload_waits_for_background_erase_of_its_page)
+{
+    const pkg_vector_t *a = find("ok_pfs154_fuse_word"), *b = find("ok_pfs154_ihrc");
+    ASSERT_EQ(tp_upload(a->data, a->len, &seq, 508, &r), TP_STAGE_OK);   /* slot 0 */
+    ASSERT_EQ(tp_upload(b->data, b->len, &seq, 508, &r), TP_STAGE_OK);   /* slot 1, slot 0 now dirty */
+    fake_flash_bg_busy_polls(1000);
+    pdk_core_poll();   /* a background erase of slot 0 starts and stays busy */
+    ASSERT_EQ(tp_upload(a->data, a->len, &seq, 508, &r), TP_STAGE_OK);   /* targets slot 0 */
+    ASSERT_EQ(active_crc(), trailer(a));
+    ASSERT_TRUE(!fake_flash_bg_violation());
+}
+
+TEST(deleted_package_is_wiped_in_the_background)
+{
+    const pkg_vector_t *a = find("ok_pfs154_fuse_word");
+    ASSERT_EQ(tp_upload(a->data, a->len, &seq, 508, &r), TP_STAGE_OK);
+    ASSERT_EQ(call(PDK_CMD_PKG_DELETE), PDK_OK);
+    idle(20);
+    for (uint32_t addr = 0x0800B000u; addr < 0x0800F000u; addr++)
+        if (*fake_flash_mem(addr) != 0xFF)
+            PDK_FAIL("byte at 0x%08x survived delete", addr);
+}
+
+TEST(aborted_upload_is_wiped_in_the_background)
+{
+    const pkg_vector_t *a = find("ok_pfs154_3words"), *b = find("ok_pfs154_fuse_word");
+    ASSERT_EQ(tp_upload(a->data, a->len, &seq, 508, &r), TP_STAGE_OK);
+    tp_call(seq++, PDK_CMD_PKG_BEGIN, b->data, 128, &r);
+    ASSERT_EQ(data(0, b->data, 508), PDK_OK);
+    ASSERT_EQ(call(PDK_CMD_PKG_ABORT), PDK_OK);
+    idle(20);
+    for (uint32_t addr = 0x0800D000u; addr < 0x0800F000u; addr++)   /* the upload went to slot 1 */
+        if (*fake_flash_mem(addr) != 0xFF)
+            PDK_FAIL("byte at 0x%08x survived abort", addr);
+    ASSERT_EQ(active_crc(), trailer(a));   /* the active slot is never touched */
 }
 
 TEST(duplicate_seq_does_not_duplicate_data)

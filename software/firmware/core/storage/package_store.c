@@ -13,7 +13,7 @@ static uint8_t compute_state(uint32_t *computed)
     const journal_state_t *j = journal_get();
     if (computed)
         *computed = 0;
-    if (j->active_slot > 1)
+    if (j->active_slot >= slots_count())
         return PDK_PKG_EMPTY;
     if (j->package_size < 8 || j->package_size > slots_size())
         return PDK_PKG_CORRUPTED;
@@ -29,6 +29,7 @@ void package_store_init(void)
 {
     journal_init();
     state = compute_state(NULL);
+    slots_init(state == PDK_PKG_EMPTY ? SLOT_NONE : journal_get()->active_slot);
 }
 
 uint8_t package_store_state(void) { return state; }
@@ -37,11 +38,7 @@ uint32_t package_store_crc(void) { return state == PDK_PKG_EMPTY ? 0 : journal_g
 uint8_t package_store_active_slot(void) { return journal_get()->active_slot; }
 uint16_t package_store_flags(void) { return journal_get()->flags; }
 
-uint8_t package_store_inactive_slot(void)
-{
-    uint8_t a = journal_get()->active_slot;
-    return a > 1 ? 0 : (uint8_t)(a ^ 1u);
-}
+uint8_t package_store_upload_slot(void) { return slots_pick_upload(); }
 
 uint8_t package_store_recheck(uint32_t *computed_crc)
 {
@@ -57,6 +54,7 @@ bool package_store_commit(uint8_t slot, uint32_t size, uint32_t crc)
     st.package_crc = crc;
     if (!journal_append(&st))
         return false;
+    slots_set_active(slot);   /* the previous package's slot is erased in the background */
     state = compute_state(NULL);
     return state == PDK_PKG_VALID;
 }
@@ -69,6 +67,7 @@ bool package_store_delete(void)
     st.package_crc = 0;
     if (!journal_append(&st))
         return false;
+    slots_set_active(SLOT_NONE);   /* the deleted package is erased in the background */
     state = PDK_PKG_EMPTY;
     return true;
 }

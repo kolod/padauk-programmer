@@ -5,7 +5,9 @@
 #include "fake_hal.h"
 #include "hal_flash.h"
 #include "proto/le.h"
+#include "storage/housekeeping.h"
 #include "storage/journal.h"
+#include "storage/slots.h"
 
 #define PER_PAGE (2048u / JOURNAL_RECORD_SIZE)
 
@@ -13,6 +15,14 @@ void pdk_test_setup(void)
 {
     fake_reset();
     journal_init();
+    slots_init(SLOT_NONE);
+    housekeeping_init();
+}
+
+static void idle(int polls)
+{
+    while (polls--)
+        housekeeping_poll();
 }
 
 static journal_state_t state(uint32_t ok)
@@ -110,17 +120,17 @@ TEST(page_overflow_switches_pages)
     ASSERT_EQ(fake_flash_erases(), 0);   /* both pages start erased */
     journal_state_t s = state(PER_PAGE + 1);
     ASSERT_TRUE(journal_append(&s));
-    ASSERT_EQ(fake_flash_erases(), 1);
+    ASSERT_EQ(fake_flash_erases(), 0);   /* the spare page was blank: switching needs no erase */
     ASSERT_EQ(le32(fake_flash_mem(page_addr(1)) + 4), PER_PAGE + 1);
     journal_init();
     ASSERT_EQ(journal_get()->seq, PER_PAGE + 1);
 
-    /* fill page 1 and wrap back to page 0 */
+    /* fill page 1 and wrap back to page 0: without housekeeping the full spare is erased in place */
     for (uint32_t i = PER_PAGE + 2; i <= 2 * PER_PAGE + 1; i++) {
         s = state(i);
         ASSERT_TRUE(journal_append(&s));
     }
-    ASSERT_EQ(fake_flash_erases(), 2);
+    ASSERT_EQ(fake_flash_erases(), 1);
     ASSERT_EQ(le32(fake_flash_mem(page_addr(0)) + 4), 2 * PER_PAGE + 1);
     journal_init();
     ASSERT_EQ(journal_get()->seq, 2 * PER_PAGE + 1);
@@ -170,4 +180,68 @@ TEST(seq_compare_survives_wraparound)
     journal_init();
     ASSERT_EQ(journal_get()->seq, 0);
     ASSERT_EQ(journal_get()->ok_count, 2);
+}
+
+TEST(spare_page_is_erased_in_the_background)
+{
+    for (uint32_t i = 1; i <= PER_PAGE + 1; i++) {   /* switch to page 1 once */
+        journal_state_t s = state(i);
+        ASSERT_TRUE(journal_append(&s));
+    }
+    uint32_t addr;
+    ASSERT_TRUE(journal_spare_dirty(&addr));
+    ASSERT_EQ(addr, page_addr(0));
+    idle(4);
+    ASSERT_TRUE(!journal_spare_dirty(&addr));
+    ASSERT_EQ(fake_flash_erases(), 1);
+    ASSERT_TRUE(flash_page_blank(page_addr(0)));
+
+    /* the wrap back to page 0 now happens without any erase inside journal_append() */
+    for (uint32_t i = PER_PAGE + 2; i <= 2 * PER_PAGE; i++) {
+        journal_state_t s = state(i);
+        ASSERT_TRUE(journal_append(&s));
+    }
+    uint32_t before = fake_flash_erases();
+    journal_state_t s = state(2 * PER_PAGE + 1);
+    ASSERT_TRUE(journal_append(&s));
+    ASSERT_EQ(fake_flash_erases(), before);
+    journal_init();
+    ASSERT_EQ(journal_get()->seq, 2 * PER_PAGE + 1);
+}
+
+TEST(page_with_current_record_is_never_erased)
+{
+    for (uint32_t i = 1; i <= PER_PAGE; i++) {
+        journal_state_t s = state(i);
+        ASSERT_TRUE(journal_append(&s));
+    }
+    /* the first record on the new page fails: the current record stays on page 0 */
+    fake_flash_fail_after(0);
+    journal_state_t s = state(PER_PAGE + 1);
+    ASSERT_TRUE(!journal_append(&s));
+    fake_flash_power_restored();
+    uint32_t addr;
+    ASSERT_TRUE(!journal_spare_dirty(&addr));
+    idle(10);
+    journal_init();
+    ASSERT_EQ(journal_get()->seq, PER_PAGE);
+    ASSERT_EQ(journal_get()->ok_count, PER_PAGE);
+}
+
+TEST(spare_erase_waits_when_a_switch_comes_first)
+{
+    fake_flash_bg_busy_polls(50);
+    for (uint32_t i = 1; i <= PER_PAGE + 1; i++) {
+        journal_state_t s = state(i);
+        ASSERT_TRUE(journal_append(&s));
+    }
+    housekeeping_poll();   /* starts erasing page 0, still busy */
+    for (uint32_t i = PER_PAGE + 2; i <= 2 * PER_PAGE + 1; i++) {   /* overflow into page 0 */
+        journal_state_t s = state(i);
+        ASSERT_TRUE(journal_append(&s));
+    }
+    ASSERT_TRUE(!fake_flash_bg_violation());
+    ASSERT_EQ(fake_flash_erases(), 1);   /* the background erase was awaited, not repeated */
+    journal_init();
+    ASSERT_EQ(journal_get()->seq, 2 * PER_PAGE + 1);
 }

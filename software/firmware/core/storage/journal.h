@@ -29,7 +29,12 @@ bool journal_record_decode(const uint8_t in[JOURNAL_RECORD_SIZE], journal_state_
 void journal_init(void);
 const journal_state_t *journal_get(void);
 
-/* Appends `st` as a new record (seq = current + 1). Switches pages when the current one is full. */
+/* Appends `st` as a new record (seq = current + 1). Switches pages when the current one is full;
+ * the spare page is normally erased in the background already (housekeeping). */
 bool journal_append(const journal_state_t *st);
+
+/* Housekeeping: the spare page (the one not holding the current record) and its erase result. */
+bool journal_spare_dirty(uint32_t *addr);
+void journal_spare_erased(uint32_t addr, bool ok);
 
 #endif
