@@ -14,8 +14,8 @@
 #define DIVIDER 6u
 #define VREFINT_CAL (*(const uint16_t *)0x1FFF75AAu)   /* VREFINT at VDDA = 3.0 V, factory */
 #define VREFINT_CAL_MV 3000u
-#define CH_VPP 1u    /* PA0 */
-#define CH_VDD 2u    /* PA1 */
+#define CH_VDD 1u    /* PA0 */
+#define CH_VPP 2u    /* PA1 */
 #define CH_VREFINT 18u
 
 static uint16_t dac_vdd, dac_vpp;
