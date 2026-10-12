@@ -68,6 +68,8 @@ void slots_set_upload(uint8_t slot)
     pend_len = 0;   /* a new upload (or none) discards unflushed bytes */
 }
 
+bool slots_upload_active(void) { return upload != SLOT_NONE; }
+
 bool slots_is_clean(uint8_t slot) { return slot < slots_count() && clean[slot] == all_pages(); }
 
 uint8_t slots_pick_upload(void)
