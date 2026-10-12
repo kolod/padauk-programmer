@@ -9,7 +9,7 @@
  * bank 1, so erasing and programming bank 2 does not stall the CPU (read-while-write, DBANK = 1).
  *
  * Supplies (provisional pins, only with -DPDK_G474_SUPPLIES=ON): DAC1_OUT1 PA4 → VPP regulator,
- * DAC1_OUT2 PA5 → VDD regulator, ADC1_IN1 PA0 = VPP/6, ADC1_IN2 PA1 = VDD/6 (Easy PDK scaling).
+ * DAC1_OUT2 PA5 → VDD regulator, ADC1_IN1 PA0 = VDD/6, ADC1_IN2 PA1 = VPP/6 (Easy PDK scaling).
  * Without the option the board has no supplies: limits are 0 V and INFO hides MEASURE_POWER.
  */
 #ifndef PDK_G474_H
