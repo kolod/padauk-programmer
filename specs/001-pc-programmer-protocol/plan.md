@@ -108,7 +108,7 @@ software/
 │   ├── platform/
 │   │   ├── common/                   # спільне для STM32: USB CDC (TinyUSB), заглушка chip_engine
 │   │   ├── stm32f072/                # ціль налагодження: startup, linker (розмітка flash), LL, TinyUSB CDC, hal_*.c
-│   │   ├── stm32f411/                # кандидат: WeAct MiniSTM32F4x1 + W25Q64 (пакети й журнал у SPI flash); без схеми VDD/VPP
+│   │   ├── stm32g474/                # кандидат: WeAct STM32G474 (ЦАП/АЦП на кристалі, пакети в банку 2 внутрішньої flash)
 │   │   ├── <main-mcu>/               # основна МК — наступна специфікація
 │   │   └── host/                     # mock flash з «обривом живлення», модель живлення (з несправностями), модель мікросхеми, pdk-sim (stdio/TCP)
 │   └── tests/                        # модульні тести ядра (CTest)

@@ -88,8 +88,13 @@ uint16_t pkg_cmd_data(const uint8_t *req, uint16_t len, uint8_t *rsp, uint16_t *
         return PDK_STORE_WRITE_FAILED;
     }
     up.received += n;
-    if (up.received == up.expected)
+    if (up.received == up.expected) {
+        if (!slots_flush(up.slot)) {
+            upload_abort();
+            return PDK_STORE_WRITE_FAILED;
+        }
         up.state = UP_COMPLETE;
+    }
     put32(rsp, up.received);
     *rsp_len = 4;
     return PDK_OK;

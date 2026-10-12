@@ -18,6 +18,7 @@ static bool corrupt_writes;
 
 static const hal_flash_geometry_t geometry = {
     .page_size = 2048u,
+    .write_unit = 2,
     .slot_count = 2,
     .slot_addr = {0x0800B000u, 0x0800D000u},
     .slot_size = 8192u,

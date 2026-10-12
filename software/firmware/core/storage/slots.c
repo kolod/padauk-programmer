@@ -9,6 +9,12 @@ static uint32_t clean[HAL_FLASH_MAX_SLOTS];   /* bit p = page p of the slot is e
 static uint32_t ready;                        /* upload slot: page erased during this upload (may hold its data) */
 static uint8_t active = SLOT_NONE, upload = SLOT_NONE;
 
+/* Bytes of the upload waiting to complete a write unit (flash that programs 8-byte words). */
+#define UNIT_MAX 8u
+static uint8_t pend[UNIT_MAX];
+static uint32_t pend_off;   /* slot offset of pend[0], aligned to the write unit */
+static uint8_t pend_len;
+
 static const hal_flash_geometry_t *geo(void) { return hal_flash_geometry(); }
 static uint32_t pages(void) { return geo()->slot_size / geo()->page_size; }
 static uint32_t all_pages(void) { return pages() >= 32u ? 0xFFFFFFFFu : (1u << pages()) - 1u; }
@@ -49,10 +55,17 @@ void slots_set_active(uint8_t slot)
     active = slot;
 }
 
+static uint32_t unit(void)
+{
+    uint32_t u = geo()->write_unit;
+    return u == 0 ? 1u : u;
+}
+
 void slots_set_upload(uint8_t slot)
 {
     upload = slot;
     ready = slot < slots_count() ? clean[slot] : 0;
+    pend_len = 0;   /* a new upload (or none) discards unflushed bytes */
 }
 
 bool slots_is_clean(uint8_t slot) { return slot < slots_count() && clean[slot] == all_pages(); }
@@ -79,7 +92,7 @@ void slots_read(uint8_t slot, uint32_t offset, uint8_t *buf, size_t len)
 bool slots_write(uint8_t slot, uint32_t offset, const uint8_t *data, size_t len)
 {
     const hal_flash_geometry_t *g = geo();
-    if (slot >= g->slot_count || (offset | len) & 1u || offset + len > g->slot_size)
+    if (slot >= g->slot_count || (offset | len) & 1u || offset + len > g->slot_size || unit() > UNIT_MAX)
         return false;
     if (!len)
         return true;
@@ -100,7 +113,43 @@ bool slots_write(uint8_t slot, uint32_t offset, const uint8_t *data, size_t len)
     }
     for (uint32_t p = first; p <= last; p++)
         clean[slot] &= ~(1u << p);   /* dirty from the first byte written */
-    return hal_flash_program(base + offset, data, len);
+
+    /* Writes of an upload are sequential; bytes that do not fill a write unit wait in pend[]. */
+    uint32_t u = unit();
+    if (pend_len) {
+        if (offset != pend_off + pend_len)
+            return false;
+        while (len && pend_len < u) {
+            pend[pend_len++] = *data++;
+            offset++;
+            len--;
+        }
+        if (pend_len < u)
+            return true;
+        pend_len = 0;
+        if (!hal_flash_program(base + pend_off, pend, u))
+            return false;
+    } else if (offset % u) {
+        return false;   /* only the continuation of the previous write may be unaligned */
+    }
+    size_t whole = len - len % u;
+    if (whole && !hal_flash_program(base + offset, data, whole))
+        return false;
+    for (size_t i = whole; i < len; i++)
+        pend[pend_len++] = data[i];
+    pend_off = offset + (uint32_t)whole;
+    return true;
+}
+
+bool slots_flush(uint8_t slot)
+{
+    if (!pend_len || slot != upload)
+        return true;
+    uint32_t u = unit();
+    while (pend_len < u)
+        pend[pend_len++] = 0xFF;   /* past the end of the package: never interpreted */
+    pend_len = 0;
+    return hal_flash_program(geo()->slot_addr[slot] + pend_off, pend, u);
 }
 
 uint32_t slots_crc(uint8_t slot, uint32_t len)

@@ -1,12 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* STM32F411CE (512 KB flash, 128 KB RAM). Packages and the state journal live in the external
- * W25Q64, not in internal flash (its 16/64/128 KB sectors are too coarse); see hal_f411_flash.c. */
+/* STM32G474CE (512 KB flash in two 256 KB banks, 96 KB SRAM1+SRAM2; CCM SRAM unused).
+ * Bank 1 (0x08000000, 256 KB): firmware. Bank 2 (0x08040000): package slots and the state journal,
+ * see hal_g474_flash.c. */
 ENTRY(Reset_Handler)
 
 MEMORY
 {
-    FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 512K
-    RAM   (rwx) : ORIGIN = 0x20000000, LENGTH = 128K
+    FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 256K
+    RAM   (rwx) : ORIGIN = 0x20000000, LENGTH = 96K
 }
 
 __stack_top = ORIGIN(RAM) + LENGTH(RAM);

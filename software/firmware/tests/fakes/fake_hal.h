@@ -35,6 +35,8 @@ void fake_flash_power_restored(void);
 void fake_flash_bg_busy_polls(uint32_t n);
 bool fake_flash_bg_violation(void);   /* a page was touched while erasing / overlapping erases */
 uint32_t fake_flash_bg_started(void);
+/* Program granularity (default 2 as on STM32F0; 8 models STM32G4 ECC flash). */
+void fake_flash_write_unit(uint8_t unit);
 
 /* --- power --- */
 typedef enum { FAKE_POWER_OK = 0, FAKE_POWER_SLOW, FAKE_POWER_STUCK, FAKE_POWER_LOW } fake_power_mode_t;
