@@ -20,6 +20,7 @@ void slots_init(uint8_t active);
 /* Slots never erased in the background: the active package and the current upload target. */
 void slots_set_active(uint8_t slot);
 void slots_set_upload(uint8_t slot);   /* SLOT_NONE when no upload is running */
+bool slots_upload_active(void);
 
 /* Upload target: a fully clean slot other than the active one if any, else the first other slot. */
 uint8_t slots_pick_upload(void);

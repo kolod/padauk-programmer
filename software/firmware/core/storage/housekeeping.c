@@ -58,6 +58,10 @@ void housekeeping_poll(void)
     }
     if (job.backoff && hal_time_ms() - job.failed_at < RETRY_AFTER_FAIL_MS)
         return;
+    /* No new erase while an upload runs: its slot is clean already, and on flash that cannot program
+     * while erasing (STM32G4) every PKG_DATA would wait for the erase. */
+    if (slots_upload_active())
+        return;
     job.backoff = false;
     uint32_t addr;
     job_kind_t kind = JOB_NONE;

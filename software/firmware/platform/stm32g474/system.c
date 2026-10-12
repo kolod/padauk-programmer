@@ -12,7 +12,9 @@ void g474_clock_init(void)
     RCC->APB1ENR1 |= RCC_APB1ENR1_PWREN;
     (void)RCC->APB1ENR1;
     PWR->CR5 &= ~PWR_CR5_R1MODE;   /* range 1 boost: up to 170 MHz */
-    FLASH->ACR = FLASH_ACR_LATENCY_4WS | FLASH_ACR_PRFTEN | FLASH_ACR_ICEN | FLASH_ACR_DCEN;
+    /* read-modify-write: ACR also holds DBG_SWEN, and clearing it disables SWD */
+    FLASH->ACR = (FLASH->ACR & ~FLASH_ACR_LATENCY) | FLASH_ACR_LATENCY_4WS | FLASH_ACR_PRFTEN | FLASH_ACR_ICEN |
+                 FLASH_ACR_DCEN;
     while ((FLASH->ACR & FLASH_ACR_LATENCY) != FLASH_ACR_LATENCY_4WS) {
     }
 
