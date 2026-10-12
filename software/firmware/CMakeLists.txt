@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 cmake_minimum_required(VERSION 3.20)
 
-set(PLATFORM "host" CACHE STRING "Target platform: host | stm32f072 | stm32f411")
-set_property(CACHE PLATFORM PROPERTY STRINGS host stm32f072 stm32f411)
+set(PLATFORM "host" CACHE STRING "Target platform: host | stm32f072 | stm32g474")
+set_property(CACHE PLATFORM PROPERTY STRINGS host stm32f072 stm32g474)
 
 if(PLATFORM STREQUAL "host")
     project(padauk_programmer C)
@@ -64,10 +64,10 @@ elseif(PLATFORM STREQUAL "stm32f072")
     include(${CMAKE_CURRENT_SOURCE_DIR}/platform/stm32f072/stm32f072.cmake)
 
 # ---------------------------------------------------------------------------
-# STM32F411CEU6: WeAct Black Pill + W25Q64 (no supply front end yet)
+# STM32G474CEU6: WeAct STM32G474 core board (DAC/ADC/OPAMP on chip; supply front end optional)
 # ---------------------------------------------------------------------------
-elseif(PLATFORM STREQUAL "stm32f411")
-    include(${CMAKE_CURRENT_SOURCE_DIR}/platform/stm32f411/stm32f411.cmake)
+elseif(PLATFORM STREQUAL "stm32g474")
+    include(${CMAKE_CURRENT_SOURCE_DIR}/platform/stm32g474/stm32g474.cmake)
 else()
     message(FATAL_ERROR "Unknown PLATFORM=${PLATFORM}")
 endif()
