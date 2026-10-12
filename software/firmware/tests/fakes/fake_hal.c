@@ -43,8 +43,9 @@ static struct {
     pdk_ui_state_t ui;
 } f;
 
-static const hal_flash_geometry_t geometry = {
+static hal_flash_geometry_t geometry = {
     .page_size = 2048u,
+    .write_unit = 2,
     .slot_count = 2,
     .slot_addr = {0x0800B000u, 0x0800D000u},
     .slot_size = 8192u,
@@ -54,6 +55,7 @@ static const hal_flash_geometry_t geometry = {
 void fake_reset(void)
 {
     memset(&f, 0, sizeof f);
+    geometry.write_unit = 2;
     memset(f.flash, 0xFF, sizeof f.flash);
     f.open = true;
     f.settle_us = 200;
@@ -152,6 +154,7 @@ static bool touches_erasing(uint32_t addr, size_t len)
 }
 
 void fake_flash_bg_busy_polls(uint32_t n) { f.bg_busy_polls = n; }
+void fake_flash_write_unit(uint8_t unit) { geometry.write_unit = unit; }
 bool fake_flash_bg_violation(void) { return f.bg_violation; }
 uint32_t fake_flash_bg_started(void) { return f.bg_started; }
 
@@ -216,7 +219,7 @@ bool hal_flash_program(uint32_t addr, const uint8_t *data, size_t len)
 {
     if (touches_erasing(addr, len))
         f.bg_violation = true;
-    if ((addr | len) & 1u || addr < FLASH_BASE || addr + len > FLASH_BASE + FLASH_SIZE)
+    if ((addr | len) % geometry.write_unit || addr < FLASH_BASE || addr + len > FLASH_BASE + FLASH_SIZE)
         return false;
     int fc = fail_check();
     if (fc == 2)

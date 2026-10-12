@@ -28,8 +28,13 @@ bool slots_is_clean(uint8_t slot);
 void slots_read(uint8_t slot, uint32_t offset, uint8_t *buf, size_t len);
 
 /* Writes `len` bytes at `offset` (even). A page that is not clean yet is erased first (waiting for
- * a background erase of that page if one is running). Written pages become dirty. */
+ * a background erase of that page if one is running). Written pages become dirty. Writes must be
+ * sequential within an upload: bytes that do not fill the platform write unit are held back until
+ * the next write or slots_flush(). */
 bool slots_write(uint8_t slot, uint32_t offset, const uint8_t *data, size_t len);
+
+/* Programs held-back bytes, padded with 0xFF to a whole write unit. Call before reading the slot. */
+bool slots_flush(uint8_t slot);
 
 /* CRC-32 of the first `len` bytes of the slot. */
 uint32_t slots_crc(uint8_t slot, uint32_t len);
