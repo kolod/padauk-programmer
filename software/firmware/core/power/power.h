@@ -29,6 +29,18 @@ typedef struct {
  * POWER_SAMPLES samples. On timeout switches everything off and returns PDK_VDD_FAULT/PDK_VPP_FAULT. */
 uint16_t power_apply(pdk_rail_t rail, uint16_t mV, uint32_t min_pause_us, power_fault_t *fault);
 
+/* Supply calibration (per mille, ±127): measurement and output scale of each rail.
+ *   true voltage = HAL measurement · (1000 + meas) / 1000
+ *   HAL set point = wanted voltage · 1000 / (1000 + out)
+ * All zero = uncalibrated. Indexed by POWER_CAL_*. */
+enum { POWER_CAL_MEAS_VDD = 0, POWER_CAL_MEAS_VPP, POWER_CAL_OUT_VDD, POWER_CAL_OUT_VPP };
+void power_set_calibration(const int8_t cal[4]);
+void power_get_calibration(int8_t cal[4]);
+
+/* Calibrated set/measure (power_apply() uses them; calibration commands too). */
+void power_set_raw(pdk_rail_t rail, uint16_t mV);
+uint16_t power_measure(pdk_rail_t rail);
+
 /* Tolerance used by power_apply() for a target voltage. */
 uint16_t power_tolerance_mV(uint16_t target_mV);
 

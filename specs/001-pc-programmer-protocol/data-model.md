@@ -54,10 +54,10 @@ IDLE ──PKG_BEGIN ok──► RECEIVING ──PKG_DATA (received == expected)
 | `u32` | `rec_seq` | монотонний номер запису |
 | `u8` | `active_slot` | 0, 1 або `0xFF` — пакета немає |
 | `u8` | `cfg_copy_ihrc` | режим IHRC для локального `COPY` (0 або 2), за замовчуванням 0 |
-| `u16` | `flags` | біт0 `MASTER_RESTORE_PENDING` — активний пакет є дампом еталона, який змінено й не відновлено |
+| `u16` | `flags` | біт0 `MASTER_RESTORE_PENDING` — активний пакет є дампом еталона, який змінено й не відновлено; біт15 — `supply_cal` дійсне |
 | `u32` | `package_size` | |
 | `u32` | `package_crc32` | |
-| `u32` | `reserved0` | `0xFFFFFFFF` (колишній лічильник серійних номерів; номери тепер випадкові) |
+| `i8[4]` | `supply_cal` | калібрування живлення в проміле: вимір VDD, вимір VPP, вихід VDD, вихід VPP (contracts/protocol.md, `CAL_*`); без біта15 у `flags` — `0xFFFFFFFF` (колишній лічильник серійних номерів), записи старих версій читаються як «не калібровано» |
 | `u32` | `ok_count` | |
 | `u32` | `fail_count` | |
 | `u8` | `cfg_copy_ilrc` | режим ILRC для локального `COPY` (0), за замовчуванням 0 |

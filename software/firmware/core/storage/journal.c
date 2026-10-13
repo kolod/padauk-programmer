@@ -31,7 +31,10 @@ void journal_record_encode(const journal_state_t *st, uint8_t out[JOURNAL_RECORD
     put16(out + 10, st->flags);
     put32(out + 12, st->package_size);
     put32(out + 16, st->package_crc);
-    put32(out + 20, 0xFFFFFFFFu);          /* reserved0 */
+    if (st->flags & JOURNAL_FLAG_SUPPLY_CAL)   /* former reserved0: supply calibration */
+        memcpy(out + 20, st->supply_cal, 4);
+    else
+        put32(out + 20, 0xFFFFFFFFu);
     put32(out + 24, st->ok_count);
     put32(out + 28, st->fail_count);
     out[32] = st->cfg_copy_ilrc;
@@ -48,6 +51,10 @@ bool journal_record_decode(const uint8_t in[JOURNAL_RECORD_SIZE], journal_state_
     st->active_slot = in[8];
     st->cfg_copy_ihrc = in[9];
     st->flags = le16(in + 10);
+    if (st->flags & JOURNAL_FLAG_SUPPLY_CAL)
+        memcpy(st->supply_cal, in + 20, 4);
+    else
+        memset(st->supply_cal, 0, 4);
     st->package_size = le32(in + 12);
     st->package_crc = le32(in + 16);
     st->ok_count = le32(in + 24);

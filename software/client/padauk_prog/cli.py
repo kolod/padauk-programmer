@@ -9,7 +9,7 @@ import sys
 import zlib
 
 from . import __version__, ihex, package
-from .protocol import (FAMILY_NAMES, PkgState, Programmer, ProgrammerError, ProtocolError, Status,
+from .protocol import (CAP_SUPPLY_CAL, FAMILY_NAMES, PkgState, Programmer, ProgrammerError, ProtocolError, Status,
                        connect, status_name)
 from .transport import TransportError
 
@@ -192,6 +192,97 @@ def cmd_list(prog: Programmer, a) -> int:
     return 0
 
 
+CAL_NAMES = ("VDD measurement", "VPP measurement", "VDD output", "VPP output")
+
+
+def ask(prompt: str) -> str:
+    try:
+        return input(prompt)
+    except EOFError:
+        return ""
+
+
+def parse_volts(text: str) -> int:
+    """'5.32', '5,32' or '5.32 V' → millivolts."""
+    v = float(text.strip().lower().rstrip("v").strip().replace(",", "."))
+    if not 0.0 < v < 30.0:
+        raise ValueError(text)
+    return round(v * 1000)
+
+
+def show_calibration(c: dict) -> None:
+    if not c["valid"]:
+        print("Supplies are not calibrated.")
+        return
+    print("Supply calibration:")
+    for name, pm in zip(CAL_NAMES, c["cal_permille"]):
+        print(f"  {name:16} {pm / 10:+.1f} %")
+
+
+def cmd_calibrate(prog: Programmer, a) -> int:
+    if not prog.info.capabilities & CAP_SUPPLY_CAL:
+        raise CliError("this programmer has no supply front end to calibrate")
+    if a.show:
+        show_calibration(prog.cal_get())
+        return 0
+    if a.reset:
+        prog.cal_clear()
+        print("Supply calibration cleared.")
+        return 0
+
+    print("WARNING: disconnect the programmer from any target board before calibrating.")
+    print("Both supplies will be raised to near their maximum (VDD about 6 V, VPP about 12-13 V).")
+    if not a.yes and ask("Nothing is connected to the output pins? [y/N] ").strip().lower() not in ("y", "yes"):
+        print("Calibration cancelled.")
+        return 1
+
+    started = prog.cal_start()
+    accepted = False
+    try:
+        print(f"Applied VDD = {started['vdd_set_mV'] / 1000:.2f} V and VPP = {started['vpp_set_mV'] / 1000:.2f} V "
+              "(nominal). Measure both against GND with a multimeter.")
+        while True:
+            try:
+                vdd = parse_volts(a.vdd) if a.vdd else parse_volts(ask("Measured VDD, V: "))
+                vpp = parse_volts(a.vpp) if a.vpp else parse_volts(ask("Measured VPP, V: "))
+            except ValueError:
+                if a.vdd or a.vpp:
+                    raise CliError("measured voltages must be numbers in volts") from None
+                print("Please enter a number in volts, e.g. 5.93")
+                continue
+            try:
+                res = prog.cal_set(vdd, vpp)
+                break
+            except ProgrammerError as e:
+                if e.status != Status.BAD_PAYLOAD or a.vdd or a.vpp:
+                    raise
+                rail = "VDD" if e.payload[:1] == b"\x00" else "VPP"
+                print(f"The {rail} value is more than 12.7 % away from what the programmer expects - "
+                      "check the meter and type it again.")
+        print(f"Now applied with the new calibration: VDD = {res['vdd_target_mV'] / 1000:.3f} V, "
+              f"VPP = {res['vpp_target_mV'] / 1000:.3f} V.")
+        print(f"(the programmer reads VDD {res['vdd_meas_mV'] / 1000:.3f} V, VPP {res['vpp_meas_mV'] / 1000:.3f} V)")
+        if a.accept is not None:
+            accepted = a.accept
+        else:
+            answer = ask("Does the meter show the same voltages (within about 0.5 %)? [y/N] ")
+            accepted = answer.strip().lower() in ("y", "yes")
+        prog.cal_confirm(accepted)
+    except BaseException:
+        if not accepted:
+            try:
+                prog.cal_confirm(False)   # voltages off, previous calibration kept
+            except Exception:
+                pass
+        raise
+    if accepted:
+        print("Calibration stored.")
+        show_calibration(prog.cal_get())
+        return 0
+    print("Calibration discarded; the previous one stays in effect.")
+    return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="pdkprog", description="PADAUK programmer client")
     p.add_argument("--version", action="version", version=f"pdkprog {__version__}")
@@ -219,6 +310,18 @@ def build_parser() -> argparse.ArgumentParser:
     k.add_argument("action", choices=["info", "read", "delete", "check"])
     k.add_argument("file", nargs="?")
     k.set_defaults(func=cmd_pkg)
+
+    c = sub.add_parser("calibrate", help="calibrate VDD/VPP with an external meter (nothing connected!)")
+    c.add_argument("--show", action="store_true", help="print the stored calibration")
+    c.add_argument("--reset", action="store_true", help="clear the stored calibration")
+    c.add_argument("--yes", action="store_true", help="do not ask whether the outputs are disconnected")
+    c.add_argument("--vdd", help="measured VDD in volts (otherwise asked)")
+    c.add_argument("--vpp", help="measured VPP in volts (otherwise asked)")
+    g = c.add_mutually_exclusive_group()
+    g.add_argument("--accept", dest="accept", action="store_true", default=None,
+                   help="store without asking (the check voltages were verified)")
+    g.add_argument("--reject", dest="accept", action="store_false", help="discard without asking")
+    c.set_defaults(func=cmd_calibrate)
 
     sub.add_parser("info", help="programmer information").set_defaults(func=cmd_info)
     sub.add_parser("list", help="chips supported by the programmer").set_defaults(func=cmd_list)

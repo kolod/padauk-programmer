@@ -2,7 +2,7 @@
 /* pdk-sim: the programmer core on the PC, speaking the protocol over TCP.
  *
  *   pdk-sim [--tcp HOST:PORT] [--flash FILE] [--power-fail-after N] [--power-fault RAIL:MODE]
- *           [--corrupt-flash-during-write] [--uid HEX24]
+ *           [--power-scale RAIL:OUT:MEAS] [--corrupt-flash-during-write] [--uid HEX24]
  *
  * Exit code 99 = simulated power loss. Prints "listening HOST:PORT" on stdout when ready.
  */
@@ -17,7 +17,8 @@
 static void usage(void)
 {
     fprintf(stderr, "usage: pdk-sim [--tcp HOST:PORT] [--flash FILE] [--power-fail-after N]\n"
-                    "               [--power-fault vdd|vpp:low|slow|stuck] [--corrupt-flash-during-write] [--uid HEX24]\n");
+                    "               [--power-fault vdd|vpp:low|slow|stuck] [--power-scale vdd|vpp:OUT:MEAS]\n"
+                    "               [--corrupt-flash-during-write] [--uid HEX24]\n");
     exit(2);
 }
 
@@ -56,6 +57,10 @@ int main(int argc, char **argv)
             i++;
         } else if (!strcmp(a, "--power-fault") && v) {
             if (!host_power_fault(v))
+                usage();
+            i++;
+        } else if (!strcmp(a, "--power-scale") && v) {
+            if (!host_power_scale(v))
                 usage();
             i++;
         } else if (!strcmp(a, "--corrupt-flash-during-write")) {

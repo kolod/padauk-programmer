@@ -25,6 +25,9 @@ uint8_t package_store_recheck(uint32_t *computed_crc);
 bool package_store_commit(uint8_t slot, uint32_t size, uint32_t crc);
 bool package_store_delete(void);
 
+/* Stores the supply calibration (power.h POWER_CAL_*) in the journal; valid = false clears it. */
+bool package_store_save_supply_cal(const int8_t cal[4], bool valid);
+
 void package_store_read(uint32_t offset, uint8_t *buf, size_t len);
 
 #endif

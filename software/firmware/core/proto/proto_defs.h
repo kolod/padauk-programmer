@@ -39,6 +39,13 @@ enum {
     PDK_CMD_OP_RESULT = 0x0022,
     PDK_CMD_RESULT_READ = 0x0023,
     PDK_CMD_UART_TX = 0x0030,
+
+    /* programmer service */
+    PDK_CMD_CAL_START = 0x0040,
+    PDK_CMD_CAL_SET = 0x0041,
+    PDK_CMD_CAL_CONFIRM = 0x0042,
+    PDK_CMD_CAL_GET = 0x0043,
+    PDK_CMD_CAL_CLEAR = 0x0044,
 };
 
 /* Events (§5) */
@@ -180,6 +187,7 @@ enum {
     PDK_CAP_MEASURE_POWER = 1u << 4,
     PDK_CAP_SELF_TEST = 1u << 5,
     PDK_CAP_PATCH = 1u << 6,
+    PDK_CAP_SUPPLY_CAL = 1u << 7,
 };
 
 /* CHIP_DESC.ops bits */

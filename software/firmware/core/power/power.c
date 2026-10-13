@@ -1,8 +1,33 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "power.h"
 
+#include <string.h>
+
 #include "hal_time.h"
 #include "proto/proto_defs.h"
+
+static int8_t cal[4];
+
+void power_set_calibration(const int8_t c[4]) { memcpy(cal, c, sizeof cal); }
+void power_get_calibration(int8_t c[4]) { memcpy(c, cal, sizeof cal); }
+
+static uint32_t scale(uint32_t v, int32_t num, int32_t den)
+{
+    uint32_t r = (uint32_t)(((uint64_t)v * (uint32_t)num + (uint32_t)den / 2u) / (uint32_t)den);
+    return r > 0xFFFFu ? 0xFFFFu : r;
+}
+
+void power_set_raw(pdk_rail_t rail, uint16_t mV)
+{
+    int8_t out = cal[rail == PDK_RAIL_VDD ? POWER_CAL_OUT_VDD : POWER_CAL_OUT_VPP];
+    hal_power_set(rail, (uint16_t)scale(mV, 1000, 1000 + out));
+}
+
+uint16_t power_measure(pdk_rail_t rail)
+{
+    int8_t meas = cal[rail == PDK_RAIL_VDD ? POWER_CAL_MEAS_VDD : POWER_CAL_MEAS_VPP];
+    return (uint16_t)scale(hal_power_measure(rail), 1000 + meas, 1000);
+}
 
 uint16_t power_tolerance_mV(uint16_t target_mV)
 {
@@ -18,7 +43,7 @@ void power_off_all(void)
 uint16_t power_apply(pdk_rail_t rail, uint16_t mV, uint32_t min_pause_us, power_fault_t *fault)
 {
     uint16_t tol = power_tolerance_mV(mV);
-    hal_power_set(rail, mV);
+    power_set_raw(rail, mV);
     uint32_t start = hal_time_us();
     uint32_t last_sample = 0;
     int have_sample = 0;
@@ -31,7 +56,7 @@ uint16_t power_apply(pdk_rail_t rail, uint16_t mV, uint32_t min_pause_us, power_
         if (!have_sample || now - last_sample >= POWER_SAMPLE_GAP_US) {
             have_sample = 1;
             last_sample = now;
-            meas = hal_power_measure(rail);
+            meas = power_measure(rail);
             int diff = (int)meas - (int)mV;
             if (diff < 0)
                 diff = -diff;

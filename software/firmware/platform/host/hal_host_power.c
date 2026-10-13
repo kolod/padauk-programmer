@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* Supply model: linear ramp to the target in SETTLE_US, small noise, optional faults. */
+/* Supply model: linear ramp to the target in SETTLE_US, small noise, optional faults and scale errors
+ * (output stage and ADC, for supply calibration tests). */
 #include "hal_power.h"
 #include "hal_time.h"
 #include "host.h"
@@ -16,7 +17,30 @@ static struct {
     uint16_t target, from;
     uint32_t set_at;
     mode_t_ mode;
-} rail[2];
+    double out_scale, meas_scale;   /* true = set · out_scale, reading = true · meas_scale */
+} rail[2] = {{0, 0, 0, MODE_OK, 1.0, 1.0}, {0, 0, 0, MODE_OK, 1.0, 1.0}};
+
+/* "vdd:OUT:MEAS", e.g. "vpp:0.948:1.012". */
+bool host_power_scale(const char *spec)
+{
+    int r;
+    if (!strncmp(spec, "vdd:", 4))
+        r = PDK_RAIL_VDD;
+    else if (!strncmp(spec, "vpp:", 4))
+        r = PDK_RAIL_VPP;
+    else
+        return false;
+    char *end;
+    double out = strtod(spec + 4, &end);
+    if (*end != ':')
+        return false;
+    double meas = strtod(end + 1, &end);
+    if (*end || out < 0.8 || out > 1.2 || meas < 0.8 || meas > 1.2)
+        return false;
+    rail[r].out_scale = out;
+    rail[r].meas_scale = meas;
+    return true;
+}
 
 bool host_power_fault(const char *spec)
 {
@@ -63,6 +87,7 @@ uint16_t hal_power_measure(pdk_rail_t r)
     case MODE_LOW: v = rail[r].target * 9 / 10; break;
     default: v = ideal(r); break;
     }
+    v = (int)(v * rail[r].out_scale * rail[r].meas_scale + 0.5);
     v += (rand() % 9) - 4;   /* ±4 mV noise */
     return (uint16_t)(v < 0 ? 0 : v);
 }
