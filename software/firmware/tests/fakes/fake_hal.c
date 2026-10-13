@@ -39,6 +39,7 @@ static struct {
     fake_power_mode_t mode[2];
     uint32_t settle_us;
     uint32_t off_calls;
+    uint32_t out_ppm[2], meas_ppm[2];   /* scale errors: output (DAC/stage) and measurement (ADC) */
 
     pdk_ui_state_t ui;
 } f;
@@ -59,6 +60,7 @@ void fake_reset(void)
     memset(f.flash, 0xFF, sizeof f.flash);
     f.open = true;
     f.settle_us = 200;
+    f.out_ppm[0] = f.out_ppm[1] = f.meas_ppm[0] = f.meas_ppm[1] = 1000000u;
 }
 
 /* ---------------- transport ---------------- */
@@ -245,6 +247,12 @@ void hal_flash_read(uint32_t addr, uint8_t *buf, size_t len)
 
 /* ---------------- power ---------------- */
 void fake_power_mode(pdk_rail_t rail, fake_power_mode_t mode) { f.mode[rail] = mode; }
+
+void fake_power_scale(pdk_rail_t rail, uint32_t out_ppm, uint32_t meas_ppm)
+{
+    f.out_ppm[rail] = out_ppm;
+    f.meas_ppm[rail] = meas_ppm;
+}
 void fake_power_settle_us(uint32_t us) { f.settle_us = us; }
 uint16_t fake_power_set_value(pdk_rail_t rail) { return f.set[rail]; }
 uint32_t fake_power_off_calls(void) { return f.off_calls; }
@@ -266,14 +274,22 @@ void hal_power_set(pdk_rail_t rail, uint16_t mV)
     f.set_at[rail] = f.now_us;
 }
 
+/* What an external meter shows: the ideal ramp scaled by the output error. */
+uint16_t fake_power_true_mV(pdk_rail_t rail)
+{
+    uint16_t v;
+    switch (f.mode[rail]) {
+    case FAKE_POWER_STUCK: v = f.from[rail]; break;
+    case FAKE_POWER_LOW: v = (uint16_t)(f.set[rail] * 9u / 10u); break;
+    default: v = ideal(rail); break;
+    }
+    return (uint16_t)((uint64_t)v * f.out_ppm[rail] / 1000000u);
+}
+
 uint16_t hal_power_measure(pdk_rail_t rail)
 {
     f.now_us += 10;   /* a measurement takes time */
-    switch (f.mode[rail]) {
-    case FAKE_POWER_STUCK: return f.from[rail];
-    case FAKE_POWER_LOW: return (uint16_t)(f.set[rail] * 9u / 10u);
-    default: return ideal(rail);
-    }
+    return (uint16_t)((uint64_t)fake_power_true_mV(rail) * f.meas_ppm[rail] / 1000000u);
 }
 
 void hal_power_off_all(void)

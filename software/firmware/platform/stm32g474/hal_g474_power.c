@@ -10,7 +10,8 @@
  *          trips TIM1 break: the gate goes low and stays low until reset (AOE = 0). COMP1 is locked.
  *   -2.5 V diode charge pump driven by TIM16_CH1 (PB4), 100 kHz, 50 %, low-speed edges. PB4 is on the
  *          far side of the package from the analog pins (PA0…PB2, VREF+, VDDA).
- * VDD/VPP: DAC1 → linear output stage (op-amp from +15 V / -2.5 V), as on the Easy PDK board:
+ * VDD/VPP: DAC1 (output buffers off, so 0 V is reachable) → linear output stage (op-amp from
+ *   +15 V / -2.5 V), as on the Easy PDK board:
  *   DAC full scale → 6.26 V VDD / 13.27 V VPP, ADC inputs on /6 dividers, VDDA from VREFINT
  *   (calibrated at 3.0 V on the G4).
  * Without PDK_G474_SUPPLIES nothing is driven: limits are 0 V, measurements 0 V, and every nonzero
@@ -52,7 +53,10 @@ void g474_supplies_early_off(void)
     if (RCC->APB2ENR & RCC_APB2ENR_TIM1EN)
         TIM1->BDTR &= ~TIM_BDTR_MOE;
     GPIOA->MODER |= (3u << 8) | (3u << 10);   /* PA4, PA5 analog (reset state) */
-    DAC1->MCR = DAC_MCR_HFSEL_1;               /* AHB > 160 MHz once the PLL runs */
+    /* Output buffers off (MODE = 010, external pin): the load is an op-amp input with a 240 k pull-down,
+     * and only the unbuffered DAC reaches 0 V (buffered: about 0.2 V … VDDA − 0.2 V). The output
+     * impedance (~10-15 k) and the 10 nF on the pin form the anti-noise RC filter. */
+    DAC1->MCR = DAC_MCR_HFSEL_1 | (2u << DAC_MCR_MODE1_Pos) | (2u << DAC_MCR_MODE2_Pos);
     DAC1->DHR12RD = 0;
     DAC1->CR = DAC_CR_EN1 | DAC_CR_EN2;
 }

@@ -15,12 +15,16 @@ typedef struct {
     uint8_t cfg_copy_ihrc;
     uint8_t cfg_copy_ilrc;
     uint8_t cfg_copy_bg;
-    uint16_t flags;           /* PDK_FLAG_MASTER_RESTORE_PENDING */
+    uint16_t flags;           /* PDK_FLAG_MASTER_RESTORE_PENDING, JOURNAL_FLAG_SUPPLY_CAL */
     uint32_t package_size;
     uint32_t package_crc;
     uint32_t ok_count;
     uint32_t fail_count;
+    int8_t supply_cal[4];     /* per mille, valid with JOURNAL_FLAG_SUPPLY_CAL; see power.h */
 } journal_state_t;
+
+/* Journal-only flag (not a protocol STATUS flag): supply_cal[] holds a confirmed calibration. */
+#define JOURNAL_FLAG_SUPPLY_CAL 0x8000u
 
 void journal_record_encode(const journal_state_t *st, uint8_t out[JOURNAL_RECORD_SIZE]);
 bool journal_record_decode(const uint8_t in[JOURNAL_RECORD_SIZE], journal_state_t *st);

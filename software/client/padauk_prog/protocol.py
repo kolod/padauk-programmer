@@ -37,6 +37,11 @@ class Cmd(IntEnum):
     OP_RESULT = 0x0022
     RESULT_READ = 0x0023
     UART_TX = 0x0030
+    CAL_START = 0x0040
+    CAL_SET = 0x0041
+    CAL_CONFIRM = 0x0042
+    CAL_GET = 0x0043
+    CAL_CLEAR = 0x0044
 
 
 class Evt(IntEnum):
@@ -92,6 +97,10 @@ class Status(IntEnum):
     SELFTEST_FAILED = 0x0412
     CHIP_ALREADY_PROGRAMMED = 0x0413
     COPY_MASTER_UNCALIBRATED = 0x0414
+
+
+CAP_MEASURE_POWER = 1 << 4
+CAP_SUPPLY_CAL = 1 << 7
 
 
 class PkgState(IntEnum):
@@ -340,6 +349,30 @@ class Programmer:
         p = self.call(Cmd.PKG_CHECK)
         state, crc = struct.unpack_from("<BI", p)
         return {"state": PkgState(state), "crc32": crc}
+
+    # ---------------------------------------------------------------- supply calibration
+    def cal_start(self) -> dict:
+        """Raises VDD/VPP to the calibration points (no target may be connected)."""
+        p = self.call(Cmd.CAL_START, timeout=max(self.timeout, 1.0))
+        vdd, vpp, vdd_raw, vpp_raw = struct.unpack_from("<4H", p)
+        return {"vdd_set_mV": vdd, "vpp_set_mV": vpp, "vdd_raw_mV": vdd_raw, "vpp_raw_mV": vpp_raw}
+
+    def cal_set(self, vdd_mV: int, vpp_mV: int) -> dict:
+        """Sends the voltages read on an external meter; the programmer then applies exact check voltages."""
+        p = self.call(Cmd.CAL_SET, struct.pack("<2H", vdd_mV, vpp_mV), timeout=max(self.timeout, 1.0))
+        vdd_t, vpp_t, vdd_m, vpp_m = struct.unpack_from("<4H", p)
+        return {"vdd_target_mV": vdd_t, "vpp_target_mV": vpp_t, "vdd_meas_mV": vdd_m, "vpp_meas_mV": vpp_m,
+                "cal_permille": struct.unpack_from("<4b", p, 8)}
+
+    def cal_confirm(self, accept: bool) -> None:
+        self.call(Cmd.CAL_CONFIRM, bytes([1 if accept else 0]))
+
+    def cal_get(self) -> dict:
+        p = self.call(Cmd.CAL_GET)
+        return {"valid": bool(p[0]), "cal_permille": struct.unpack_from("<4b", p, 1), "state": p[5]}
+
+    def cal_clear(self) -> None:
+        self.call(Cmd.CAL_CLEAR)
 
     def close(self) -> None:
         self.t.close()

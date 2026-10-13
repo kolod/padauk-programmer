@@ -71,17 +71,22 @@ void host_transport_shutdown(void)
     client = listener = SOCK_BAD;
 }
 
+/* After a disconnect the port reads "closed" at least once before the next client is accepted, so
+ * the core sees the session end even when the host reconnects at once (like DTR going low on USB). */
+static bool dropped;
+
 static void drop_client(void)
 {
     if (client != SOCK_BAD) {
         sock_close(client);
         client = SOCK_BAD;
+        dropped = true;
     }
 }
 
 static void poll_accept(void)
 {
-    if (client != SOCK_BAD || listener == SOCK_BAD)
+    if (client != SOCK_BAD || listener == SOCK_BAD || dropped)
         return;
     sock_t c = accept(listener, NULL, NULL);
     if (c == SOCK_BAD)
@@ -94,13 +99,18 @@ static void poll_accept(void)
 
 bool hal_transport_is_open(void)
 {
+    if (dropped) {
+        dropped = false;
+        return false;
+    }
     poll_accept();
     return client != SOCK_BAD;
 }
 
 size_t hal_transport_read(uint8_t *buf, size_t max)
 {
-    poll_accept();
+    /* no accept here: a new client is taken only by hal_transport_is_open(), so the session layer
+     * sees every open/close transition before the client's data */
     if (client == SOCK_BAD)
         return 0;
     int n = recv(client, (char *)buf, (int)max, 0);

@@ -41,6 +41,9 @@ void fake_flash_write_unit(uint8_t unit);
 /* --- power --- */
 typedef enum { FAKE_POWER_OK = 0, FAKE_POWER_SLOW, FAKE_POWER_STUCK, FAKE_POWER_LOW } fake_power_mode_t;
 void fake_power_mode(pdk_rail_t rail, fake_power_mode_t mode);
+/* Scale errors in ppm (1000000 = none): output stage (true = set · out) and ADC (reading = true · meas). */
+void fake_power_scale(pdk_rail_t rail, uint32_t out_ppm, uint32_t meas_ppm);
+uint16_t fake_power_true_mV(pdk_rail_t rail);   /* what an external meter would show */
 void fake_power_settle_us(uint32_t us);   /* time constant of an ideal supply */
 uint16_t fake_power_set_value(pdk_rail_t rail);
 uint32_t fake_power_off_calls(void);

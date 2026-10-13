@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "package_store.h"
 
+#include <string.h>
+
 #include "journal.h"
 #include "proto/le.h"
 #include "proto/proto_defs.h"
@@ -70,6 +72,19 @@ bool package_store_delete(void)
     slots_set_active(SLOT_NONE);   /* the deleted package is erased in the background */
     state = PDK_PKG_EMPTY;
     return true;
+}
+
+bool package_store_save_supply_cal(const int8_t cal[4], bool valid)
+{
+    journal_state_t st = *journal_get();
+    if (valid) {
+        st.flags |= JOURNAL_FLAG_SUPPLY_CAL;
+        memcpy(st.supply_cal, cal, sizeof st.supply_cal);
+    } else {
+        st.flags &= (uint16_t)~JOURNAL_FLAG_SUPPLY_CAL;
+        memset(st.supply_cal, 0, sizeof st.supply_cal);
+    }
+    return journal_append(&st);
 }
 
 void package_store_read(uint32_t offset, uint8_t *buf, size_t len)

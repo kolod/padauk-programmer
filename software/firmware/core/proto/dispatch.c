@@ -11,6 +11,7 @@
 #include "le.h"
 #include "ops/op_manager.h"
 #include "package/pkg_cmds.h"
+#include "power/supply_cal.h"
 #include "pdk_config.h"
 #include "proto_defs.h"
 #include "session.h"
@@ -30,6 +31,11 @@ static const pdk_command_t commands[] = {
     {PDK_CMD_PKG_READ, 0, pkg_cmd_read},
     {PDK_CMD_PKG_DELETE, 0, pkg_cmd_delete},
     {PDK_CMD_PKG_CHECK, 0, pkg_cmd_check},
+    {PDK_CMD_CAL_START, 0, supply_cal_cmd_start},
+    {PDK_CMD_CAL_SET, 0, supply_cal_cmd_set},
+    {PDK_CMD_CAL_CONFIRM, 0, supply_cal_cmd_confirm},
+    {PDK_CMD_CAL_GET, PDK_CMDF_DURING_OP, supply_cal_cmd_get},
+    {PDK_CMD_CAL_CLEAR, 0, supply_cal_cmd_clear},
 };
 
 static uint32_t capabilities(void)
@@ -39,7 +45,7 @@ static uint32_t capabilities(void)
     uint16_t vdd_max, vpp_max;
     hal_power_limits(&vdd_max, &vpp_max);
     if (vdd_max && vpp_max)   /* a board without the supply front end reports 0 V limits */
-        caps |= PDK_CAP_MEASURE_POWER;
+        caps |= PDK_CAP_MEASURE_POWER | PDK_CAP_SUPPLY_CAL;
     return caps;
 }
 
