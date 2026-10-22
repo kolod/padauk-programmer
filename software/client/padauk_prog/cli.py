@@ -30,6 +30,8 @@ PKG_MESSAGES = {
     Status.STORE_CORRUPTED: "stored package is corrupted",
     Status.MASTER_RESTORE_PENDING: "a master chip restore is pending; run restore-master first",
     Status.BUSY: "the programmer is busy",
+    Status.CALIB_WRONG_SITE: "the chip runs a different calibration placeholder than the one being calibrated - "
+                             "placeholders must be executed in address order (see docs/padauk-calibration.md)",
 }
 
 
