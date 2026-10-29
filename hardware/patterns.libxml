@@ -1,0 +1,330 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Library Type="DipTrace-PatternLibrary" Version="5.3.5.1" Name="Programmer" Hint="Programmer Patterns" UID32="186077008" Units="mm">
+<PadStyles>
+<PadStyle Name="PadT0" Type="Through" HoleType="Round" Hole="1">
+<MainStack Shape="Obround" Width="1.5" Height="2" XOff="0" YOff="0" />
+<Terminals>
+<Terminal Shape="Rectangle" X="0" Y="0" Angle="0" Width="0.64" Height="0.64" Corner="0" />
+</Terminals>
+</PadStyle>
+<PadStyle Name="PadT1" Type="Through" HoleType="Round" Hole="1">
+<MainStack Shape="Rectangle" Width="1.5" Height="20" XOff="0" YOff="8.73" Corner="20" />
+<Terminals>
+<Terminal Shape="Rectangle" X="0" Y="0" Angle="0" Width="0.64" Height="0.64" Corner="0" />
+</Terminals>
+</PadStyle>
+<PadStyle Name="PadT2" Type="Through" HoleType="Round" Hole="1">
+<MainStack Shape="Obround" Width="1.5" Height="1.5" XOff="0" YOff="0" />
+<Terminals>
+<Terminal Shape="Obround" X="0" Y="0" Angle="0" Width="0.7" Height="0.7" />
+</Terminals>
+</PadStyle>
+</PadStyles>
+<Patterns>
+<Pattern Id="0" RefDes="A" Mounting="None" Width="61.42" Height="18.24" Orientation="0" LockTypeChange="N" Type="Lines" Float1="2.54" Float2="15.24" Float3="0" Int1="2" Int2="48">
+<Name>stm32f4xx-long</Name>
+<Value>stm32f4xx-long</Value>
+<Manufacturer>weact</Manufacturer>
+<Origin X="0" Y="0" Cross="Y" Circle="Y" Common="Hide" Courtyard="Show" />
+<DefPad Style="PadT0" />
+<Pads>
+<Pad Id="1" Style="PadT0" DefStyle="Y" X="-29.21" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>1</Number>
+</Pad>
+<Pad Id="2" Style="PadT0" DefStyle="Y" X="-26.67" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>2</Number>
+</Pad>
+<Pad Id="3" Style="PadT0" DefStyle="Y" X="-24.13" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>3</Number>
+</Pad>
+<Pad Id="4" Style="PadT0" DefStyle="Y" X="-21.59" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>4</Number>
+</Pad>
+<Pad Id="5" Style="PadT0" DefStyle="Y" X="-19.05" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>5</Number>
+</Pad>
+<Pad Id="6" Style="PadT0" DefStyle="Y" X="-16.51" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>6</Number>
+</Pad>
+<Pad Id="7" Style="PadT0" DefStyle="Y" X="-13.97" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>7</Number>
+</Pad>
+<Pad Id="8" Style="PadT0" DefStyle="Y" X="-11.43" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>8</Number>
+</Pad>
+<Pad Id="9" Style="PadT0" DefStyle="Y" X="-8.89" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>9</Number>
+</Pad>
+<Pad Id="10" Style="PadT0" DefStyle="Y" X="-6.35" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>10</Number>
+</Pad>
+<Pad Id="11" Style="PadT0" DefStyle="Y" X="-3.81" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>11</Number>
+</Pad>
+<Pad Id="12" Style="PadT0" DefStyle="Y" X="-1.27" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>12</Number>
+</Pad>
+<Pad Id="13" Style="PadT0" DefStyle="Y" X="1.27" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>13</Number>
+</Pad>
+<Pad Id="14" Style="PadT0" DefStyle="Y" X="3.81" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>14</Number>
+</Pad>
+<Pad Id="15" Style="PadT0" DefStyle="Y" X="6.35" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>15</Number>
+</Pad>
+<Pad Id="16" Style="PadT0" DefStyle="Y" X="8.89" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>16</Number>
+</Pad>
+<Pad Id="17" Style="PadT0" DefStyle="Y" X="11.43" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>17</Number>
+</Pad>
+<Pad Id="18" Style="PadT0" DefStyle="Y" X="13.97" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>18</Number>
+</Pad>
+<Pad Id="19" Style="PadT0" DefStyle="Y" X="16.51" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>19</Number>
+</Pad>
+<Pad Id="20" Style="PadT0" DefStyle="Y" X="19.05" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>20</Number>
+</Pad>
+<Pad Id="21" Style="PadT0" DefStyle="Y" X="21.59" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>21</Number>
+</Pad>
+<Pad Id="22" Style="PadT0" DefStyle="Y" X="24.13" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>22</Number>
+</Pad>
+<Pad Id="23" Style="PadT0" DefStyle="Y" X="26.67" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>23</Number>
+</Pad>
+<Pad Id="24" Style="PadT0" DefStyle="Y" X="29.21" Y="-7.62" Angle="0" Locked="N" Side="Top">
+<Number>24</Number>
+</Pad>
+<Pad Id="25" Style="PadT0" DefStyle="Y" X="29.21" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>25</Number>
+</Pad>
+<Pad Id="26" Style="PadT0" DefStyle="Y" X="26.67" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>26</Number>
+</Pad>
+<Pad Id="27" Style="PadT0" DefStyle="Y" X="24.13" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>27</Number>
+</Pad>
+<Pad Id="28" Style="PadT0" DefStyle="Y" X="21.59" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>28</Number>
+</Pad>
+<Pad Id="29" Style="PadT0" DefStyle="Y" X="19.05" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>29</Number>
+</Pad>
+<Pad Id="30" Style="PadT0" DefStyle="Y" X="16.51" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>30</Number>
+</Pad>
+<Pad Id="31" Style="PadT0" DefStyle="Y" X="13.97" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>31</Number>
+</Pad>
+<Pad Id="32" Style="PadT0" DefStyle="Y" X="11.43" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>32</Number>
+</Pad>
+<Pad Id="33" Style="PadT0" DefStyle="Y" X="8.89" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>33</Number>
+</Pad>
+<Pad Id="34" Style="PadT0" DefStyle="Y" X="6.35" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>34</Number>
+</Pad>
+<Pad Id="35" Style="PadT0" DefStyle="Y" X="3.81" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>35</Number>
+</Pad>
+<Pad Id="36" Style="PadT0" DefStyle="Y" X="1.27" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>36</Number>
+</Pad>
+<Pad Id="37" Style="PadT0" DefStyle="Y" X="-1.27" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>37</Number>
+</Pad>
+<Pad Id="38" Style="PadT0" DefStyle="Y" X="-3.81" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>38</Number>
+</Pad>
+<Pad Id="39" Style="PadT0" DefStyle="Y" X="-6.35" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>39</Number>
+</Pad>
+<Pad Id="40" Style="PadT0" DefStyle="Y" X="-8.89" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>40</Number>
+</Pad>
+<Pad Id="41" Style="PadT0" DefStyle="Y" X="-11.43" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>41</Number>
+</Pad>
+<Pad Id="42" Style="PadT0" DefStyle="Y" X="-13.97" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>42</Number>
+</Pad>
+<Pad Id="43" Style="PadT0" DefStyle="Y" X="-16.51" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>43</Number>
+</Pad>
+<Pad Id="44" Style="PadT0" DefStyle="Y" X="-19.05" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>44</Number>
+</Pad>
+<Pad Id="45" Style="PadT0" DefStyle="Y" X="-21.59" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>45</Number>
+</Pad>
+<Pad Id="46" Style="PadT0" DefStyle="Y" X="-24.13" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>46</Number>
+</Pad>
+<Pad Id="47" Style="PadT0" DefStyle="Y" X="-26.67" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>47</Number>
+</Pad>
+<Pad Id="48" Style="PadT0" DefStyle="Y" X="-29.21" Y="7.62" Angle="3.14159" Locked="N" Side="Top">
+<Number>48</Number>
+</Pad>
+</Pads>
+<Shapes>
+<Shape Id="1" Type="Rectangle" Locked="N" Layer="Top Outline" AllLayers="N" PadId="0">
+<Points>
+<Point X="-30.71" Y="9.12" />
+<Point X="30.71" Y="-9.12" />
+</Points>
+</Shape>
+<Shape Id="2" Type="Rectangle" Locked="N" Layer="Top Silk" AllLayers="N" PadId="0">
+<Points>
+<Point X="-30.71" Y="9.12" />
+<Point X="30.71" Y="-9.12" />
+</Points>
+</Shape>
+<Shape Id="3" Type="Rectangle" Locked="N" Layer="Top Assy" AllLayers="N" PadId="0">
+<Points>
+<Point X="-30.71" Y="9.12" />
+<Point X="30.71" Y="-9.12" />
+</Points>
+</Shape>
+</Shapes>
+<Dimensions>
+<Dimension Id="0" Locked="N" Type="Horizontal" Connected1="Shape" Object1="0" SubObject1="1" Point1="2" Connected2="Pad" Object2="0" SubObject2="1" Point2="0" Layer="Top Dimension" X1="-30.71" Y1="-9.12" X2="-29.21" Y2="-7.62" XD="-30.71" YD="-14.2" ArrowSize="0.66667" Units="Common" FontVector="Y" FontMono="N" FontName="Tahoma" FontSize="2" FontSizeFloat="2" FontScale="1" FontWidth="-2" ShowUnits="N" Angle="0" ExternalRadius="0" PointerMode="0" />
+<Dimension Id="1" Locked="N" Type="Horizontal" Connected1="Shape" Object1="0" SubObject1="1" Point1="2" Connected2="Shape" Object2="0" SubObject2="1" Point2="1" Layer="Top Dimension" X1="-30.71" Y1="-9.12" X2="30.71" Y2="-9.12" XD="-30.71" YD="-16.74" ArrowSize="0.66667" Units="Common" FontVector="Y" FontMono="N" FontName="Tahoma" FontSize="2" FontSizeFloat="2" FontScale="1" FontWidth="-2" ShowUnits="N" Angle="0" ExternalRadius="0" PointerMode="0" />
+<Dimension Id="2" Locked="N" Type="Vertical" Connected1="Pad" Object1="0" SubObject1="48" Point1="0" Connected2="Pad" Object2="0" SubObject2="1" Point2="0" Layer="Top Dimension" X1="-29.21" Y1="7.62" X2="-29.21" Y2="-7.62" XD="-35.79" YD="7.62" ArrowSize="0.66667" Units="Common" FontVector="Y" FontMono="N" FontName="Tahoma" FontSize="2" FontSizeFloat="2" FontScale="1" FontWidth="-2" ShowUnits="N" Angle="0" ExternalRadius="0" PointerMode="0" />
+<Dimension Id="3" Locked="N" Type="Vertical" Connected1="Shape" Object1="0" SubObject1="1" Point1="0" Connected2="Shape" Object2="0" SubObject2="1" Point2="2" Layer="Top Dimension" X1="-30.71" Y1="9.12" X2="-30.71" Y2="-9.12" XD="-38.33" YD="9.12" ArrowSize="0.66667" Units="Common" FontVector="Y" FontMono="N" FontName="Tahoma" FontSize="2" FontSizeFloat="2" FontScale="1" FontWidth="-2" ShowUnits="N" Angle="0" ExternalRadius="0" PointerMode="0" />
+</Dimensions>
+<Model3D Mirror="N" NoSearch="N" Units="mm" IPC_XOff="0" IPC_YOff="0" AutoHeight="0" AutoColor="4934475" Type="File" KeepPins="N">
+<Filename>
+<Path>C:\Users\alexa\Projects\aram\padauk-programmer\hardware\3d_models\WeAct-STM32G474CoreBoard_Long_V10.STEP</Path>
+<Var>C:\Users\alexa\Projects\aram\padauk-programmer\hardware\3d_models\WeAct-STM32G474CoreBoard_Long_V10.STEP</Var>
+</Filename>
+<Rotate X="0" Y="0" Z="0" />
+<Offset X="0" Y="0" Z="0" />
+<Zoom X="1" Y="1" Z="1" />
+</Model3D>
+</Pattern>
+<Pattern Id="1" RefDes="J" Mounting="None" Width="20.955" Height="20.32" Orientation="0" LockTypeChange="N" Type="Lines" Float1="2.54" Float2="7.62" Float3="0" Int1="1" Int2="8">
+<Name>PDK-ICP</Name>
+<Value>PDK-ICP</Value>
+<Origin X="0" Y="0" Cross="Y" Circle="Y" Common="Hide" Courtyard="Show" />
+<DefPad Style="PadT1" />
+<Pads>
+<Pad Id="1" Style="PadT1" DefStyle="Y" X="8.73" Y="8.89" Angle="1.5708" Locked="N" Side="Top">
+<Number>1</Number>
+</Pad>
+<Pad Id="2" Style="PadT1" DefStyle="Y" X="8.73" Y="6.35" Angle="1.5708" Locked="N" Side="Top">
+<Number>2</Number>
+</Pad>
+<Pad Id="3" Style="PadT1" DefStyle="Y" X="8.73" Y="3.81" Angle="1.5708" Locked="N" Side="Top">
+<Number>3</Number>
+</Pad>
+<Pad Id="4" Style="PadT1" DefStyle="Y" X="8.73" Y="1.27" Angle="1.5708" Locked="N" Side="Top">
+<Number>4</Number>
+</Pad>
+<Pad Id="5" Style="PadT1" DefStyle="Y" X="8.73" Y="-1.27" Angle="1.5708" Locked="N" Side="Top">
+<Number>5</Number>
+</Pad>
+<Pad Id="6" Style="PadT1" DefStyle="Y" X="8.73" Y="-3.81" Angle="1.5708" Locked="N" Side="Top">
+<Number>6</Number>
+</Pad>
+<Pad Id="7" Style="PadT1" DefStyle="Y" X="8.73" Y="-6.35" Angle="1.5708" Locked="N" Side="Top">
+<Number>7</Number>
+</Pad>
+<Pad Id="8" Style="PadT1" DefStyle="Y" X="8.73" Y="-8.89" Angle="1.5708" Locked="N" Side="Top">
+<Number>8</Number>
+</Pad>
+</Pads>
+<Shapes>
+<Shape Id="1" Type="Polyline" Locked="N" Layer="Top Silk" AllLayers="N" PadId="0">
+<Points>
+<Point X="9.8425" Y="10.16" />
+<Point X="-10.4775" Y="10.16" />
+<Point X="-10.4775" Y="-10.16" />
+<Point X="9.8425" Y="-10.16" />
+</Points>
+</Shape>
+<Shape Id="2" Type="Rectangle" Locked="N" Layer="Top Assy" AllLayers="N" PadId="0">
+<Points>
+<Point X="-10.4775" Y="10.16" />
+<Point X="10.4775" Y="-10.16" />
+</Points>
+</Shape>
+<Shape Id="3" Type="Rectangle" Locked="N" Layer="Top Outline" AllLayers="N" PadId="0">
+<Points>
+<Point X="-10.4775" Y="10.16" />
+<Point X="10.4775" Y="-10.16" />
+</Points>
+</Shape>
+<Shape Id="4" Type="Rectangle" Locked="N" Layer="Top Courtyard" AllLayers="N" PadId="0">
+<Points>
+<Point X="-10.4775" Y="10.16" />
+<Point X="10.4775" Y="-10.16" />
+</Points>
+</Shape>
+</Shapes>
+<Model3D Mirror="N" NoSearch="N" Units="mm" IPC_XOff="0" IPC_YOff="0" AutoHeight="0" AutoColor="4934475" Type="File" KeepPins="N">
+<Filename>
+<Path>C:\Users\alexa\Projects\aram\padauk-programmer\hardware\3d_models\P100-E2x8.SLDPRT.STEP</Path>
+<Var>C:\Users\alexa\Projects\aram\padauk-programmer\hardware\3d_models\P100-E2x8.SLDPRT.STEP</Var>
+</Filename>
+<Rotate X="0" Y="0" Z="0" />
+<Offset X="0" Y="0" Z="0" />
+<Zoom X="1" Y="1" Z="1" />
+</Model3D>
+</Pattern>
+<Pattern Id="2" RefDes="L" Mounting="Through" Width="8.8" Height="8.8" Orientation="0" LockTypeChange="Y" Type="IPC-7351" Float1="0" Float2="0" Float3="0" Int1="1" Int2="0">
+<Name>INDRD500W70D830H750</Name>
+<Name_Description>Inductor, Non-Polarized, Radial Diameter, 5mm lead spacing, 0.7mm lead width, 8.3mm body diameter, 7.5mm height</Name_Description>
+<Value>RCH875NP-330K</Value>
+<Manufacturer>Sumida</Manufacturer>
+<Origin X="0" Y="0" Cross="Y" Circle="Y" Common="Hide" Courtyard="Show" />
+<RecoveryCode Generator="Y" Model="Y">[N;Radial (Inductor);1;N;Y;0;0;0;Y;Y;Y;Y;101;;|0;5;;;7.5;;;0.65;0.7;0.8;0.1;-0.05;7.3;7.8;8.3;0.5;-0.5;1;1.5|0;|;;;;0.5||||||||||||||4934475;15461355;16119285;Y]</RecoveryCode>
+<DefPad Style="PadT2" />
+<Pads>
+<Pad Id="1" Style="PadT2" DefStyle="Y" X="-2.5" Y="0" Angle="0" Locked="N" Side="Top">
+<Number>1</Number>
+</Pad>
+<Pad Id="2" Style="PadT2" DefStyle="Y" X="2.5" Y="0" Angle="3.14159" Locked="N" Side="Top">
+<Number>2</Number>
+</Pad>
+</Pads>
+<Shapes>
+<Shape Id="1" Type="Obround" Locked="N" Layer="Top Outline" LineWidth="0.05" AllLayers="N" PadId="0">
+<Points>
+<Point X="-3.9" Y="3.9" />
+<Point X="3.9" Y="-3.9" />
+</Points>
+</Shape>
+<Shape Id="2" Type="Obround" Locked="N" Layer="Top Silk" LineWidth="0.12" AllLayers="N" PadId="0">
+<Points>
+<Point X="-4.15" Y="4.15" />
+<Point X="4.15" Y="-4.15" />
+</Points>
+</Shape>
+<Shape Id="3" Type="Obround" Locked="N" Layer="Top Assy" LineWidth="0.12" AllLayers="N" PadId="0">
+<Points>
+<Point X="-4.15" Y="4.15" />
+<Point X="4.15" Y="-4.15" />
+</Points>
+</Shape>
+<Shape Id="4" Type="Obround" Locked="N" Layer="Top Courtyard" LineWidth="0.05" AllLayers="N" PadId="0">
+<Points>
+<Point X="-4.4" Y="4.4" />
+<Point X="4.4" Y="-4.4" />
+</Points>
+</Shape>
+</Shapes>
+<Model3D Mirror="N" NoSearch="N" Units="mm" IPC_XOff="0" IPC_YOff="0" AutoHeight="7.5" AutoColor="4934475" Type="IPC-7351" KeepPins="N">
+<Rotate X="0" Y="0" Z="0" />
+<Offset X="0" Y="0" Z="-0.05" />
+<Zoom X="1" Y="1" Z="1" />
+</Model3D>
+</Pattern>
+</Patterns>
+</Library>

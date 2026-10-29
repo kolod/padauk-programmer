@@ -1,0 +1,585 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Library Type="DipTrace-ComponentLibrary" Version="5.3.5.1" Name="Programmer" Hint="Programmer Components" UID32="1216028457" Units="inch">
+<Library Type="DipTrace-PatternLibrary" Version="5.3.5.1" Units="inch">
+<PadStyles>
+<PadStyle Name="PadT0" Type="Through" HoleType="Round" Hole="0.03937">
+<MainStack Shape="Rectangle" Width="0.059055" Height="0.787402" XOff="0" YOff="0.343701" Corner="20" />
+<Terminals>
+<Terminal Shape="Rectangle" X="0" Y="0" Angle="0" Width="0.025197" Height="0.025197" Corner="0" />
+</Terminals>
+</PadStyle>
+<PadStyle Name="PadT1" Type="Through" HoleType="Round" Hole="0.03937">
+<MainStack Shape="Obround" Width="0.059055" Height="0.059055" XOff="0" YOff="0" />
+<Terminals>
+<Terminal Shape="Obround" X="0" Y="0" Angle="0" Width="0.027559" Height="0.027559" />
+</Terminals>
+</PadStyle>
+</PadStyles>
+<Patterns>
+<Pattern PatternStyle="PatType0" Id="0" RefDes="J" Mounting="None" Width="0.825" Height="0.8" Orientation="0" LockTypeChange="N" Type="Lines" Float1="0.1" Float2="0.3" Float3="0" Int1="1" Int2="8">
+<Name>PDK-ICP</Name>
+<Value>PDK-ICP</Value>
+<Origin X="0" Y="0" Cross="Y" Circle="Y" Common="Hide" Courtyard="Show" />
+<DefPad Style="PadT0" />
+<Pads>
+<Pad Id="1" Style="PadT0" DefStyle="Y" X="0.343701" Y="0.35" Angle="1.5708" Locked="N" Side="Top">
+<Number>1</Number>
+</Pad>
+<Pad Id="2" Style="PadT0" DefStyle="Y" X="0.343701" Y="0.25" Angle="1.5708" Locked="N" Side="Top">
+<Number>2</Number>
+</Pad>
+<Pad Id="3" Style="PadT0" DefStyle="Y" X="0.343701" Y="0.15" Angle="1.5708" Locked="N" Side="Top">
+<Number>3</Number>
+</Pad>
+<Pad Id="4" Style="PadT0" DefStyle="Y" X="0.343701" Y="0.05" Angle="1.5708" Locked="N" Side="Top">
+<Number>4</Number>
+</Pad>
+<Pad Id="5" Style="PadT0" DefStyle="Y" X="0.343701" Y="-0.05" Angle="1.5708" Locked="N" Side="Top">
+<Number>5</Number>
+</Pad>
+<Pad Id="6" Style="PadT0" DefStyle="Y" X="0.343701" Y="-0.15" Angle="1.5708" Locked="N" Side="Top">
+<Number>6</Number>
+</Pad>
+<Pad Id="7" Style="PadT0" DefStyle="Y" X="0.343701" Y="-0.25" Angle="1.5708" Locked="N" Side="Top">
+<Number>7</Number>
+</Pad>
+<Pad Id="8" Style="PadT0" DefStyle="Y" X="0.343701" Y="-0.35" Angle="1.5708" Locked="N" Side="Top">
+<Number>8</Number>
+</Pad>
+</Pads>
+<Shapes>
+<Shape Id="1" Type="Polyline" Locked="N" Layer="Top Silk" AllLayers="N" PadId="0">
+<Points>
+<Point X="0.3875" Y="0.4" />
+<Point X="-0.4125" Y="0.4" />
+<Point X="-0.4125" Y="-0.4" />
+<Point X="0.3875" Y="-0.4" />
+</Points>
+</Shape>
+<Shape Id="2" Type="Rectangle" Locked="N" Layer="Top Assy" AllLayers="N" PadId="0">
+<Points>
+<Point X="-0.4125" Y="0.4" />
+<Point X="0.4125" Y="-0.4" />
+</Points>
+</Shape>
+<Shape Id="3" Type="Rectangle" Locked="N" Layer="Top Outline" AllLayers="N" PadId="0">
+<Points>
+<Point X="-0.4125" Y="0.4" />
+<Point X="0.4125" Y="-0.4" />
+</Points>
+</Shape>
+<Shape Id="4" Type="Rectangle" Locked="N" Layer="Top Courtyard" AllLayers="N" PadId="0">
+<Points>
+<Point X="-0.4125" Y="0.4" />
+<Point X="0.4125" Y="-0.4" />
+</Points>
+</Shape>
+</Shapes>
+<Model3D Mirror="N" NoSearch="N" Units="mm" IPC_XOff="0" IPC_YOff="0" AutoHeight="0" AutoColor="4934475" Type="File" KeepPins="N">
+<Filename>
+<Path>C:\Users\alexa\Projects\aram\padauk-programmer\hardware\3d_models\P100-E2x8.SLDPRT.STEP</Path>
+<Var>C:\Users\alexa\Projects\aram\padauk-programmer\hardware\3d_models\P100-E2x8.SLDPRT.STEP</Var>
+</Filename>
+<Rotate X="0" Y="0" Z="0" />
+<Offset X="0" Y="0" Z="0" />
+<Zoom X="1" Y="1" Z="1" />
+</Model3D>
+</Pattern>
+<Pattern PatternStyle="PatType1" Id="1" RefDes="L" Mounting="Through" Width="0.346457" Height="0.346457" Orientation="0" LockTypeChange="Y" Type="IPC-7351" Float1="0" Float2="0" Float3="0" Int1="1" Int2="0">
+<Name>INDRD500W70D830H750</Name>
+<Name_Description>Inductor, Non-Polarized, Radial Diameter, 5mm lead spacing, 0.7mm lead width, 8.3mm body diameter, 7.5mm height</Name_Description>
+<Value>RCH875NP-330K</Value>
+<Manufacturer>Sumida</Manufacturer>
+<Origin X="0" Y="0" Cross="Y" Circle="Y" Common="Hide" Courtyard="Show" />
+<RecoveryCode Generator="Y" Model="Y">[N;Radial (Inductor);1;N;Y;0;0;0;Y;Y;Y;Y;101;;|0;5;;;7.5;;;0.65;0.7;0.8;0.1;-0.05;7.3;7.8;8.3;0.5;-0.5;1;1.5|0;|;;;;0.5||||||||||||||4934475;15461355;16119285;Y]</RecoveryCode>
+<DefPad Style="PadT1" />
+<Pads>
+<Pad Id="1" Style="PadT1" DefStyle="Y" X="-0.098425" Y="0" Angle="0" Locked="N" Side="Top">
+<Number>1</Number>
+</Pad>
+<Pad Id="2" Style="PadT1" DefStyle="Y" X="0.098425" Y="0" Angle="3.14159" Locked="N" Side="Top">
+<Number>2</Number>
+</Pad>
+</Pads>
+<Shapes>
+<Shape Id="1" Type="Obround" Locked="N" Layer="Top Outline" LineWidth="0.001969" AllLayers="N" PadId="0">
+<Points>
+<Point X="-0.153543" Y="0.153543" />
+<Point X="0.153543" Y="-0.153543" />
+</Points>
+</Shape>
+<Shape Id="2" Type="Obround" Locked="N" Layer="Top Silk" LineWidth="0.004724" AllLayers="N" PadId="0">
+<Points>
+<Point X="-0.163386" Y="0.163386" />
+<Point X="0.163386" Y="-0.163386" />
+</Points>
+</Shape>
+<Shape Id="3" Type="Obround" Locked="N" Layer="Top Assy" LineWidth="0.004724" AllLayers="N" PadId="0">
+<Points>
+<Point X="-0.163386" Y="0.163386" />
+<Point X="0.163386" Y="-0.163386" />
+</Points>
+</Shape>
+<Shape Id="4" Type="Obround" Locked="N" Layer="Top Courtyard" LineWidth="0.001969" AllLayers="N" PadId="0">
+<Points>
+<Point X="-0.173228" Y="0.173228" />
+<Point X="0.173228" Y="-0.173228" />
+</Points>
+</Shape>
+</Shapes>
+<Model3D Mirror="N" NoSearch="N" Units="mm" IPC_XOff="0" IPC_YOff="0" AutoHeight="0.295276" AutoColor="4934475" Type="IPC-7351" KeepPins="N">
+<Rotate X="0" Y="0" Z="0" />
+<Offset X="0" Y="0" Z="-0.001969" />
+<Zoom X="1" Y="1" Z="1" />
+</Model3D>
+</Pattern>
+</Patterns>
+</Library>
+<Categories>
+<Category Index="0">
+<Name>Symbols</Name>
+<Types>
+<Type Index="0">
+<Name>European, EIC</Name>
+<SubTypes />
+</Type>
+<Type Index="1">
+<Name>Inductors</Name>
+<SubTypes />
+</Type>
+</Types>
+</Category>
+</Categories>
+<Components>
+<Component Id="0">
+<Part Id="0" RefDes="A" PartType="Normal" Type="IC-2 Sides" Int1="24" Int2="24" Width="1" Height="2.5" LockTypeChange="N">
+<Name>stm32g474-long</Name>
+<PartName>Part 1</PartName>
+<Value>stm32f4xx-long</Value>
+<Origin X="0" Y="0" />
+<SpiceModel Type="SubCkt" />
+<Manufacturer>weact</Manufacturer>
+<Pins>
+<Pin Id="0" X="-0.5" Y="1.15" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="1" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>GND</Name>
+<PadNumber>1</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="1" X="-0.5" Y="1.05" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="2" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>GND</Name>
+<PadNumber>2</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="2" X="-0.5" Y="0.95" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="3" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>+5V</Name>
+<PadNumber>3</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="3" X="-0.5" Y="0.85" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="4" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>+5V</Name>
+<PadNumber>4</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="4" X="-0.5" Y="0.75" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="5" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>B12</Name>
+<PadNumber>5</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="5" X="-0.5" Y="0.65" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="6" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>B13</Name>
+<PadNumber>6</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="6" X="-0.5" Y="0.55" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="7" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>B14</Name>
+<PadNumber>7</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="7" X="-0.5" Y="0.45" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="8" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>B15</Name>
+<PadNumber>8</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="8" X="-0.5" Y="0.35" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="9" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>C6</Name>
+<PadNumber>9</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="9" X="-0.5" Y="0.25" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="10" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>A8</Name>
+<PadNumber>10</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="10" X="-0.5" Y="0.15" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="11" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>A9</Name>
+<PadNumber>11</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="11" X="-0.5" Y="0.05" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="12" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>A10</Name>
+<PadNumber>12</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="12" X="-0.5" Y="-0.05" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="13" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>A11</Name>
+<PadNumber>13</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="13" X="-0.5" Y="-0.15" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="14" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>A12</Name>
+<PadNumber>14</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="14" X="-0.5" Y="-0.25" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="15" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>A15</Name>
+<PadNumber>15</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="15" X="-0.5" Y="-0.35" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="16" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>C10</Name>
+<PadNumber>16</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="16" X="-0.5" Y="-0.45" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="17" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>C11</Name>
+<PadNumber>17</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="17" X="-0.5" Y="-0.55" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="18" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>B3</Name>
+<PadNumber>18</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="18" X="-0.5" Y="-0.65" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="19" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>B4</Name>
+<PadNumber>19</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="19" X="-0.5" Y="-0.75" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="20" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>B5</Name>
+<PadNumber>20</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="20" X="-0.5" Y="-0.85" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="21" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>B6</Name>
+<PadNumber>21</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="21" X="-0.5" Y="-0.95" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="22" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>B7</Name>
+<PadNumber>22</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="22" X="-0.5" Y="-1.05" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="23" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>B9</Name>
+<PadNumber>23</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="23" X="-0.5" Y="-1.15" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="24" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>GND</Name>
+<PadNumber>24</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="24" X="0.5" Y="-1.15" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="25" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>GND</Name>
+<PadNumber>25</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="25" X="0.5" Y="-1.05" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="26" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>+3.3V</Name>
+<PadNumber>26</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="26" X="0.5" Y="-0.95" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="27" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>VBAT</Name>
+<PadNumber>27</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="27" X="0.5" Y="-0.85" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="28" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>C13</Name>
+<PadNumber>28</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="28" X="0.5" Y="-0.75" Locked="N" Type="Dot" ElectricType="Undefined" Orientation="180" PadId="29" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>NRST</Name>
+<PadNumber>29</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="29" X="0.5" Y="-0.65" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="30" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>A0</Name>
+<PadNumber>30</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="30" X="0.5" Y="-0.55" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="31" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>A1</Name>
+<PadNumber>31</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="31" X="0.5" Y="-0.45" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="32" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>A2</Name>
+<PadNumber>32</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="32" X="0.5" Y="-0.35" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="33" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>A3</Name>
+<PadNumber>33</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="33" X="0.5" Y="-0.25" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="34" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>A4</Name>
+<PadNumber>34</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="34" X="0.5" Y="-0.15" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="35" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>A5</Name>
+<PadNumber>35</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="35" X="0.5" Y="-0.05" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="36" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>A6</Name>
+<PadNumber>36</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="36" X="0.5" Y="0.05" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="37" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>A7</Name>
+<PadNumber>37</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="37" X="0.5" Y="0.15" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="38" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>C4</Name>
+<PadNumber>38</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="38" X="0.5" Y="0.25" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="39" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>B0</Name>
+<PadNumber>39</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="39" X="0.5" Y="0.35" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="40" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>B1</Name>
+<PadNumber>40</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="40" X="0.5" Y="0.45" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="41" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>B2</Name>
+<PadNumber>41</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="41" X="0.5" Y="0.55" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="42" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>VREF+</Name>
+<PadNumber>42</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="42" X="0.5" Y="0.65" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="43" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>B10</Name>
+<PadNumber>43</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="43" X="0.5" Y="0.75" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="44" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>B11</Name>
+<PadNumber>44</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="44" X="0.5" Y="0.85" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="45" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>+3.3V</Name>
+<PadNumber>45</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="45" X="0.5" Y="0.95" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="46" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>+3.3V</Name>
+<PadNumber>46</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="46" X="0.5" Y="1.05" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="47" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>GND</Name>
+<PadNumber>47</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="47" X="0.5" Y="1.15" Locked="N" Type="Default" ElectricType="Undefined" Orientation="180" PadId="48" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>GND</Name>
+<PadNumber>48</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+</Pins>
+<Shapes>
+<Shape Id="0" Type="Rectangle" LineWidth="0.009843">
+<Points>
+<Point X="-0.5" Y="1.25" />
+<Point X="0.5" Y="-1.25" />
+</Points>
+</Shape>
+</Shapes>
+</Part>
+</Component>
+<Component Id="1">
+<Part Id="0" RefDes="J" PartType="Normal" Type="IC-2 Sides" Int1="8" Int2="0" Width="0.5" Height="1.6" LockTypeChange="N">
+<Pattern Style="PatType0" />
+<Name>PDK ICP</Name>
+<PartName>Part 1</PartName>
+<Value>PDK ICP</Value>
+<Origin X="0" Y="0" />
+<SpiceModel Type="SubCkt" />
+<Pins>
+<Pin Id="0" X="-0.25" Y="0.7" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="1" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>VDD</Name>
+<PadNumber>1</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="1" X="-0.25" Y="0.1" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="4" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>PA7</Name>
+<PadNumber>4</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="2" X="-0.25" Y="0.3" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="3" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>PA6/ICPDA</Name>
+<PadNumber>3</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="3" X="-0.25" Y="0.5" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="2" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>PA5/VPP</Name>
+<PadNumber>2</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="4" X="-0.25" Y="-0.1" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="5" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>PA3/ICPCK</Name>
+<PadNumber>5</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="5" X="-0.25" Y="-0.3" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="6" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>PA4</Name>
+<PadNumber>6</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="6" X="-0.25" Y="-0.5" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="7" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>PA0</Name>
+<PadNumber>7</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="7" X="-0.25" Y="-0.7" Locked="N" Type="Default" ElectricType="Undefined" Orientation="0" PadId="8" Length="0.15" ShowName="Y" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>GND</Name>
+<PadNumber>8</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+</Pins>
+<Shapes>
+<Shape Id="0" Type="Rectangle" LineWidth="0.009843">
+<Points>
+<Point X="-0.25" Y="0.8" />
+<Point X="0.25" Y="-0.8" />
+</Points>
+</Shape>
+</Shapes>
+</Part>
+</Component>
+<Component Id="2">
+<Part Id="0" RefDes="L" PartType="Normal" Type="Free" Int1="0" Int2="0" Width="0.4" Height="0.125" LockTypeChange="Y">
+<Pattern Style="PatType1" />
+<Name>RCH875NP-330K</Name>
+<PartName>Part 1</PartName>
+<Value>33uH</Value>
+<Origin X="0" Y="-0.0625" />
+<SpiceModel Type="SubCkt" />
+<Manufacturer>Sumida</Manufacturer>
+<Category Index="0">
+<Name>Symbols</Name>
+<CategoryTypes>
+<CategoryType>
+<Type Index="0">European, EIC</Type>
+</CategoryType>
+<CategoryType>
+<Type Index="1">Inductors</Type>
+</CategoryType>
+</CategoryTypes>
+</Category>
+<Pins>
+<Pin Id="0" X="0.2" Y="-0.0625" Locked="N" Type="Default" ElectricType="Passive" Orientation="180" PadId="2" Length="0.15" ShowName="N" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>2</Name>
+<PadNumber>2</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+<Pin Id="1" X="-0.2" Y="-0.0625" Locked="N" Type="Default" ElectricType="Passive" Orientation="0" PadId="1" Length="0.15" ShowName="N" NumXShift="0" NumYShift="0" NameXShift="0" NameYShift="0" SignalDelay="0" NumOrientation="0" NameOrientation="0">
+<Name>1</Name>
+<PadNumber>1</PadNumber>
+<NameFont Size="5" FontSizeFloat="5" Width="-2" Scale="1" FontMono="N" />
+</Pin>
+</Pins>
+<Shapes>
+<Shape Id="0" Type="Arc" LineWidth="0.01">
+<Points>
+<Point X="0.2" Y="-0.0125" />
+<Point X="0.15" Y="0.0375" />
+<Point X="0.100013" Y="-0.0125" />
+</Points>
+</Shape>
+<Shape Id="1" Type="Arc" LineWidth="0.01">
+<Points>
+<Point X="0.1" Y="-0.0125" />
+<Point X="0.05" Y="0.0375" />
+<Point X="0.000013" Y="-0.0125" />
+</Points>
+</Shape>
+<Shape Id="2" Type="Arc" LineWidth="0.01">
+<Points>
+<Point X="0" Y="-0.0125" />
+<Point X="-0.05" Y="0.0375" />
+<Point X="-0.099987" Y="-0.0125" />
+</Points>
+</Shape>
+<Shape Id="3" Type="Arc" LineWidth="0.01">
+<Points>
+<Point X="-0.1" Y="-0.0125" />
+<Point X="-0.15" Y="0.0375" />
+<Point X="-0.199987" Y="-0.0125" />
+</Points>
+</Shape>
+<Shape Id="4" Type="Line" LineWidth="0.009843">
+<Points>
+<Point X="0.2" Y="-0.0625" />
+<Point X="0.2" Y="-0.0125" />
+</Points>
+</Shape>
+<Shape Id="5" Type="Line" LineWidth="0.009843">
+<Points>
+<Point X="0.1" Y="-0.0625" />
+<Point X="0.1" Y="-0.0125" />
+</Points>
+</Shape>
+<Shape Id="6" Type="Line" LineWidth="0.009843">
+<Points>
+<Point X="0" Y="-0.0625" />
+<Point X="0" Y="-0.0125" />
+</Points>
+</Shape>
+<Shape Id="7" Type="Line" LineWidth="0.009843">
+<Points>
+<Point X="-0.1" Y="-0.0625" />
+<Point X="-0.1" Y="-0.0125" />
+</Points>
+</Shape>
+<Shape Id="8" Type="Line" LineWidth="0.009843">
+<Points>
+<Point X="-0.2" Y="-0.0625" />
+<Point X="-0.2" Y="-0.0125" />
+</Points>
+</Shape>
+<Shape Id="9" Type="Line" LineWidth="0.009843">
+<Points>
+<Point X="-0.2" Y="0.0625" />
+<Point X="0.2" Y="0.0625" />
+</Points>
+</Shape>
+</Shapes>
+<AddFields>
+<AddField Type="Text">
+<Name>Description 1</Name>
+<Text>Inductor</Text>
+</AddField>
+<AddField Type="Text">
+<Name>Description 2</Name>
+<Text>Magnetic Core</Text>
+</AddField>
+</AddFields>
+</Part>
+</Component>
+</Components>
+</Library>

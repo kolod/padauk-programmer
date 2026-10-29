@@ -14,3 +14,11 @@ build/
 __pycache__/
 *.egg-info/
 .pytest_cache/
+
+# SolidWorks native files (STEP exports are kept)
+*.[Ss][Ll][Dd][Pp][Rr][Tt]
+*.[Ss][Ll][Dd][Aa][Ss][Mm]
+*.[Ss][Ll][Dd][Dd][Rr][Ww]
+*.[Ss][Ll][Dd][Ll][Ff][Pp]
+*.[Ss][Ll][Dd][Bb][Ll][Kk]
+~$*.SLD*
