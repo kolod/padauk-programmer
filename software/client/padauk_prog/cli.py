@@ -13,7 +13,8 @@ from . import __version__, ihex, package
 from .protocol import (CALIB_KINDS, CAP_SUPPLY_CAL, CAP_SUPPLY_SET, FAMILY_NAMES, OPF_CALIB_FINALIZE_ON_FAIL,
                        OPF_SKIP_BLANK_CHECK, OPF_SKIP_ERASE, OPF_SKIP_VERIFY, PATCH_EXPECT_ACTIVE_PACKAGE,
                        PATCH_EXPECT_NORMALIZED, PATCH_EXPECT_RAW, SITE_STATUS, Op, PkgState, Programmer,
-                       ProgrammerError, ProtocolError, Result, Status, connect, stage_name, status_name)
+                       EVT_OP_DONE, EVT_OP_STARTED, EVT_PROGRESS, Progress, ProgrammerError, ProtocolError, Result,
+                       Status, connect, stage_name, status_name)
 from .transport import TransportError
 
 PKG_MESSAGES = {
@@ -513,6 +514,51 @@ def cmd_patch(prog: Programmer, a) -> int:
     return 0
 
 
+def cmd_stats(prog: Programmer, a) -> int:
+    if a.action == "reset":
+        prog.stats_reset()
+        print("Statistics reset")
+        return 0
+    ok, fail = prog.stats_get()
+    print(f"Chips programmed: {ok} ok, {fail} failed")
+    return 0
+
+
+def op_name(code: int) -> str:
+    try:
+        return Op(code).name
+    except ValueError:
+        return f"0x{code:02X}"
+
+
+def cmd_monitor(prog: Programmer, a) -> int:
+    """Shows operations as they happen, local ones included (started by a button or a conveyor)."""
+    print("Watching the programmer (Ctrl+C to stop)...")
+    done = 0
+    deadline = time.monotonic() + a.timeout if a.timeout else None
+    try:
+        while deadline is None or time.monotonic() < deadline:
+            for e in prog.poll_events(0.2):
+                if e.code == EVT_OP_STARTED:
+                    op_id, op_type, source = struct.unpack_from("<HBB", e.payload)
+                    print(f"#{op_id} {op_name(op_type)} started ({'local' if source else 'PC'})")
+                elif e.code == EVT_PROGRESS and a.verbose:
+                    show_progress(Progress.parse(e.payload))
+                elif e.code == EVT_OP_DONE:
+                    r = Result.parse(e.payload)
+                    if a.verbose:
+                        print(file=sys.stderr)
+                    serial = f", serial 0x{r.serial:016X}" if r.serial_valid else ""
+                    print(f"#{r.op_id} {op_name(r.op_type)}: {status_name(r.status)} at {stage_name(r.stage)}"
+                          f"{serial}, {r.elapsed_ms / 1000:.1f} s")
+                    done += 1
+                    if a.count and done >= a.count:
+                        return 0
+    except KeyboardInterrupt:
+        pass
+    return 0
+
+
 def cmd_status(prog: Programmer, a) -> int:
     s = prog.get_status()
     states = {0: "idle", 1: "receiving a package", 2: "operation running", 3: "running the chip"}
@@ -673,6 +719,15 @@ def build_parser() -> argparse.ArgumentParser:
         q.add_argument("-q", "--quiet", action="store_true", help="no progress line")
         q.set_defaults(func=func)
     sub.add_parser("status", help="programmer state and the last operation").set_defaults(func=cmd_status)
+
+    q = sub.add_parser("stats", help="chips programmed ok / failed: stats | stats reset")
+    q.add_argument("action", nargs="?", choices=["show", "reset"], default="show")
+    q.set_defaults(func=cmd_stats)
+
+    q = sub.add_parser("monitor", help="show operations as they happen (local ones included)")
+    q.add_argument("--count", type=int, default=0, help="stop after this many operations")
+    q.add_argument("--timeout", type=float, default=0, help="stop after this many seconds")
+    q.set_defaults(func=cmd_monitor)
 
     q = sub.add_parser("selftest", help="check every supply level with an empty socket")
     q.add_argument("--yes", action="store_true", help="do not ask whether the socket is empty")

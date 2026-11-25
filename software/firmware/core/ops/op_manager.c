@@ -7,6 +7,7 @@
 #include "chips/chip_table.h"
 #include "hal_time.h"
 #include "hal_ui.h"
+#include "indication.h"
 #include "package/upload.h"
 #include "pdk_config.h"
 #include "power/power.h"
@@ -107,6 +108,7 @@ static void send_progress(void)
     p[5] = count;
     p[6] = (uint8_t)(((uint32_t)m.index * 100u + m.percent) / count);
     session_send_event(PDK_EVT_PROGRESS, p, sizeof p);
+    indication_busy(m.res.stage, p[6]);
     m.progress_ms = hal_time_ms();
 }
 
@@ -137,6 +139,7 @@ bool op_poll(void)
 {
     session_poll();        /* commands allowed during an operation are answered, the rest get BUSY */
     housekeeping_poll();
+    hal_ui_poll();         /* local cancel */
     if (hal_time_ms() - m.progress_ms >= OP_PROGRESS_INTERVAL_MS)
         send_progress();
     return !m.cancel;
@@ -218,8 +221,7 @@ void op_manager_poll(void)
     started[2] = m.req.op_type;
     started[3] = m.req.source;
     session_send_event(PDK_EVT_OP_STARTED, started, sizeof started);
-    pdk_ui_detail_t busy = {0};
-    hal_ui_state(PDK_UI_BUSY, &busy);
+    indication_busy(0, 0);
 
     uint16_t st;
     switch (m.req.op_type) {
@@ -243,25 +245,12 @@ void op_manager_poll(void)
         m.res.v_meas_mV = f->meas_mV;
     }
     m.res.elapsed_ms = hal_time_ms() - m.start_ms;
-    if (m.req.op_type == PDK_OP_PROGRAM && st != PDK_CHIP_ALREADY_PROGRAMMED)
+    /* ok/fail count chips: not a PROGRAM refused before the chip was touched (no package, OTP flags) */
+    if (m.req.op_type == PDK_OP_PROGRAM && st != PDK_CHIP_ALREADY_PROGRAMMED && m.res.stage != PDK_STAGE_PKG_CHECK)
         package_store_count(st == PDK_OK);
     m.state = OPS_DONE;
 
     static uint8_t buf[PDK_MAX_PAYLOAD];
     session_send_event(PDK_EVT_OP_DONE, buf, op_result_encode(&m.res, buf));
-    pdk_ui_detail_t d = {0};
-    hal_ui_state(st == PDK_OK ? PDK_UI_SUCCESS : PDK_UI_FAIL, &d);
-}
-
-/* Local actions (FR-054) come with US3. Until then a local request is reported as "blocked" so the
- * operator sees that nothing is executed. */
-void pdk_local_start(pdk_local_request_t request)
-{
-    (void)request;
-    pdk_ui_detail_t d = {0};
-    hal_ui_state(PDK_UI_BLOCKED, &d);
-}
-
-void pdk_local_cancel(void)
-{
+    indication_done(m.req.op_type, st);
 }

@@ -60,6 +60,10 @@ void fake_entropy(fake_entropy_mode_t mode, uint32_t seed);
 void fake_uid(const uint8_t uid[12]);
 
 /* --- ui --- */
+#define FAKE_UI_HISTORY 512u
 pdk_ui_state_t fake_ui_last(void);
+/* Every hal_ui_state() since fake_reset() / fake_ui_clear() (up to FAKE_UI_HISTORY). */
+size_t fake_ui_history(const pdk_ui_state_t **states, const pdk_ui_detail_t **details);
+void fake_ui_clear(void);
 
 #endif

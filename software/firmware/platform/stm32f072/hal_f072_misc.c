@@ -120,7 +120,8 @@ void f072_ui_init(void)
     leds(1);
 }
 
-/* Bring-up mapping (final indication: T102). */
+/* The states of core/ops/indication.c on three LEDs (the FAIL class needs a display):
+ *   READY LED1 · BUSY LED2 · SUCCESS LED1+LED2 · FAIL LED3 · BLOCKED LED2+LED3 */
 void hal_ui_state(pdk_ui_state_t state, const pdk_ui_detail_t *detail)
 {
     (void)detail;
@@ -129,11 +130,11 @@ void hal_ui_state(pdk_ui_state_t state, const pdk_ui_detail_t *detail)
     case PDK_UI_BUSY: leds(2); break;
     case PDK_UI_SUCCESS: leds(3); break;
     case PDK_UI_FAIL: leds(4); break;
-    case PDK_UI_BLOCKED: leds(5); break;
+    case PDK_UI_BLOCKED: leds(6); break;
     }
 }
 
-void f072_ui_poll(void)
+void hal_ui_poll(void)
 {
     static uint32_t since;
     static bool stable, last;

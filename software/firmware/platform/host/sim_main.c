@@ -7,15 +7,23 @@
  * --chip none | NAME[:offset=±N,osc=broken,weak=ADDR,order=reverse,deaf,pa0=float,slow=US] (default none).
  * --corrupt-flash-during-write disturbs flash reads from the first chip write until the safe state.
  * --power-fail-after counts flash operations and chip writes/erases together.
+ * stdin: local-start program|copy|verify|selftest|restore, local-cancel, swap-chip SPEC (local controls).
  * Exit code 99 = simulated power loss. Prints "listening HOST:PORT" on stdout when ready.
  */
 #include "hal_ui.h"
 #include "host.h"
 #include "pdk_core.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <poll.h>
+#include <unistd.h>
+#endif
 
 static void usage(void)
 {
@@ -25,6 +33,69 @@ static void usage(void)
                     "               [--power-fault vdd|vpp:low|slow|stuck] [--power-scale vdd|vpp:OUT:MEAS]\n"
                     "               [--corrupt-flash-during-write] [--uid HEX24]\n");
     exit(2);
+}
+
+/* One line from stdin without blocking (a pipe from the test, or nothing). Returns true when complete. */
+static bool stdin_line(char *out, size_t cap)
+{
+    static char buf[96];
+    static size_t n;
+    for (;;) {
+        char c;
+#ifdef _WIN32
+        HANDLE h = GetStdHandle(STD_INPUT_HANDLE);
+        DWORD avail = 0, got = 0;
+        if (!PeekNamedPipe(h, NULL, 0, NULL, &avail, NULL) || !avail || !ReadFile(h, &c, 1, &got, NULL) || !got)
+            return false;
+#else
+        struct pollfd p = {.fd = 0, .events = POLLIN};
+        if (poll(&p, 1, 0) <= 0 || read(0, &c, 1) != 1)
+            return false;
+#endif
+        if (c == '\r')
+            continue;
+        if (c != '\n') {
+            if (n + 1 < sizeof buf)
+                buf[n++] = c;
+            continue;
+        }
+        buf[n] = 0;
+        n = 0;
+        snprintf(out, cap, "%s", buf);
+        return true;
+    }
+}
+
+/* local-start program|copy|verify|selftest|restore, local-cancel, swap-chip SPEC (the local controls). */
+static void stdin_command(const char *cmd)
+{
+    static const struct {
+        const char *name;
+        pdk_local_request_t request;
+    } starts[] = {{"program", PDK_LOCAL_PROGRAM}, {"copy", PDK_LOCAL_COPY}, {"verify", PDK_LOCAL_VERIFY},
+                  {"selftest", PDK_LOCAL_SELF_TEST}, {"restore", PDK_LOCAL_RESTORE_MASTER}};
+    if (!strncmp(cmd, "local-start ", 12)) {
+        for (size_t i = 0; i < sizeof starts / sizeof starts[0]; i++)
+            if (!strcmp(cmd + 12, starts[i].name)) {
+                pdk_local_start(starts[i].request);
+                return;
+            }
+    } else if (!strcmp(cmd, "local-cancel")) {
+        pdk_local_cancel();
+        return;
+    } else if (!strncmp(cmd, "swap-chip ", 10)) {
+        if (host_chip_config(cmd + 10))
+            return;
+    }
+    fprintf(stderr, "unknown command: %s\n", cmd);
+}
+
+/* The simulator's local controls are its stdin commands. */
+void hal_ui_poll(void)
+{
+    char cmd[96];
+    if (stdin_line(cmd, sizeof cmd))
+        stdin_command(cmd);
 }
 
 static int hexval(char c)
@@ -110,7 +181,7 @@ int main(int argc, char **argv)
     fflush(stdout);
 
     for (;;) {
-        pdk_core_poll();
+        pdk_core_poll();   /* reads stdin through hal_ui_poll() */
         host_sleep_us(200);
     }
 }

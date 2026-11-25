@@ -573,6 +573,13 @@ class Programmer:
     def get_status(self) -> ProgrammerStatus:
         return ProgrammerStatus.parse(self.call(Cmd.GET_STATUS))
 
+    def stats_get(self) -> tuple:
+        """(ok, fail): chips programmed since the last reset."""
+        return struct.unpack_from("<II", self.call(Cmd.STATS_GET))
+
+    def stats_reset(self) -> None:
+        self.call(Cmd.STATS_RESET)
+
     def wait_op(self, op_id: int, on_progress=None, timeout: float = 600.0, poll_every: float = 1.0) -> Result:
         """Waits for EVT_OP_DONE of `op_id`, passing EVT_PROGRESS to `on_progress`. Asks OP_RESULT when no
         event came for `poll_every` seconds: events are not acknowledged and may be lost."""
