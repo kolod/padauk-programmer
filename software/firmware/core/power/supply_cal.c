@@ -9,6 +9,7 @@
 #include "proto/proto_defs.h"
 #include "storage/journal.h"
 #include "storage/package_store.h"
+#include "supply_set.h"
 
 #define CAL_POINT_PERCENT 90u          /* of the rail limit: below op-amp saturation */
 #define CHECK_VDD_MV 6000u
@@ -106,6 +107,7 @@ uint16_t supply_cal_cmd_start(const uint8_t *req, uint16_t len, uint8_t *rsp, ui
         return PDK_BAD_PAYLOAD;
     if (!supplies_present(&vdd_max, &vpp_max))
         return PDK_OP_UNSUPPORTED;
+    supply_set_abort();   /* manual voltages give way to calibration */
     if (c.state == CAL_IDLE)
         power_get_calibration(c.saved);
     static const int8_t none[4] = {0, 0, 0, 0};

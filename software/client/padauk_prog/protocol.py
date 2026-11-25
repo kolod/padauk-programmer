@@ -42,6 +42,8 @@ class Cmd(IntEnum):
     CAL_CONFIRM = 0x0042
     CAL_GET = 0x0043
     CAL_CLEAR = 0x0044
+    SUPPLY_SET = 0x0045
+    SUPPLY_GET = 0x0046
 
 
 class Evt(IntEnum):
@@ -102,6 +104,7 @@ class Status(IntEnum):
 
 CAP_MEASURE_POWER = 1 << 4
 CAP_SUPPLY_CAL = 1 << 7
+CAP_SUPPLY_SET = 1 << 8
 
 
 class PkgState(IntEnum):
@@ -374,6 +377,23 @@ class Programmer:
 
     def cal_clear(self) -> None:
         self.call(Cmd.CAL_CLEAR)
+
+    # ---------------------------------------------------------------- manual supplies
+    @staticmethod
+    def _supply_state(p: bytes) -> dict:
+        vdd, vpp, vdd_m, vpp_m, vdd_lo, vdd_hi, vpp_lo, vpp_hi = struct.unpack_from("<8H", p)
+        return {"vdd_set_mV": vdd, "vpp_set_mV": vpp, "vdd_meas_mV": vdd_m, "vpp_meas_mV": vpp_m,
+                "vdd_min_mV": vdd_lo, "vdd_max_mV": vdd_hi, "vpp_min_mV": vpp_lo, "vpp_max_mV": vpp_hi}
+
+    def supply_set(self, vdd_mV: int, vpp_mV: int, check: bool = True) -> dict:
+        """Applies VDD/VPP (0 = off; nothing may be connected); they drop with the session or after 5 min.
+        check=False keeps a rail up even outside the tolerance (diagnostics with a meter)."""
+        payload = struct.pack("<2H", vdd_mV, vpp_mV) + (b"" if check else bytes([1]))
+        return self._supply_state(self.call(Cmd.SUPPLY_SET, payload, timeout=max(self.timeout, 1.0)))
+
+    def supply_get(self) -> dict:
+        """Set points and readings; also keeps manually applied voltages from timing out."""
+        return self._supply_state(self.call(Cmd.SUPPLY_GET))
 
     def close(self) -> None:
         self.t.close()
