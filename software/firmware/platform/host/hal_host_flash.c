@@ -15,6 +15,7 @@ static uint8_t mem[FLASH_SIZE];
 static FILE *backing;
 static long fail_after = -1;
 static bool corrupt_writes;
+static bool chip_writing;   /* set by the chip model from its first write until the safe state */
 
 static const hal_flash_geometry_t geometry = {
     .page_size = 2048u,
@@ -49,6 +50,7 @@ bool host_flash_open(const char *path)
 
 void host_flash_power_fail_after(long n) { fail_after = n; }
 void host_flash_corrupt_during_write(bool on) { corrupt_writes = on; }
+void host_flash_chip_writing(bool on) { chip_writing = on; }
 
 static void persist(uint32_t off, size_t len)
 {
@@ -117,8 +119,8 @@ bool hal_flash_program(uint32_t addr, const uint8_t *data, size_t len)
 void hal_flash_read(uint32_t addr, uint8_t *buf, size_t len)
 {
     memcpy(buf, mem + (addr - FLASH_BASE), len);
-    if (corrupt_writes && len)
-        buf[0] ^= 0x01;   /* simulated read disturbance (FR-049 tests) */
+    if (corrupt_writes && chip_writing && len)
+        buf[0] ^= 0x01;   /* read disturbance while the chip is written (FR-049 tests) */
 }
 
 /* No background erase on this flash: the erase completes inside erase_start(). */

@@ -10,7 +10,8 @@
  *    target; deaf ignores the "+1" pulses; BandGap flips the comparator at k = 128 − 4 · offset;
  *  - FR-055 checks of the calibrate primitive: first reading within 1/4 … 4 of the target, every step
  *    changes the frequency, PA0 driven for BandGap (pa0=float: not) → CALIB_WRONG_SITE;
- *  - weak=ADDR: writes to ADDR after the first one do not stick (FR-048);
+ *  - weak=ADDR: writes to ADDR after the first one do not stick (FR-048); slow=US: each write block
+ *    takes US microseconds (to act in the middle of an operation);
  *  - --chip-state FILE keeps the chip memory across runs; --power-fail-after also counts chip writes
  *    (the cut write is half done). */
 #include <stdio.h>
@@ -39,6 +40,7 @@ static struct {
     bool osc_broken, deaf, reverse, pa0_float;
     bool weak;
     uint16_t weak_addr;
+    uint32_t slow_us;
     uint16_t mem[MAX_WORDS];
     uint8_t written[MAX_WORDS];
     uint32_t erases;
@@ -65,7 +67,9 @@ bool host_chip_config(const char *spec)
         return false;
     memcpy(name, spec, n);
     name[n] = 0;
-    c.chip = NULL;
+    const char *state_path = c.state_path;
+    memset(&c, 0, sizeof c);   /* a later --chip replaces every option of an earlier one */
+    c.state_path = state_path;
     if (strcmp(name, "none") != 0) {
         for (size_t i = 0; i < chip_count() && !c.chip; i++)
             if (chip_name_matches(chip_at(i), name))
@@ -90,6 +94,8 @@ bool host_chip_config(const char *spec)
             c.deaf = true;
         else if (len == 9 && !strncmp(o, "pa0=float", 9))
             c.pa0_float = true;
+        else if (!strncmp(o, "slow=", 5))
+            c.slow_us = (uint32_t)strtoul(o + 5, NULL, 0);
         else
             return false;
         o = end;
@@ -132,6 +138,7 @@ void chip_engine_safe_state(void)
 {
     power_off_all();
     platform_ic_lines_hiz();
+    host_flash_chip_writing(false);
     c.vdd = c.vpp = 0;
 }
 
@@ -233,6 +240,9 @@ uint16_t chip_engine_write_block(const struct chip_info *chip, uint16_t addr, co
         return fail(PDK_CANCELLED);
     if ((st = supplies(chip->vpp_write, chip->vdd_write)) != PDK_OK)
         return st;
+    host_flash_chip_writing(true);
+    if (c.slow_us)
+        host_sleep_us(c.slow_us);
     bool cut = host_power_fail_now();
     unsigned n = cut ? (count + 1u) / 2u : count;
     for (unsigned i = 0; i < n; i++) {

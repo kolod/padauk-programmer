@@ -33,11 +33,16 @@ class Sim:
         self.stop()
         self.port = _free_port()
         cmd = [self.exe, "--tcp", f"127.0.0.1:{self.port}", "--flash", self.flash, *self.args, *extra]
-        self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                     text=True)
+        # stderr (ui_state lines, one pair per operation) goes to a file: an unread pipe fills up and
+        # blocks the simulator
+        self.log = open(self.flash + ".log", "a")
+        self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.log, text=True)
         line = self.proc.stdout.readline()
         if not line.startswith("listening"):
-            err = self.proc.stderr.read() if self.proc.poll() is not None else ""
+            self.proc.wait(5)
+            self.log.close()
+            with open(self.flash + ".log") as f:
+                err = f.read()[-2000:]
             raise RuntimeError(f"pdk-sim did not start: {line!r} {err}")
         return self
 
@@ -52,6 +57,9 @@ class Sim:
             self.proc.kill()
             self.proc.wait()
         self.proc = None
+        if getattr(self, "log", None):
+            self.log.close()
+            self.log = None
 
     @property
     def url(self) -> str:
