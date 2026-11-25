@@ -42,6 +42,9 @@ typedef struct {
 
 /* Implemented by the platform. */
 void hal_ui_state(pdk_ui_state_t state, const pdk_ui_detail_t *detail);
+/* Polls the local controls (and refreshes the indication); called by the core from its main-loop poll
+ * and while an operation runs, so pdk_local_cancel() can reach a running operation. */
+void hal_ui_poll(void);
 
 /* Implemented by the core, called by the platform. */
 void pdk_local_start(pdk_local_request_t request);

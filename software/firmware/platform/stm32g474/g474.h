@@ -31,6 +31,5 @@ void g474_time_init(void);            /* SysTick 1 ms, TIM2 (32 bit) 1 MHz free-
 void g474_flash_init(void);           /* unlock state, error flags, page size from DBANK */
 void g474_power_init(void);
 void g474_ui_init(void);
-void g474_ui_poll(void);              /* LED pattern + KEY debounce → pdk_local_start() */
 
 #endif

@@ -17,6 +17,7 @@
 #include "pdk_config.h"
 #include "proto_defs.h"
 #include "session.h"
+#include "storage/stats_cmds.h"
 
 static uint16_t cmd_hello(const uint8_t *req, uint16_t len, uint8_t *rsp, uint16_t *rsp_len);
 static uint16_t cmd_get_info(const uint8_t *req, uint16_t len, uint8_t *rsp, uint16_t *rsp_len);
@@ -37,6 +38,8 @@ static const pdk_command_t commands[] = {
     {PDK_CMD_PKG_READ, 0, pkg_cmd_read},
     {PDK_CMD_PKG_DELETE, 0, pkg_cmd_delete},
     {PDK_CMD_PKG_CHECK, 0, pkg_cmd_check},
+    {PDK_CMD_STATS_GET, PDK_CMDF_DURING_OP, stats_cmd_get},
+    {PDK_CMD_STATS_RESET, 0, stats_cmd_reset},
     {PDK_CMD_CAL_START, 0, supply_cal_cmd_start},
     {PDK_CMD_CAL_SET, 0, supply_cal_cmd_set},
     {PDK_CMD_CAL_CONFIRM, 0, supply_cal_cmd_confirm},

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "pdk_core.h"
 
+#include "hal_ui.h"
 #include "ops/op_manager.h"
 #include "package/upload.h"
 #include "power/power.h"
@@ -32,6 +33,7 @@ void pdk_core_poll(void)
     housekeeping_poll();   /* background erase, one step per loop */
     supply_cal_poll();
     supply_set_poll();
+    hal_ui_poll();
     op_manager_poll();   /* a started operation runs to the end here */
 }
 

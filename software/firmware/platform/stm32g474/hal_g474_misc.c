@@ -93,7 +93,8 @@ bool hal_entropy_raw(uint8_t *buf, size_t len)
 
 /* ---------------- UI: one LED (PC6, active high) shows the state by its pattern ----------------
  *   READY steady on · BUSY 4 Hz · SUCCESS 1 Hz · FAIL 10 Hz · BLOCKED off
- * KEY (PC13, pressed = 1) → local PROGRAM. Final indication comes with T102. */
+ * KEY (PC13, pressed = 1) → local PROGRAM. The FAIL class (core/ops/indication.c) needs more LEDs or a
+ * display; one LED shows only the state. */
 static volatile pdk_ui_state_t ui_state = PDK_UI_READY;
 
 static void led(bool on) { GPIOC->BSRR = on ? (1u << 6) : (1u << (6 + 16)); }
@@ -114,7 +115,7 @@ void hal_ui_state(pdk_ui_state_t state, const pdk_ui_detail_t *detail)
     ui_state = state;
 }
 
-void g474_ui_poll(void)
+void hal_ui_poll(void)
 {
     uint32_t t = hal_time_ms();
     switch (ui_state) {

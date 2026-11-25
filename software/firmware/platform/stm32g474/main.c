@@ -18,7 +18,6 @@ int main(void)
 
     for (;;) {
         tud_task();
-        pdk_core_poll();
-        g474_ui_poll();
+        pdk_core_poll();   /* polls the button too (hal_ui_poll) */
     }
 }

@@ -47,6 +47,9 @@ static struct {
     uint8_t uid[12];
 
     pdk_ui_state_t ui;
+    pdk_ui_state_t ui_hist[FAKE_UI_HISTORY];
+    pdk_ui_detail_t ui_det[FAKE_UI_HISTORY];
+    size_t ui_n;
 } f;
 
 static hal_flash_geometry_t geometry = {
@@ -151,10 +154,24 @@ void hal_uid(uint8_t uid[12]) { memcpy(uid, f.uid, 12); }
 
 void hal_ui_state(pdk_ui_state_t state, const pdk_ui_detail_t *detail)
 {
-    (void)detail;
     f.ui = state;
+    if (f.ui_n < FAKE_UI_HISTORY) {
+        f.ui_hist[f.ui_n] = state;
+        f.ui_det[f.ui_n] = detail ? *detail : (pdk_ui_detail_t){0};
+        f.ui_n++;
+    }
 }
 pdk_ui_state_t fake_ui_last(void) { return f.ui; }
+void hal_ui_poll(void) {}
+
+size_t fake_ui_history(const pdk_ui_state_t **states, const pdk_ui_detail_t **details)
+{
+    *states = f.ui_hist;
+    *details = f.ui_det;
+    return f.ui_n;
+}
+
+void fake_ui_clear(void) { f.ui_n = 0; }
 
 /* ---------------- flash ---------------- */
 const hal_flash_geometry_t *hal_flash_geometry(void) { return &geometry; }
