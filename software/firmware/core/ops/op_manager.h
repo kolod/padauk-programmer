@@ -63,9 +63,13 @@ typedef struct {
     op_level_t levels[OP_MAX_LEVELS];
 } op_result_t;
 
+#define OP_EXT_MAX (7u + 64u * 4u)   /* the longest ext: PATCH with 64 words */
+
 typedef struct {
     uint8_t op_type, op_flags, source;
     uint16_t chip_id12, param;
+    uint16_t ext_len;
+    uint8_t ext[OP_EXT_MAX];
 } op_request_t;
 
 void op_manager_init(void);
@@ -117,5 +121,6 @@ uint16_t op_probe_run(void);
 uint16_t op_erase_run(void);
 uint16_t op_blank_check_run(void);
 uint16_t op_verify_run(void);
+uint16_t op_patch_run(void);
 
 #endif

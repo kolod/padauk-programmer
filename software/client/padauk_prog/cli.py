@@ -11,7 +11,8 @@ import zlib
 
 from . import __version__, ihex, package
 from .protocol import (CALIB_KINDS, CAP_SUPPLY_CAL, CAP_SUPPLY_SET, FAMILY_NAMES, OPF_CALIB_FINALIZE_ON_FAIL,
-                       OPF_SKIP_BLANK_CHECK, OPF_SKIP_ERASE, OPF_SKIP_VERIFY, SITE_STATUS, Op, PkgState, Programmer,
+                       OPF_SKIP_BLANK_CHECK, OPF_SKIP_ERASE, OPF_SKIP_VERIFY, PATCH_EXPECT_ACTIVE_PACKAGE,
+                       PATCH_EXPECT_NORMALIZED, PATCH_EXPECT_RAW, SITE_STATUS, Op, PkgState, Programmer,
                        ProgrammerError, ProtocolError, Result, Status, connect, stage_name, status_name)
 from .transport import TransportError
 
@@ -427,6 +428,59 @@ def cmd_blankcheck(prog: Programmer, a) -> int:
     return finish(run_operation(prog, a, Op.BLANK_CHECK, chip_id12=chip_id_of(prog, a)), "Chip is blank")
 
 
+def parse_patch_words(items: list) -> dict:
+    """['0x10=0x1234', '17=0', …] → {address: value}."""
+    words = {}
+    for item in items:
+        addr, sep, value = item.partition("=")
+        if not sep:
+            raise CliError(f"'{item}': expected ADDR=VALUE")
+        try:
+            a, v = parse_int(addr), parse_int(value)
+        except ValueError:
+            raise CliError(f"'{item}': ADDR and VALUE must be numbers") from None
+        if a in words:
+            raise CliError(f"address 0x{a:04X} given twice")
+        words[a] = v
+    return words
+
+
+def cmd_patch(prog: Programmer, a) -> int:
+    chip = prog.find_chip(a.icname)
+    words = parse_patch_words(a.words)
+    if a.expect_package:
+        mode, crc = PATCH_EXPECT_ACTIVE_PACKAGE, 0
+    elif a.expect_crc is not None:
+        mode, crc = (PATCH_EXPECT_NORMALIZED if a.normalized else PATCH_EXPECT_RAW), a.expect_crc
+    elif a.check:
+        mode, crc = PATCH_EXPECT_RAW, 0   # nothing to compare: just report the sums
+    else:
+        raise CliError("give the expected content: --expect-crc CRC [--normalized] or --expect-package "
+                       "(use --check to see the chip's sums)")
+    if not words and not a.check:
+        raise CliError("nothing to patch: give ADDR=VALUE pairs")
+    r = prog.patch(chip.id12, words, mode, crc, check_only=a.check, allow_security_fuse=a.allowsecfuse,
+                   on_progress=None if a.quiet else show_progress)
+    if not a.quiet:
+        print(file=sys.stderr)
+    print(f"Chip content CRC 0x{r.image_crc_raw:08X}, normalized 0x{r.image_crc_norm:08X}")
+    if r.status == Status.PATCH_CONFLICT:
+        bits = chip.code_bits
+        print(f"error: PATCH_CONFLICT: word 0x{r.fail_addr:04X} would need a 0 -> 1 change:\n"
+              f"  chip  {r.actual:0{bits}b}\n  wants {r.expected:0{bits}b}\nnothing was written",
+              file=sys.stderr)
+        return 1
+    if r.status == Status.PATCH_IMAGE_MISMATCH:
+        print("error: PATCH_IMAGE_MISMATCH: the chip does not hold the expected firmware - nothing was written",
+              file=sys.stderr)
+        return 1
+    if not r.ok:
+        print(f"error: {describe_result(r)}", file=sys.stderr)
+        return 1
+    print("Check passed, nothing written" if a.check else f"Patched {r.data_words} word(s), verified")
+    return 0
+
+
 def cmd_status(prog: Programmer, a) -> int:
     s = prog.get_status()
     states = {0: "idle", 1: "receiving a package", 2: "operation running", 3: "running the chip"}
@@ -587,6 +641,20 @@ def build_parser() -> argparse.ArgumentParser:
         q.add_argument("-q", "--quiet", action="store_true", help="no progress line")
         q.set_defaults(func=func)
     sub.add_parser("status", help="programmer state and the last operation").set_defaults(func=cmd_status)
+
+    t = sub.add_parser("patch", help="change single words of a programmed chip (1 -> 0 only)")
+    t.add_argument("-n", "--icname", required=True, help="chip type")
+    t.add_argument("words", nargs="*", metavar="ADDR=VALUE", help="word address and its new full value")
+    e = t.add_mutually_exclusive_group()
+    e.add_argument("--expect-crc", type=parse_int, metavar="CRC", help="the chip's content checksum")
+    e.add_argument("--expect-package", action="store_true",
+                   help="the chip must hold the stored package (normalized checksum)")
+    t.add_argument("--normalized", action="store_true",
+                   help="--expect-crc is the normalized checksum (calibration and serial number ignored)")
+    t.add_argument("--check", action="store_true", help="only check (and show the sums), write nothing")
+    t.add_argument("--allowsecfuse", action="store_true", help="allow a fuse value that enables read protection")
+    t.add_argument("-q", "--quiet", action="store_true", help="no progress line")
+    t.set_defaults(func=cmd_patch)
 
     k = sub.add_parser("pkg", help="stored package: info | read FILE | delete | check")
     k.add_argument("action", choices=["info", "read", "delete", "check"])

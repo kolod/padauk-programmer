@@ -45,6 +45,12 @@ uint16_t op_manager_start(const op_request_t *req, uint16_t *op_id)
     case PDK_OP_BLANK_CHECK:
     case PDK_OP_PROGRAM:
     case PDK_OP_VERIFY: break;
+#ifdef PDK_FEATURE_PATCH
+    case PDK_OP_PATCH:
+        if (req->source != PDK_SOURCE_HOST || !req->chip_id12)   /* PC only, chip type required */
+            return PDK_BAD_PAYLOAD;
+        break;
+#endif
     default: return PDK_OP_UNSUPPORTED;
     }
     if ((req->op_flags & ~PDK_OPF_ALLOWED) || (req->op_flags && req->op_type != PDK_OP_PROGRAM))
@@ -220,6 +226,9 @@ void op_manager_poll(void)
     case PDK_OP_ERASE: st = op_erase_run(); break;
     case PDK_OP_BLANK_CHECK: st = op_blank_check_run(); break;
     case PDK_OP_VERIFY: st = op_verify_run(); break;
+#ifdef PDK_FEATURE_PATCH
+    case PDK_OP_PATCH: st = op_patch_run(); break;
+#endif
     default: st = op_program_run(); break;
     }
 

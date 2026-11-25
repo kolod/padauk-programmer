@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "op_cmds.h"
 
+#include <string.h>
+
 #include "op_manager.h"
 #include "package/upload.h"
 #include "proto/le.h"
@@ -12,8 +14,12 @@ uint16_t op_cmd_start(const uint8_t *req, uint16_t len, uint8_t *rsp, uint16_t *
 {
     if (len < 6)
         return PDK_BAD_PAYLOAD;
-    op_request_t r = {.op_type = req[0], .op_flags = req[1], .source = PDK_SOURCE_HOST,
-                      .chip_id12 = le16(req + 2), .param = le16(req + 4)};
+    if (len - 6u > OP_EXT_MAX)
+        return PDK_BAD_PAYLOAD;
+    static op_request_t r;   /* ext makes it large */
+    r = (op_request_t){.op_type = req[0], .op_flags = req[1], .source = PDK_SOURCE_HOST,
+                       .chip_id12 = le16(req + 2), .param = le16(req + 4), .ext_len = (uint16_t)(len - 6u)};
+    memcpy(r.ext, req + 6, r.ext_len);
     uint16_t id = 0;
     uint16_t st = op_manager_start(&r, &id);
     if (st == PDK_OK) {
