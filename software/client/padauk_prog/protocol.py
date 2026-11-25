@@ -102,6 +102,175 @@ class Status(IntEnum):
     CALIB_WRONG_SITE = 0x0415
 
 
+class Op(IntEnum):
+    PROBE = 0x01
+    READ = 0x02
+    ERASE = 0x03
+    BLANK_CHECK = 0x04
+    PROGRAM = 0x05
+    VERIFY = 0x06
+    COPY = 0x07
+    RUN = 0x08
+    RESTORE_MASTER = 0x09
+    PATCH = 0x0A
+    SELF_TEST = 0x0B
+
+
+class Stage(IntEnum):
+    PKG_CHECK = 0x01
+    ID = 0x02
+    ERASE = 0x03
+    BLANK_CHECK = 0x04
+    WRITE = 0x05
+    VERIFY = 0x06
+    CALIBRATE = 0x07
+    FUSE = 0x08
+    READ = 0x09
+    STORE = 0x0A
+    RUN = 0x0B
+    MEASURE = 0x0C
+    RESTORE = 0x0D
+    SELF_TEST = 0x0E
+    FINAL_VERIFY = 0x0F
+
+
+# OP_START op_flags (PROGRAM)
+OPF_SKIP_ERASE = 1 << 0
+OPF_SKIP_BLANK_CHECK = 1 << 1
+OPF_SKIP_VERIFY = 1 << 2
+OPF_CALIB_FINALIZE_ON_FAIL = 1 << 4
+
+# RESULT.warnings
+WARN_NAMES = ("CALIB_VALUE_COPIED", "CALIB_SNAPPED", "MASTER_MODIFIED", "RESUMED", "CALIB_FORCED",
+              "SERIAL_DUPLICATED", "CALIB_UNRECOGNIZED")
+WARN_RESUMED = 1 << 3
+WARN_CALIB_FORCED = 1 << 4
+
+SITE_STATUS = {0: "OK", 1: "FAILED", 2: "FORCED", 4: "COPIED", 5: "MASTER_LOOP"}
+CALIB_KINDS = {1: "IHRC", 2: "ILRC", 3: "BG"}
+
+EVT_PROGRESS = 0x8001
+EVT_OP_DONE = 0x8002
+EVT_OP_STARTED = 0x8003
+
+
+def stage_name(code: int) -> str:
+    try:
+        return Stage(code).name
+    except ValueError:
+        return f"0x{code:02X}"
+
+
+@dataclass
+class CalibResult:
+    kind: int
+    value: int
+    target_hz: int
+    measured_hz: int
+    mode: int
+    master_value: int
+    site_status: int
+
+
+@dataclass
+class Level:
+    rail: int
+    set_mV: int
+    meas_mV: int
+    settle_us: int
+    ok: bool
+
+
+@dataclass
+class Result:
+    """RESULT of an operation (contracts/protocol.md §4)."""
+    op_id: int
+    op_type: int
+    source: int
+    status: int
+    stage: int
+    chip_id_found: int
+    family_found: int
+    fail_addr: int
+    expected: int
+    actual: int
+    serial_valid: bool
+    serial: int
+    fuse_written: int
+    data_words: int
+    data_crc32: int
+    elapsed_ms: int
+    calib: list
+    image_crc_raw: int
+    image_crc_norm: int
+    warnings: int
+    v_rail: int
+    v_set_mV: int
+    v_meas_mV: int
+    levels: list
+
+    @classmethod
+    def parse(cls, p: bytes) -> "Result":
+        (op_id, op_type, source, status, stage, chip, fam, fail_addr, expected, actual, serial_valid, serial, fuse,
+         data_words, data_crc, elapsed, n) = struct.unpack_from("<HBBHBHBHHHBQHIIIB", p)
+        off = 40
+        calib = []
+        for _ in range(n):
+            calib.append(CalibResult(*struct.unpack_from("<BBIIBBB", p, off)))
+            off += 13
+        raw, norm, warn, v_rail, v_set, v_meas, nl = struct.unpack_from("<IIBBHHB", p, off)
+        off += 15
+        levels = []
+        for _ in range(nl):
+            rail, s, m, t, ok = struct.unpack_from("<BHHHB", p, off)
+            levels.append(Level(rail, s, m, t, bool(ok)))
+            off += 8
+        return cls(op_id, op_type, source, status, stage, chip, fam, fail_addr, expected, actual, bool(serial_valid),
+                   serial, fuse, data_words, data_crc, elapsed, calib, raw, norm, warn, v_rail, v_set, v_meas, levels)
+
+    @property
+    def ok(self) -> bool:
+        return self.status == Status.OK
+
+    def warning_names(self) -> list:
+        return [n for i, n in enumerate(WARN_NAMES) if self.warnings & (1 << i)]
+
+
+@dataclass
+class Progress:
+    op_id: int
+    op_type: int
+    stage: int
+    stage_index: int
+    stage_count: int
+    percent: int
+
+    @classmethod
+    def parse(cls, p: bytes) -> "Progress":
+        return cls(*struct.unpack_from("<HBBBBB", p))
+
+
+@dataclass
+class ProgrammerStatus:
+    state: int          # 0 idle, 1 upload, 2 operation, 3 running
+    op_id: int
+    op_type: int
+    op_stage: int
+    op_percent: int
+    pkg_state: int
+    pkg_crc32: int
+    ok_count: int
+    fail_count: int
+    flags: int
+    copy_cfg: tuple
+    selftest_state: int
+
+    @classmethod
+    def parse(cls, p: bytes) -> "ProgrammerStatus":
+        st, op_id, op_type, stage, pct, pkg, crc, ok, fail, flags, c1, c2, c3, self_test =             struct.unpack_from("<BHBBBBIIIBBBBB", p)
+        return cls(st, op_id, op_type, stage, pct, pkg, crc, ok, fail, flags, (c1, c2, c3), self_test)
+
+
 CAP_MEASURE_POWER = 1 << 4
 CAP_SUPPLY_CAL = 1 << 7
 CAP_SUPPLY_SET = 1 << 8
@@ -377,6 +546,53 @@ class Programmer:
 
     def cal_clear(self) -> None:
         self.call(Cmd.CAL_CLEAR)
+
+    # ---------------------------------------------------------------- operations
+    def start_op(self, op_type: int, flags: int = 0, chip_id12: int = 0, param: int = 0, ext: bytes = b"") -> int:
+        p = self.call(Cmd.OP_START, struct.pack("<BBHH", op_type, flags, chip_id12, param) + ext)
+        return struct.unpack_from("<H", p)[0]
+
+    def cancel_op(self, op_id: int) -> None:
+        self.call(Cmd.OP_CANCEL, struct.pack("<H", op_id))
+
+    def op_result(self, op_id: int = 0) -> Result | None:
+        """RESULT of `op_id` (0 = the last one), None while it is still running."""
+        status, data = self.request(Cmd.OP_RESULT, struct.pack("<H", op_id))
+        if status == Status.NOT_ALLOWED_NOW:
+            return None
+        if status != Status.OK:
+            raise ProgrammerError(status, data, Cmd.OP_RESULT)
+        return Result.parse(data)
+
+    def get_status(self) -> ProgrammerStatus:
+        return ProgrammerStatus.parse(self.call(Cmd.GET_STATUS))
+
+    def wait_op(self, op_id: int, on_progress=None, timeout: float = 600.0, poll_every: float = 1.0) -> Result:
+        """Waits for EVT_OP_DONE of `op_id`, passing EVT_PROGRESS to `on_progress`. Asks OP_RESULT when no
+        event came for `poll_every` seconds: events are not acknowledged and may be lost."""
+        deadline = time.monotonic() + timeout
+        quiet_since = time.monotonic()
+        while time.monotonic() < deadline:
+            for e in self.poll_events(0.1):
+                quiet_since = time.monotonic()
+                if e.code == EVT_PROGRESS and on_progress:
+                    pr = Progress.parse(e.payload)
+                    if pr.op_id == op_id:
+                        on_progress(pr)
+                elif e.code == EVT_OP_DONE:
+                    r = Result.parse(e.payload)
+                    if r.op_id == op_id:
+                        return r
+            if time.monotonic() - quiet_since >= poll_every:
+                r = self.op_result(op_id)
+                if r is not None:
+                    return r
+                quiet_since = time.monotonic()
+        raise ProtocolError(f"operation {op_id} did not finish in {timeout:.0f} s")
+
+    def run_op(self, op_type: int, flags: int = 0, chip_id12: int = 0, param: int = 0, ext: bytes = b"",
+               on_progress=None, timeout: float = 600.0) -> Result:
+        return self.wait_op(self.start_op(op_type, flags, chip_id12, param, ext), on_progress, timeout)
 
     # ---------------------------------------------------------------- manual supplies
     @staticmethod

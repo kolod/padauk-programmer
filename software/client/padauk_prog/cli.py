@@ -10,8 +10,9 @@ import time
 import zlib
 
 from . import __version__, ihex, package
-from .protocol import (CAP_SUPPLY_CAL, CAP_SUPPLY_SET, FAMILY_NAMES, PkgState, Programmer, ProgrammerError, ProtocolError, Status,
-                       connect, status_name)
+from .protocol import (CALIB_KINDS, CAP_SUPPLY_CAL, CAP_SUPPLY_SET, FAMILY_NAMES, OPF_CALIB_FINALIZE_ON_FAIL,
+                       OPF_SKIP_BLANK_CHECK, OPF_SKIP_ERASE, OPF_SKIP_VERIFY, SITE_STATUS, Op, PkgState, Programmer,
+                       ProgrammerError, ProtocolError, Result, Status, connect, stage_name, status_name)
 from .transport import TransportError
 
 PKG_MESSAGES = {
@@ -289,6 +290,162 @@ def cmd_calibrate(prog: Programmer, a) -> int:
 RAILS = ("VDD", "VPP")
 
 
+# ------------------------------------------------------------------ operations with the chip
+OP_MESSAGES = {
+    Status.CHIP_NOT_FOUND: "no chip answers - check the socket and the ICP wiring",
+    Status.CHIP_ID_MISMATCH: "another chip type is in the socket",
+    Status.CHIP_NOT_BLANK: "the chip is not blank (and not a compatible earlier attempt) - nothing was written",
+    Status.VERIFY_FAILED: "the chip does not hold what was expected",
+    Status.CALIB_FAILED: "calibration did not reach its target - the placeholder stays a measurement loop, "
+                         "the chip can be completed later by programming it again",
+    Status.CHIP_ALREADY_PROGRAMMED: "the chip already holds this package completely - nothing to do",
+    Status.CANCELLED: "cancelled",
+    Status.VDD_FAULT: "VDD did not settle - check the supply and the board",
+    Status.VPP_FAULT: "VPP did not settle - check the supply and the board",
+    Status.OP_UNSUPPORTED: "this programmer or chip does not support the operation",
+}
+
+
+def show_progress(pr) -> None:
+    print(f"\r[{pr.stage_index + 1}/{pr.stage_count}] {stage_name(pr.stage):<12} {pr.percent:3d}%",
+          end="", file=sys.stderr, flush=True)
+
+
+def run_operation(prog: Programmer, a, op_type: int, flags: int = 0, chip_id12: int = 0) -> Result:
+    """Runs one operation with a progress line; Ctrl+C asks the programmer to cancel it safely."""
+    op_id = prog.start_op(op_type, flags, chip_id12)
+    progress = None if getattr(a, "quiet", False) else show_progress
+    try:
+        while True:
+            try:
+                return prog.wait_op(op_id, progress)
+            except KeyboardInterrupt:
+                print("\nCancelling...", file=sys.stderr)
+                try:
+                    prog.cancel_op(op_id)
+                except ProgrammerError:
+                    pass   # already finished
+    finally:
+        if progress:
+            print(file=sys.stderr)
+
+
+def describe_result(r: Result) -> str:
+    text = f"{status_name(r.status)} at {stage_name(r.stage)}"
+    msg = OP_MESSAGES.get(r.status) or PKG_MESSAGES.get(r.status)
+    if msg:
+        text += f": {msg}"
+    if r.status == Status.CHIP_ID_MISMATCH:
+        text += f" (found 0x{r.chip_id_found:03X})"
+    if r.status in (Status.VDD_FAULT, Status.VPP_FAULT) and r.v_rail in (0, 1):
+        text += f" ({RAILS[r.v_rail]} set {r.v_set_mV / 1000:.2f} V, measured {r.v_meas_mV / 1000:.2f} V)"
+    if r.fail_addr != 0xFFFF and r.status in (Status.CHIP_NOT_BLANK, Status.VERIFY_FAILED):
+        text += f" (word 0x{r.fail_addr:04X}: expected 0x{r.expected:04X}, found 0x{r.actual:04X})"
+    return text
+
+
+def print_result(r: Result) -> None:
+    for c in r.calib:
+        kind = CALIB_KINDS.get(c.kind, str(c.kind))
+        target = f"{c.target_hz} Hz" if c.kind != 3 else "BandGap"
+        measured = f", measured {c.measured_hz} Hz" if c.measured_hz else ""
+        print(f"Calibration {kind}: target {target}, value 0x{c.value:02X}{measured} "
+              f"[{SITE_STATUS.get(c.site_status, c.site_status)}]")
+    if r.serial_valid:
+        print(f"Serial number: 0x{r.serial:016X}")
+    if r.fuse_written != 0xFFFF:
+        print(f"Fuse: 0x{r.fuse_written:04X}")
+    if r.image_crc_raw or r.image_crc_norm:
+        print(f"Chip content CRC 0x{r.image_crc_raw:08X}, normalized 0x{r.image_crc_norm:08X}")
+    if r.warnings:
+        print(f"Warnings: {' '.join(r.warning_names())}")
+    print(f"Time: {r.elapsed_ms / 1000:.1f} s")
+
+
+def finish(r: Result, done: str) -> int:
+    print_result(r)
+    if r.ok:
+        print(done)
+        return 0
+    if r.status == Status.CHIP_ALREADY_PROGRAMMED:
+        print(OP_MESSAGES[r.status])
+        return 0
+    print(f"error: {describe_result(r)}", file=sys.stderr)
+    return 1
+
+
+def program_flags(a) -> int:
+    flags = 0
+    if getattr(a, "noerase", False):
+        flags |= OPF_SKIP_ERASE
+    if getattr(a, "noblankchk", False):
+        flags |= OPF_SKIP_BLANK_CHECK
+    if getattr(a, "noverify", False):
+        flags |= OPF_SKIP_VERIFY
+    if a.finalize_on_calib_fail:
+        flags |= OPF_CALIB_FINALIZE_ON_FAIL
+    return flags
+
+
+def cmd_program(prog: Programmer, a) -> int:
+    r = run_operation(prog, a, Op.PROGRAM, program_flags(a))
+    return finish(r, "Programming done" + (" (an earlier attempt completed)" if r.warnings & 8 else ""))
+
+
+def cmd_write(prog: Programmer, a) -> int:
+    rc = cmd_upload(prog, a)
+    if rc:
+        return rc
+    a.noerase = a.noblankchk = a.noverify = False   # already in the package flags
+    return cmd_program(prog, a)
+
+
+def cmd_verify(prog: Programmer, a) -> int:
+    return finish(run_operation(prog, a, Op.VERIFY), "Verify OK")
+
+
+def cmd_probe(prog: Programmer, a) -> int:
+    r = run_operation(prog, a, Op.PROBE)
+    if not r.ok:
+        print(f"error: {describe_result(r)}", file=sys.stderr)
+        return 1
+    chip = next((c for c in prog.list_chips() if c.id12 == r.chip_id_found), None)
+    name = "/".join(chip.names) if chip else "unknown"
+    print(f"Found: {name} (ID 0x{r.chip_id_found:03X}, family {FAMILY_NAMES.get(r.family_found, r.family_found)})")
+    return 0
+
+
+def chip_id_of(prog: Programmer, a) -> int:
+    return prog.find_chip(a.icname).id12 if a.icname else 0
+
+
+def cmd_erase(prog: Programmer, a) -> int:
+    return finish(run_operation(prog, a, Op.ERASE, chip_id12=chip_id_of(prog, a)), "Erased and blank")
+
+
+def cmd_blankcheck(prog: Programmer, a) -> int:
+    return finish(run_operation(prog, a, Op.BLANK_CHECK, chip_id12=chip_id_of(prog, a)), "Chip is blank")
+
+
+def cmd_status(prog: Programmer, a) -> int:
+    s = prog.get_status()
+    states = {0: "idle", 1: "receiving a package", 2: "operation running", 3: "running the chip"}
+    print(f"State: {states.get(s.state, s.state)}")
+    if s.op_id:
+        try:
+            op = Op(s.op_type).name
+        except ValueError:
+            op = f"0x{s.op_type:02X}"
+        print(f"Operation #{s.op_id}: {op}, {stage_name(s.op_stage)}, {s.op_percent}%")
+    print(f"Package: {PkgState(s.pkg_state).name}" + (f", CRC 0x{s.pkg_crc32:08X}" if s.pkg_state else ""))
+    print(f"Chips programmed: {s.ok_count} ok, {s.fail_count} failed")
+    if s.state != 2 and s.op_id:
+        r = prog.op_result(0)
+        if r:
+            print(f"Last result: {status_name(r.status)} at {stage_name(r.stage)}")
+    return 0
+
+
 def show_supplies(s: dict) -> None:
     """One line per rail: set point, average reading, its deviation and the spread (min..max) of the samples."""
     for rail in RAILS:
@@ -400,6 +557,36 @@ def build_parser() -> argparse.ArgumentParser:
     u.add_argument("--nocalibrate", action="store_true", help=argparse.SUPPRESS)
     u.add_argument("--serial", help=argparse.SUPPRESS)
     u.set_defaults(func=cmd_upload)
+
+    w = sub.add_parser("write", help="store the package and program the chip (upload + program)")
+    for action in u._actions[1:]:   # the same options as upload
+        w._add_action(action)
+    w.add_argument("--finalize-on-calib-fail", action="store_true",
+                   help="finish a calibration that missed its target with the best value found")
+    w.add_argument("-q", "--quiet", action="store_true", help="no progress line")
+    w.set_defaults(func=cmd_write)
+
+    g = sub.add_parser("program", help="program the chip with the stored package")
+    g.add_argument("--noerase", action="store_true")
+    g.add_argument("--noblankchk", action="store_true", help="FLASH chips only")
+    g.add_argument("--noverify", action="store_true", help="skip VERIFY (FINAL_VERIFY always runs)")
+    g.add_argument("--finalize-on-calib-fail", action="store_true",
+                   help="finish a calibration that missed its target with the best value found")
+    g.add_argument("-q", "--quiet", action="store_true", help="no progress line")
+    g.set_defaults(func=cmd_program)
+
+    for name, func, text in (("verify", cmd_verify, "compare the chip with the stored package"),
+                             ("probe", cmd_probe, "identify the chip in the socket")):
+        q = sub.add_parser(name, help=text)
+        q.add_argument("-q", "--quiet", action="store_true", help="no progress line")
+        q.set_defaults(func=func)
+    for name, func, text in (("erase", cmd_erase, "erase a FLASH chip"),
+                             ("blankcheck", cmd_blankcheck, "check that the chip is blank")):
+        q = sub.add_parser(name, help=text)
+        q.add_argument("-n", "--icname", help="chip type (default: the stored package's)")
+        q.add_argument("-q", "--quiet", action="store_true", help="no progress line")
+        q.set_defaults(func=func)
+    sub.add_parser("status", help="programmer state and the last operation").set_defaults(func=cmd_status)
 
     k = sub.add_parser("pkg", help="stored package: info | read FILE | delete | check")
     k.add_argument("action", choices=["info", "read", "delete", "check"])
