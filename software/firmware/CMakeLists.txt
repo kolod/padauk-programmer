@@ -44,7 +44,9 @@ if(PLATFORM STREQUAL "host")
     target_compile_definitions(pdk_core PUBLIC PDK_PLATFORM_HOST=1)
 
     file(GLOB PDK_HOST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/platform/host/*.c)
-    add_executable(pdk-sim ${PDK_HOST_SOURCES})
+    # chip model for the simulator comes with T079; until then the engine answers OP_UNSUPPORTED
+    add_executable(pdk-sim ${PDK_HOST_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/platform/common/chip_engine_stub.c)
+    target_include_directories(pdk-sim PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/platform/common)
     target_link_libraries(pdk-sim PRIVATE pdk_core)
     target_compile_options(pdk-sim PRIVATE ${PDK_WARNINGS})
     if(WIN32)

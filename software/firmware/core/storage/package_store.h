@@ -30,4 +30,10 @@ bool package_store_save_supply_cal(const int8_t cal[4], bool valid);
 
 void package_store_read(uint32_t offset, uint8_t *buf, size_t len);
 
+/* One journal record that only advances rec_seq (a serial number is spent before it is written). */
+bool package_store_bump(uint32_t *rec_seq);
+
+/* ok_count / fail_count after a finished PROGRAM. */
+bool package_store_count(bool ok);
+
 #endif

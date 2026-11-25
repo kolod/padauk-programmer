@@ -87,3 +87,6 @@ void hal_ui_state(pdk_ui_state_t state, const pdk_ui_detail_t *d)
             d ? (unsigned)d->fail : 0, d ? d->status : 0);
     fflush(stderr);
 }
+
+/* The simulator has no lines to a chip yet (the chip model comes with T079). */
+void platform_ic_lines_hiz(void) {}
