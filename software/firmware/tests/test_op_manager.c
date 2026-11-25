@@ -21,6 +21,7 @@ void pdk_test_setup(void)
 {
     fake_reset();
     pdk_core_init();
+    pdk_core_poll();   /* the start-up SELF_TEST */
     tops_seq = 1;
     chip = tops_chip("PFS154");
     tops_image_init(&img);

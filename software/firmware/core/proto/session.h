@@ -19,7 +19,7 @@ bool session_is_open(void);
 bool session_is_established(void);
 void session_set_established(bool established);
 
-/* Sends an unsolicited event frame (dropped while the port is closed). */
+/* Sends an unsolicited event frame (dropped while the port is closed or before HELLO). */
 void session_send_event(uint16_t code, const uint8_t *payload, uint16_t len);
 
 #endif

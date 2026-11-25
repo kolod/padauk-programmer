@@ -25,7 +25,7 @@ enum {
 enum { PDK_SOURCE_HOST = 0, PDK_SOURCE_LOCAL = 1 };
 
 #define OP_PROGRESS_INTERVAL_MS 500u
-#define OP_MAX_LEVELS 16u
+#define OP_MAX_LEVELS 32u
 
 typedef struct {
     uint8_t kind, value;
@@ -122,5 +122,9 @@ uint16_t op_erase_run(void);
 uint16_t op_blank_check_run(void);
 uint16_t op_verify_run(void);
 uint16_t op_patch_run(void);
+uint16_t op_selftest_run(void);
+
+/* STATUS.selftest_state: PDK_SELFTEST_* of the last SELF_TEST (RAM only). */
+uint8_t op_selftest_state(void);
 
 #endif

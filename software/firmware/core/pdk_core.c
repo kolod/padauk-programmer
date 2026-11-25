@@ -6,6 +6,7 @@
 #include "power/power.h"
 #include "power/supply_cal.h"
 #include "power/supply_set.h"
+#include "proto/proto_defs.h"
 #include "proto/session.h"
 #include "storage/housekeeping.h"
 #include "storage/package_store.h"
@@ -20,6 +21,9 @@ void pdk_core_init(void)
     upload_init();
     op_manager_init();
     session_init();
+    op_request_t selftest = {.op_type = PDK_OP_SELF_TEST, .source = PDK_SOURCE_LOCAL};
+    uint16_t id;
+    op_manager_start(&selftest, &id);   /* runs on the first pdk_core_poll() (FR-041) */
 }
 
 void pdk_core_poll(void)

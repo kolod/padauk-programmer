@@ -196,15 +196,15 @@ description: "Task list for 001-pc-programmer-protocol"
 
 ### Tests for User Story 4
 
-- [ ] T093 [P] [US4] Модульні тести самоперевірки в `software/firmware/tests/test_selftest.c` з фейковими `hal_power` і рушієм: рівні = усі різні значення VDD/VPP з таблиці мікросхем у порядку зростання + 0 В після кожної шини; інша шина = 0; probe першим, відповідь мікросхеми → `SELFTEST_CHIP_PRESENT` без рівнів вище probe; перший недосягнутий рівень → `SELFTEST_FAILED`, `safe_state`; `RESULT.levels[]`; автозапуск при старті з `source = 1`; `STATUS.selftest_state`
-- [ ] T094 [P] [US4] Контрактний тест `software/client/tests/contract/test_info.py`: `INFO` (версія 1.0, `max_payload`, `max_package_size`, `max_read_words`, біти можливостей), `LIST_CHIPS` з пагінацією, мажорна версія 2 → `PROTO_VERSION`, `OP_START`/`PKG_BEGIN` → `NO_SESSION`; SC-006 з `pdk-sim-extra`
-- [ ] T095 [P] [US4] Контрактний тест `software/client/tests/contract/test_selftest.py`: `--chip none` → `OK` з усіма рівнями; `--chip PFS154` → `SELFTEST_CHIP_PRESENT`; `--power-fault vpp:stuck` → `SELFTEST_FAILED` з рівнем; після старту симулятора `STATUS.selftest_state` = 2/3/4 відповідно
+- [X] T093 [P] [US4] Модульні тести самоперевірки в `software/firmware/tests/test_selftest.c` з фейковими `hal_power` і рушієм: рівні = усі різні значення VDD/VPP з таблиці мікросхем у порядку зростання + 0 В після кожної шини; інша шина = 0; probe першим, відповідь мікросхеми → `SELFTEST_CHIP_PRESENT` без рівнів вище probe; перший недосягнутий рівень → `SELFTEST_FAILED`, `safe_state`; `RESULT.levels[]`; автозапуск при старті з `source = 1`; `STATUS.selftest_state`
+- [X] T094 [P] [US4] Контрактний тест `software/client/tests/contract/test_info.py`: `INFO` (версія 1.0, `max_payload`, `max_package_size`, `max_read_words`, біти можливостей), `LIST_CHIPS` з пагінацією, мажорна версія 2 → `PROTO_VERSION`, `OP_START`/`PKG_BEGIN` → `NO_SESSION`; SC-006 з `pdk-sim-extra`
+- [X] T095 [P] [US4] Контрактний тест `software/client/tests/contract/test_selftest.py`: `--chip none` → `OK` з усіма рівнями; `--chip PFS154` → `SELFTEST_CHIP_PRESENT`; `--power-fault vpp:stuck` → `SELFTEST_FAILED` з рівнем; після старту симулятора `STATUS.selftest_state` = 2/3/4 відповідно
 
 ### Implementation for User Story 4
 
-- [ ] T096 [US4] Реалізувати операцію `SELF_TEST` (contracts §4 `SELF_TEST`, research R15) і автозапуск при старті ядра у `software/firmware/core/ops/op_selftest.c` та `software/firmware/core/pdk_core.c` (залежить від T020, T084, T023)
-- [ ] T097 [US4] Додати тестовий запис мікросхеми під `#ifdef PDK_TEST_EXTRA_CHIP` у `software/firmware/core/chips/chip_table.c` і ціль `pdk-sim-extra` у `software/firmware/CMakeLists.txt`
-- [ ] T098 [US4] Додати CLI-підкоманди `info` (версії, платформа, можливості, стан пакета, `selftest_state`), `list` (як `easypdkprog list`: назва, ID, FLASH/OTP, слова, розрядність, RAM, `(RO)`), `selftest` (підтвердження «панелька порожня», таблиця рівнів задано/виміряно/час) у `software/client/padauk_prog/cli.py` (залежить від T090)
+- [X] T096 [US4] Реалізувати операцію `SELF_TEST` (contracts §4 `SELF_TEST`, research R15) і автозапуск при старті ядра у `software/firmware/core/ops/op_selftest.c` та `software/firmware/core/pdk_core.c` (залежить від T020, T084, T023)
+- [X] T097 [US4] Додати тестовий запис мікросхеми під `#ifdef PDK_TEST_EXTRA_CHIP` у `software/firmware/core/chips/chip_table.c` і ціль `pdk-sim-extra` у `software/firmware/CMakeLists.txt`
+- [X] T098 [US4] Додати CLI-підкоманди `info` (версії, платформа, можливості, стан пакета, `selftest_state`), `list` (як `easypdkprog list`: назва, ID, FLASH/OTP, слова, розрядність, RAM, `(RO)`), `selftest` (підтвердження «панелька порожня», таблиця рівнів задано/виміряно/час) у `software/client/padauk_prog/cli.py` (залежить від T090)
 
 **Checkpoint**: US4 перевірено; клієнт не містить таблиці мікросхем (`grep` назв мікросхем у `software/client/padauk_prog/` порожній)
 
