@@ -59,8 +59,9 @@ static void persist(uint32_t off, size_t len)
     fflush(backing);
 }
 
-/* Returns true if this operation is the one interrupted by the simulated power loss. */
-static bool power_fail_now(void)
+/* Returns true if this operation is the one interrupted by the simulated power loss. Flash and chip
+ * operations share the count. */
+bool host_power_fail_now(void)
 {
     if (fail_after < 0)
         return false;
@@ -70,7 +71,7 @@ static bool power_fail_now(void)
     return false;
 }
 
-static void die_power_fail(void)
+void host_power_die(void)
 {
     if (backing)
         fclose(backing);
@@ -83,11 +84,11 @@ bool hal_flash_erase_page(uint32_t addr)
     if (addr < FLASH_BASE || addr + geometry.page_size > FLASH_BASE + FLASH_SIZE || (addr - FLASH_BASE) % geometry.page_size)
         return false;
     uint32_t off = addr - FLASH_BASE;
-    bool torn = power_fail_now();
+    bool torn = host_power_fail_now();
     memset(mem + off, 0xFF, torn ? geometry.page_size / 2 : geometry.page_size);
     persist(off, geometry.page_size);
     if (torn)
-        die_power_fail();
+        host_power_die();
     return true;
 }
 
@@ -96,7 +97,7 @@ bool hal_flash_program(uint32_t addr, const uint8_t *data, size_t len)
     if ((addr | len) & 1u || addr < FLASH_BASE || addr + len > FLASH_BASE + FLASH_SIZE)
         return false;
     uint32_t off = addr - FLASH_BASE;
-    bool torn = power_fail_now();
+    bool torn = host_power_fail_now();
     size_t n = torn ? (len / 4u) * 2u : len;
     bool ok = true;
     for (size_t i = 0; i < n; i += 2) {
@@ -109,7 +110,7 @@ bool hal_flash_program(uint32_t addr, const uint8_t *data, size_t len)
     }
     persist(off, len);
     if (torn)
-        die_power_fail();
+        host_power_die();
     return ok;
 }
 

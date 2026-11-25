@@ -9,6 +9,7 @@
 #include "hal_power.h"
 #include "hal_platform.h"
 #include "le.h"
+#include "ops/op_cmds.h"
 #include "ops/op_manager.h"
 #include "package/pkg_cmds.h"
 #include "power/supply_cal.h"
@@ -23,7 +24,11 @@ static uint16_t cmd_get_info(const uint8_t *req, uint16_t len, uint8_t *rsp, uin
 static const pdk_command_t commands[] = {
     {PDK_CMD_HELLO, PDK_CMDF_NO_SESSION | PDK_CMDF_DURING_OP, cmd_hello},
     {PDK_CMD_GET_INFO, PDK_CMDF_NO_SESSION | PDK_CMDF_DURING_OP, cmd_get_info},
+    {PDK_CMD_GET_STATUS, PDK_CMDF_DURING_OP, op_cmd_status},
     {PDK_CMD_LIST_CHIPS, 0, chip_cmd_list},
+    {PDK_CMD_OP_START, 0, op_cmd_start},
+    {PDK_CMD_OP_CANCEL, PDK_CMDF_DURING_OP, op_cmd_cancel},
+    {PDK_CMD_OP_RESULT, PDK_CMDF_DURING_OP, op_cmd_result},
     {PDK_CMD_PKG_BEGIN, 0, pkg_cmd_begin},
     {PDK_CMD_PKG_DATA, 0, pkg_cmd_data},
     {PDK_CMD_PKG_COMMIT, 0, pkg_cmd_commit},

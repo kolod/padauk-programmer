@@ -4,10 +4,12 @@
 #include <string.h>
 
 #include "chip_engine.h"
+#include "chips/chip_table.h"
 #include "hal_time.h"
 #include "hal_ui.h"
 #include "package/upload.h"
 #include "pdk_config.h"
+#include "power/power.h"
 #include "proto/le.h"
 #include "proto/proto_defs.h"
 #include "proto/session.h"
@@ -37,10 +39,18 @@ uint16_t op_manager_start(const op_request_t *req, uint16_t *op_id)
 {
     if (op_manager_busy() || upload_active())
         return PDK_BUSY;
-    if (req->op_type != PDK_OP_PROGRAM)
-        return PDK_OP_UNSUPPORTED;
-    if (req->op_flags & ~PDK_OPF_ALLOWED)
+    switch (req->op_type) {
+    case PDK_OP_PROBE:
+    case PDK_OP_ERASE:
+    case PDK_OP_BLANK_CHECK:
+    case PDK_OP_PROGRAM:
+    case PDK_OP_VERIFY: break;
+    default: return PDK_OP_UNSUPPORTED;
+    }
+    if ((req->op_flags & ~PDK_OPF_ALLOWED) || (req->op_flags && req->op_type != PDK_OP_PROGRAM))
         return PDK_BAD_PAYLOAD;
+    if (req->chip_id12 && !chip_by_id(req->chip_id12))
+        return PDK_PKG_CHIP_UNSUPPORTED;
     m.req = *req;
     if (++m.last_id == 0)
         m.last_id = 1;
@@ -62,6 +72,16 @@ const op_result_t *op_manager_result(uint16_t op_id)
     if (m.state != OPS_DONE || (op_id && op_id != m.res.op_id))
         return NULL;
     return &m.res;
+}
+
+void op_manager_status(op_status_t *s)
+{
+    uint8_t count = m.plan_n ? m.plan_n : 1;
+    s->running = op_manager_busy();
+    s->op_id = m.state == OPS_IDLE ? 0 : m.state == OPS_QUEUED ? m.last_id : m.res.op_id;
+    s->op_type = m.state == OPS_IDLE ? 0 : m.res.op_type;
+    s->stage = m.res.stage;
+    s->percent_total = m.state == OPS_DONE ? 100 : (uint8_t)(((uint32_t)m.index * 100u + m.percent) / count);
 }
 
 op_result_t *op_current(void) { return &m.res; }
@@ -194,10 +214,23 @@ void op_manager_poll(void)
     pdk_ui_detail_t busy = {0};
     hal_ui_state(PDK_UI_BUSY, &busy);
 
-    uint16_t st = op_program_run();
+    uint16_t st;
+    switch (m.req.op_type) {
+    case PDK_OP_PROBE: st = op_probe_run(); break;
+    case PDK_OP_ERASE: st = op_erase_run(); break;
+    case PDK_OP_BLANK_CHECK: st = op_blank_check_run(); break;
+    case PDK_OP_VERIFY: st = op_verify_run(); break;
+    default: st = op_program_run(); break;
+    }
 
     chip_engine_safe_state();   /* every way to DONE goes through the safe state */
     m.res.status = st;
+    if (st == PDK_VDD_FAULT || st == PDK_VPP_FAULT) {
+        const power_fault_t *f = power_last_fault();
+        m.res.v_rail = f->rail;
+        m.res.v_set_mV = f->set_mV;
+        m.res.v_meas_mV = f->meas_mV;
+    }
     m.res.elapsed_ms = hal_time_ms() - m.start_ms;
     if (m.req.op_type == PDK_OP_PROGRAM && st != PDK_CHIP_ALREADY_PROGRAMMED)
         package_store_count(st == PDK_OK);

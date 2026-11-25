@@ -71,7 +71,8 @@ typedef struct {
 void op_manager_init(void);
 
 /* Queues an operation; it starts on the next op_manager_poll(). PDK_OK and *op_id, PDK_BUSY while one
- * runs or a package upload is in progress, PDK_OP_UNSUPPORTED for an unknown type. */
+ * runs or a package upload is in progress, PDK_OP_UNSUPPORTED for a type not implemented, PDK_BAD_PAYLOAD
+ * for op_flags outside PROGRAM, PDK_PKG_CHIP_UNSUPPORTED for an unknown chip_id12. */
 uint16_t op_manager_start(const op_request_t *req, uint16_t *op_id);
 
 /* Runs a queued operation to the end (call from the main loop). */
@@ -102,7 +103,19 @@ bool op_poll(void);
 op_result_t *op_current(void);
 const op_request_t *op_request(void);
 
-/* Pipelines, one per operation type (op_program.c, …): fill op_current() and return the status. */
+/* For STATUS: the running or last operation (op_id 0 = none yet) and its progress. */
+typedef struct {
+    bool running;
+    uint16_t op_id;
+    uint8_t op_type, stage, percent_total;
+} op_status_t;
+void op_manager_status(op_status_t *s);
+
+/* Pipelines, one per operation type (op_program.c, op_simple.c): fill op_current() and return the status. */
 uint16_t op_program_run(void);
+uint16_t op_probe_run(void);
+uint16_t op_erase_run(void);
+uint16_t op_blank_check_run(void);
+uint16_t op_verify_run(void);
 
 #endif

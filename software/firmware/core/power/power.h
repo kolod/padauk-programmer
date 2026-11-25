@@ -44,6 +44,9 @@ uint16_t power_measure(pdk_rail_t rail);
 /* Tolerance used by power_apply() for a target voltage. */
 uint16_t power_tolerance_mV(uint16_t target_mV);
 
+/* The last fault of power_apply() (for RESULT.v_rail / v_set_mV / v_meas_mV, whoever called it). */
+const power_fault_t *power_last_fault(void);
+
 /* Removes all voltages immediately. */
 void power_off_all(void);
 

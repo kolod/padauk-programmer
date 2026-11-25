@@ -36,6 +36,7 @@ int tops_upload(const chip_info_t *c, const tops_image_t *img);
 
 /* Starts an operation and runs it to the end; NULL if it could not start (*start_status). */
 const op_result_t *tops_run(uint8_t op_type, uint8_t op_flags, uint8_t source, uint16_t *start_status);
+const op_result_t *tops_run_req(const op_request_t *req, uint16_t *start_status);
 
 /* The chip content after a successful PROGRAM: calibration values and serial number from `r`. */
 void tops_expected(const chip_info_t *c, const tops_image_t *img, const op_result_t *r, uint16_t *out);

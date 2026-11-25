@@ -1,9 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* pdk-sim: the programmer core on the PC, speaking the protocol over TCP.
  *
- *   pdk-sim [--tcp HOST:PORT] [--flash FILE] [--power-fail-after N] [--power-fault RAIL:MODE]
- *           [--power-scale RAIL:OUT:MEAS] [--corrupt-flash-during-write] [--uid HEX24]
+ *   pdk-sim [--tcp HOST:PORT] [--flash FILE] [--chip SPEC] [--chip-state FILE] [--power-fail-after N]
+ *           [--power-fault RAIL:MODE] [--power-scale RAIL:OUT:MEAS] [--corrupt-flash-during-write] [--uid HEX24]
  *
+ * --chip none | NAME[:offset=±N,osc=broken,weak=ADDR,order=reverse,deaf,pa0=float] (default none).
+ * --power-fail-after counts flash operations and chip writes/erases together.
  * Exit code 99 = simulated power loss. Prints "listening HOST:PORT" on stdout when ready.
  */
 #include "hal_ui.h"
@@ -17,6 +19,8 @@
 static void usage(void)
 {
     fprintf(stderr, "usage: pdk-sim [--tcp HOST:PORT] [--flash FILE] [--power-fail-after N]\n"
+                    "               [--chip none|NAME[:offset=N,osc=broken,weak=ADDR,order=reverse,deaf,pa0=float]]\n"
+                    "               [--chip-state FILE]\n"
                     "               [--power-fault vdd|vpp:low|slow|stuck] [--power-scale vdd|vpp:OUT:MEAS]\n"
                     "               [--corrupt-flash-during-write] [--uid HEX24]\n");
     exit(2);
@@ -35,7 +39,9 @@ int main(int argc, char **argv)
     const char *host = "127.0.0.1";
     unsigned port = 5555;
     const char *flash = NULL;
+    const char *chip_state = NULL;
     static char hostbuf[64];
+    host_chip_config("none");
 
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
@@ -51,6 +57,13 @@ int main(int argc, char **argv)
             i++;
         } else if (!strcmp(a, "--flash") && v) {
             flash = v;
+            i++;
+        } else if (!strcmp(a, "--chip") && v) {
+            if (!host_chip_config(v))
+                usage();
+            i++;
+        } else if (!strcmp(a, "--chip-state") && v) {
+            chip_state = v;
             i++;
         } else if (!strcmp(a, "--power-fail-after") && v) {
             host_flash_power_fail_after(atol(v));
@@ -80,6 +93,8 @@ int main(int argc, char **argv)
         }
     }
 
+    if (chip_state)
+        host_chip_state(chip_state);
     if (!host_flash_open(flash)) {
         fprintf(stderr, "cannot open flash file %s\n", flash);
         return 1;
