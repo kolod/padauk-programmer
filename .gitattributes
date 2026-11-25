@@ -7,3 +7,6 @@
 *.png binary
 *.jpg binary
 *.zip binary
+
+# Windows INF: setupapi expects CRLF
+*.inf text eol=crlf

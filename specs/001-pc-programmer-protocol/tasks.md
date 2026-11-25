@@ -42,7 +42,7 @@ description: "Task list for 001-pc-programmer-protocol"
 - [X] T002 Створити `software/firmware/CMakeLists.txt`: C11, `-Wall -Wextra -Werror`, опція `PLATFORM` (`host` | `stm32f072`), бібліотека `pdk_core` з `core/*`, для `host` — виконуваний `pdk-sim` і тести CTest, для `stm32f072` — `pdkprog.elf/.bin`
 - [X] T003 [P] Створити тулчейн-файл `software/firmware/cmake/arm-none-eabi.cmake` (Cortex-M0, `-mcpu=cortex-m0 -mthumb -Os -flto -ffunction-sections -fdata-sections`, `--gc-sections`, `--specs=nano.specs`)
 - [X] T004 [P] Створити мінімальний тестовий фреймворк `software/firmware/tests/pdk_test.h` (макроси `TEST`, `ASSERT_EQ`, `ASSERT_MEM_EQ`, реєстрація й запуск, ненульовий код виходу при падінні) і `software/firmware/tests/CMakeLists.txt`, що реєструє кожен `test_*.c` у CTest
-- [X] T005 [P] Створити `software/client/pyproject.toml`: пакет `padauk_prog`, Python ≥ 3.10, залежність `pyserial`, extra `dev` = `pytest`, консольний скрипт `pdkprog = padauk_prog.cli:main`; `software/client/padauk_prog/__init__.py` з `__version__ = "0.1.0"`
+- [X] T005 [P] Створити `software/client/pyproject.toml`: пакет `padauk_prog`, Python ≥ 3.8, залежність `pyserial`, extra `dev` = `pytest`, консольний скрипт `pdkprog = padauk_prog.cli:main`; `software/client/padauk_prog/__init__.py` з `__version__ = "0.1.0"`
 - [X] T006 [P] Створити `software/client/tests/conftest.py` з опцією `--sim PATH` (шлях до `pdk-sim`) і пропуском контрактних тестів, якщо симулятор не задано
 - [X] T007 [P] Додати в `.gitignore` кореня: `build/`, `software/client/**/__pycache__/`, `*.egg-info/`, `.pytest_cache/`
 

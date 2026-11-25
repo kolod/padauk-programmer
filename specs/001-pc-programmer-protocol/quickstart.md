@@ -6,7 +6,7 @@
 ## Передумови
 
 - CMake ≥ 3.20, хост-компілятор C11 (gcc/clang/MSVC), `arm-none-eabi-gcc` ≥ 12 (для прошивки)
-- Python ≥ 3.10, `pip install -e software/client[dev]` (pyserial, pytest)
+- Python ≥ 3.8, `pip install -e software/client[dev]` (pyserial, pytest)
 - Для сценаріїв на залізі: ціль налагодження — плата Easy PDK (STM32F072), PFS154 у панельці
 
 ## 1. Модульні тести ядра (без заліза)
