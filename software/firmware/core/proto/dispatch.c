@@ -10,6 +10,7 @@
 #include "hal_platform.h"
 #include "le.h"
 #include "ops/op_cmds.h"
+#include "ops/op_read.h"
 #include "ops/op_manager.h"
 #include "package/pkg_cmds.h"
 #include "power/supply_cal.h"
@@ -30,6 +31,7 @@ static const pdk_command_t commands[] = {
     {PDK_CMD_OP_START, 0, op_cmd_start},
     {PDK_CMD_OP_CANCEL, PDK_CMDF_DURING_OP, op_cmd_cancel},
     {PDK_CMD_OP_RESULT, PDK_CMDF_DURING_OP, op_cmd_result},
+    {PDK_CMD_RESULT_READ, 0, op_cmd_result_read},
     {PDK_CMD_PKG_BEGIN, 0, pkg_cmd_begin},
     {PDK_CMD_PKG_DATA, 0, pkg_cmd_data},
     {PDK_CMD_PKG_COMMIT, 0, pkg_cmd_commit},

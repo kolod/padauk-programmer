@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import struct
 import time
+import zlib
 from collections import deque
 from dataclasses import dataclass, field
 from enum import IntEnum
@@ -572,6 +573,23 @@ class Programmer:
 
     def get_status(self) -> ProgrammerStatus:
         return ProgrammerStatus.parse(self.call(Cmd.GET_STATUS))
+
+    def result_read(self, offset: int, length: int) -> bytes:
+        return self.call(Cmd.RESULT_READ, struct.pack("<IH", offset, length))
+
+    def read_chip(self, chip_id12: int = 0, on_progress=None, timeout: float = 120.0) -> tuple:
+        """READ, then the data through RESULT_READ: (Result, [words]); raises ProtocolError on a CRC mismatch.
+        The words are None if READ failed (see Result.status)."""
+        r = self.run_op(Op.READ, chip_id12=chip_id12, on_progress=on_progress, timeout=timeout)
+        if r.status != Status.OK:
+            return r, None
+        total, chunk = 2 * r.data_words, self.max_payload & ~1
+        data = bytearray()
+        while len(data) < total:
+            data += self.result_read(len(data), min(chunk, total - len(data)))
+        if zlib.crc32(bytes(data)) != r.data_crc32:
+            raise ProtocolError(f"read data CRC 0x{zlib.crc32(bytes(data)):08X} != 0x{r.data_crc32:08X}")
+        return r, [int.from_bytes(data[i:i + 2], "little") for i in range(0, total, 2)]
 
     def stats_get(self) -> tuple:
         """(ok, fail): chips programmed since the last reset."""

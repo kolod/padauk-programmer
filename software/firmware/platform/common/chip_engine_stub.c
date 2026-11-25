@@ -46,6 +46,13 @@ uint16_t chip_engine_calibrate(const struct chip_info *chip, uint16_t site_addr,
     return PDK_OP_UNSUPPORTED;
 }
 
+uint16_t chip_engine_measure_freq(const struct chip_info *chip, uint16_t site_addr, uint8_t kind, uint8_t start_value,
+                                  uint16_t mV, uint32_t *hz, chip_poll_fn poll)
+{
+    chip_engine_safe_state();
+    return PDK_OP_UNSUPPORTED;
+}
+
 uint16_t chip_engine_run_start(uint16_t vdd_mV)
 {
     chip_engine_safe_state();

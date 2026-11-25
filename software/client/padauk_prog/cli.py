@@ -514,6 +514,31 @@ def cmd_patch(prog: Programmer, a) -> int:
     return 0
 
 
+def cmd_read(prog: Programmer, a) -> int:
+    chip_id = prog.find_chip(a.icname).id12 if a.icname else 0
+    r, words = prog.read_chip(chip_id, None if a.quiet else show_progress)
+    if not a.quiet:
+        print(file=sys.stderr)
+    if words is None:
+        if r.status == Status.CHIP_PROTECTED:
+            print("error: CHIP_PROTECTED: the chip's read protection is on - its content cannot be read",
+                  file=sys.stderr)
+        else:
+            print(f"error: {describe_result(r)}", file=sys.stderr)
+        return 1
+    if a.binary:
+        with open(a.file, "wb") as f:
+            f.write(b"".join(w.to_bytes(2, "little") for w in words))
+    else:
+        with open(a.file, "w") as f:
+            f.write(ihex.format_words(words))
+    chip = next((c for c in prog.list_chips() if c.id12 == r.chip_id_found), None)
+    print(f"Read {len(words)} words from {chip.name if chip else hex(r.chip_id_found)} into {a.file} "
+          f"(data CRC 0x{r.data_crc32:08X} verified)")
+    print(f"Chip content CRC 0x{r.image_crc_raw:08X}, normalized 0x{r.image_crc_norm:08X}")
+    return 0
+
+
 def cmd_stats(prog: Programmer, a) -> int:
     if a.action == "reset":
         prog.stats_reset()
@@ -719,6 +744,13 @@ def build_parser() -> argparse.ArgumentParser:
         q.add_argument("-q", "--quiet", action="store_true", help="no progress line")
         q.set_defaults(func=func)
     sub.add_parser("status", help="programmer state and the last operation").set_defaults(func=cmd_status)
+
+    q = sub.add_parser("read", help="read the chip into a file (Intel HEX, or raw with -b)")
+    q.add_argument("file")
+    q.add_argument("-n", "--icname", help="chip type (default: the one PROBE finds)")
+    q.add_argument("-b", "--binary", action="store_true", help="raw little-endian words instead of Intel HEX")
+    q.add_argument("-q", "--quiet", action="store_true", help="no progress line")
+    q.set_defaults(func=cmd_read)
 
     q = sub.add_parser("stats", help="chips programmed ok / failed: stats | stats reset")
     q.add_argument("action", nargs="?", choices=["show", "reset"], default="show")

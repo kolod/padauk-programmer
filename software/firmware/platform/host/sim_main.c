@@ -4,7 +4,7 @@
  *   pdk-sim [--tcp HOST:PORT] [--flash FILE] [--chip SPEC] [--chip-state FILE] [--power-fail-after N]
  *           [--power-fault RAIL:MODE] [--power-scale RAIL:OUT:MEAS] [--corrupt-flash-during-write] [--uid HEX24]
  *
- * --chip none | NAME[:offset=±N,osc=broken,weak=ADDR,order=reverse,deaf,pa0=float,slow=US] (default none).
+ * --chip none | NAME[:offset=±N,osc=broken,weak=ADDR,order=reverse,deaf,pa0=float,slow=US,protected] (default none).
  * --corrupt-flash-during-write disturbs flash reads from the first chip write until the safe state.
  * --power-fail-after counts flash operations and chip writes/erases together.
  * stdin: local-start program|copy|verify|selftest|restore, local-cancel, swap-chip SPEC (local controls).
@@ -28,7 +28,7 @@
 static void usage(void)
 {
     fprintf(stderr, "usage: pdk-sim [--tcp HOST:PORT] [--flash FILE] [--power-fail-after N]\n"
-                    "               [--chip none|NAME[:offset=N,osc=broken,weak=ADDR,order=reverse,deaf,pa0=float,slow=US]]\n"
+                    "               [--chip none|NAME[:offset=N,osc=broken,weak=ADDR,order=reverse,deaf,pa0=float,slow=US,protected]]\n"
                     "               [--chip-state FILE]\n"
                     "               [--power-fault vdd|vpp:low|slow|stuck] [--power-scale vdd|vpp:OUT:MEAS]\n"
                     "               [--corrupt-flash-during-write] [--uid HEX24]\n");

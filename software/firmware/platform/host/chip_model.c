@@ -10,6 +10,7 @@
  *    target; deaf ignores the "+1" pulses; BandGap flips the comparator at k = 128 − 4 · offset;
  *  - FR-055 checks of the calibrate primitive: first reading within 1/4 … 4 of the target, every step
  *    changes the frequency, PA0 driven for BandGap (pa0=float: not) → CALIB_WRONG_SITE;
+ *  - protected: the fuse reads with the protection bit on (research R10);
  *  - weak=ADDR: writes to ADDR after the first one do not stick (FR-048); slow=US: each write block
  *    takes US microseconds (to act in the middle of an operation);
  *  - --chip-state FILE keeps the chip memory across runs; --power-fail-after also counts chip writes
@@ -37,7 +38,7 @@
 static struct {
     const chip_info_t *chip;   /* NULL: empty socket */
     int offset_pct;
-    bool osc_broken, deaf, reverse, pa0_float;
+    bool osc_broken, deaf, reverse, pa0_float, protect;
     bool weak;
     uint16_t weak_addr;
     uint32_t slow_us;
@@ -94,6 +95,8 @@ bool host_chip_config(const char *spec)
             c.deaf = true;
         else if (len == 9 && !strncmp(o, "pa0=float", 9))
             c.pa0_float = true;
+        else if (len == 9 && !strncmp(o, "protected", 9))
+            c.protect = true;
         else if (!strncmp(o, "slow=", 5))
             c.slow_us = (uint32_t)strtoul(o + 5, NULL, 0);
         else
@@ -201,7 +204,10 @@ uint16_t chip_engine_read(const struct chip_info *chip, uint16_t addr, uint16_t 
     for (uint32_t i = 0; i < count; i++) {
         if (i % 64u == 0 && poll && !poll())
             return fail(PDK_CANCELLED);
-        sink(ctx, (uint16_t)(addr + i), (uint16_t)(c.mem[addr + i] & chip_word_mask(chip)));
+        uint16_t a = (uint16_t)(addr + i), w = (uint16_t)(c.mem[a] & chip_word_mask(chip));
+        if (c.protect && a == chip_fuse_addr(chip))
+            w &= (uint16_t)~1u;   /* read protection on (what such a chip really returns: research R10) */
+        sink(ctx, a, w);
     }
     return PDK_OK;
 }
@@ -347,6 +353,27 @@ uint16_t chip_engine_calibrate(const struct chip_info *chip, uint16_t site_addr,
     }
     *value = (uint8_t)k;
     *measured_hz = f_prev;
+    chip_engine_safe_state();
+    return PDK_OK;
+}
+
+uint16_t chip_engine_measure_freq(const struct chip_info *chip, uint16_t site_addr, uint8_t kind, uint8_t start_value,
+                                  uint16_t mV, uint32_t *hz, chip_poll_fn poll)
+{
+    *hz = 0;
+    uint16_t st = present(chip);
+    if (st != PDK_OK)
+        return fail(st);
+    if ((st = supplies(0, mV ? mV : CALIB_DEFAULT_MV)) != PDK_OK)
+        return st;
+    if (poll && !poll())
+        return fail(PDK_CANCELLED);
+    uint16_t run_addr;
+    calib_match_t run;
+    if (!running_loop(&run_addr, &run) || run_addr != site_addr || run.kind == CALIB_KIND_BG)
+        return fail(PDK_CALIB_FAILED);   /* nothing toggles PA3 at this loop */
+    /* the loop starts with ADD A,1: it runs at its immediate + 1; the master's own oscillator, no target */
+    *hz = sysclk(run.kind, (uint8_t)~run.kind, 0, (uint8_t)(run.k + 1u));
     chip_engine_safe_state();
     return PDK_OK;
 }
