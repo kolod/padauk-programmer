@@ -147,9 +147,16 @@ PATCH_ALLOW_SECURITY_FUSE = 1 << 1
 PATCH_EXPECT_RAW, PATCH_EXPECT_NORMALIZED, PATCH_EXPECT_ACTIVE_PACKAGE = 0, 1, 2
 CAP_PATCH = 1 << 6
 
+# COPY ext
+COPY_KEEP, COPY_TARGET, COPY_SNAP, COPY_MEASURE = 0, 1, 2, 3
+COPY_ALLOW_MODIFY_MASTER = 1 << 0
+COPY_ALLOW_MASTER_LOOP = 1 << 1
+
 # RESULT.warnings
 WARN_NAMES = ("CALIB_VALUE_COPIED", "CALIB_SNAPPED", "MASTER_MODIFIED", "RESUMED", "CALIB_FORCED",
               "SERIAL_DUPLICATED", "CALIB_UNRECOGNIZED")
+WARN_CALIB_VALUE_COPIED = 1 << 0
+WARN_CALIB_SNAPPED = 1 << 1
 WARN_RESUMED = 1 << 3
 WARN_CALIB_FORCED = 1 << 4
 
@@ -591,6 +598,23 @@ class Programmer:
             raise ProtocolError(f"read data CRC 0x{zlib.crc32(bytes(data)):08X} != 0x{r.data_crc32:08X}")
         return r, [int.from_bytes(data[i:i + 2], "little") for i in range(0, total, 2)]
 
+    def copy(self, chip_id12: int = 0, mode_ihrc: int = COPY_KEEP, mode_ilrc: int = COPY_KEEP,
+             bg_restore: bool = False, flags: int = 0, target_ihrc_hz: int = 0, target_ilrc_hz: int = 0,
+             mV: int = 0, name: str = "", on_progress=None, timeout: float = 300.0) -> Result:
+        """COPY the chip in the socket into a new stored package (research R9)."""
+        ext = struct.pack("<BBBBIIH", mode_ihrc, mode_ilrc, 1 if bg_restore else 0, flags, target_ihrc_hz,
+                          target_ilrc_hz, mV)
+        if name:
+            ext += name.encode()[:32].ljust(32, bytes(1))
+        return self.run_op(Op.COPY, chip_id12=chip_id12, ext=ext, on_progress=on_progress, timeout=timeout)
+
+    def config_get(self) -> tuple:
+        """(mode_ihrc, mode_ilrc, bg_restore) of a local COPY."""
+        return tuple(self.call(Cmd.CONFIG_GET)[:3])
+
+    def config_set(self, mode_ihrc: int, mode_ilrc: int, bg_restore: bool) -> None:
+        self.call(Cmd.CONFIG_SET, bytes([mode_ihrc, mode_ilrc, 1 if bg_restore else 0]))
+
     def stats_get(self) -> tuple:
         """(ok, fail): chips programmed since the last reset."""
         return struct.unpack_from("<II", self.call(Cmd.STATS_GET))
@@ -603,23 +627,32 @@ class Programmer:
         event came for `poll_every` seconds: events are not acknowledged and may be lost."""
         deadline = time.monotonic() + timeout
         quiet_since = time.monotonic()
-        while time.monotonic() < deadline:
-            for e in self.poll_events(0.1):
-                quiet_since = time.monotonic()
-                if e.code == EVT_PROGRESS and on_progress:
-                    pr = Progress.parse(e.payload)
-                    if pr.op_id == op_id:
-                        on_progress(pr)
-                elif e.code == EVT_OP_DONE:
-                    r = Result.parse(e.payload)
-                    if r.op_id == op_id:
+        others = []   # events that are not about this operation stay for the next poll_events()
+        try:
+            while time.monotonic() < deadline:
+                for e in self.poll_events(0.1):
+                    quiet_since = time.monotonic()
+                    if e.code == EVT_PROGRESS:
+                        pr = Progress.parse(e.payload)
+                        if pr.op_id == op_id:
+                            if on_progress:
+                                on_progress(pr)
+                            continue
+                    elif e.code == EVT_OP_DONE:
+                        r = Result.parse(e.payload)
+                        if r.op_id == op_id:
+                            return r
+                    elif e.code == EVT_OP_STARTED and struct.unpack_from("<H", e.payload)[0] == op_id:
+                        continue
+                    others.append(e)
+                if time.monotonic() - quiet_since >= poll_every:
+                    r = self.op_result(op_id)
+                    if r is not None:
                         return r
-            if time.monotonic() - quiet_since >= poll_every:
-                r = self.op_result(op_id)
-                if r is not None:
-                    return r
-                quiet_since = time.monotonic()
-        raise ProtocolError(f"operation {op_id} did not finish in {timeout:.0f} s")
+                    quiet_since = time.monotonic()
+            raise ProtocolError(f"operation {op_id} did not finish in {timeout:.0f} s")
+        finally:
+            self.events.extendleft(reversed(others))
 
     def run_op(self, op_type: int, flags: int = 0, chip_id12: int = 0, param: int = 0, ext: bytes = b"",
                on_progress=None, timeout: float = 600.0) -> Result:

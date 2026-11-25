@@ -53,6 +53,26 @@ static const loop_word_t bg_loop[3][CALIB_BG_LEN] = {
 #define BG_K_POS 7u
 #define BG_REG_POS 9u
 
+uint16_t calib_mov_a_imm(uint8_t code_bits)
+{
+    switch (code_bits) {
+    case 13: return 0x1700;
+    case 14: return 0x2F00;
+    case 15: return 0x5700;
+    default: return 0;
+    }
+}
+
+uint16_t calib_mov_io_a(uint8_t code_bits, uint8_t reg)
+{
+    switch (code_bits) {
+    case 13: return (uint16_t)(0x0080u | (reg & 0x1Fu));
+    case 14: return (uint16_t)(0x0180u | (reg & 0x3Fu));
+    case 15: return (uint16_t)(0x0100u | (reg & 0x7Fu));
+    default: return 0;
+    }
+}
+
 static const loop_word_t *loop_table(uint8_t code_bits, uint8_t kind, uint8_t *len)
 {
     if (code_bits < 13 || code_bits > 15)

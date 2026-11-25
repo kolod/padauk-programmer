@@ -78,3 +78,94 @@ def test_cli_read(pdk_sim, tmp_path, capsys):
     p = sim.connect()
     assert p.run_op(Op.PROBE).status == Status.OK
     p.close()
+
+
+# ---------------------------------------------------------------- COPY (T107, T115, T116)
+
+from padauk_prog.protocol import COPY_SNAP, COPY_TARGET, WARN_CALIB_SNAPPED, Evt  # noqa: E402
+
+
+def master(pdk_sim, tmp_path, offset=3):
+    """A PFS154 master (IHRC, ILRC, BandGap, serial number) calibrated with an oscillator `offset` % off;
+    the copies go into the same socket with swap-chip."""
+    state = str(tmp_path / "master.bin")
+    sim = pdk_sim("--chip", "none", "--chip-state", state)
+    sim.proc.stdin.write(f"swap-chip PFS154:offset={offset}\n")
+    sim.proc.stdin.flush()
+    p = sim.connect()
+    p.upload_package(build("PFS154", image("PFS154", ilrc=True, bg=True)))
+    r = program(p)
+    assert r.status == Status.OK
+    return sim, p, r
+
+
+def swap(sim, p, spec):
+    sim.proc.stdin.write(f"swap-chip {spec}\n")
+    sim.proc.stdin.flush()
+    p.poll_events(0.1)
+
+
+def test_copy_modes(pdk_sim, tmp_path):
+    sim, p, prog = master(pdk_sim, tmp_path)
+    p.poll_events(0)
+    r = p.copy(CHIPS["PFS154"]["id"])   # KEEP_VALUE everywhere, BandGap kept
+    assert r.status == Status.OK and r.stage == Stage.STORE
+    assert any(e.code == Evt.PKG_STATE for e in p.poll_events(0.2))
+    assert [c.site_status for c in r.calib] == [4, 4, 4] and r.warnings & 1 and r.warnings & (1 << 5)
+    assert [c.master_value for c in r.calib] == [c.value for c in prog.calib]
+    info = p.package_info()
+    assert info["header"][64:84].rstrip(b"\0").decode() == f"copy PFS154 {r.image_crc_norm:08X}"
+
+    r = p.copy(0, COPY_TARGET, COPY_TARGET, True, 0, 4000000, 31250, 0, "targets")   # type from PROBE
+    assert r.status == Status.OK
+    assert [(c.kind, c.target_hz, c.site_status) for c in r.calib] == [(1, 4000000, 0), (2, 31250, 0), (3, 0, 0)]
+    swap(sim, p, "PFS154:offset=-2")   # a blank chip of the batch
+    c = program(p)
+    assert c.status == Status.OK
+    assert [x.target_hz for x in c.calib] == [4000000, 31250, 0]
+    assert abs(c.calib[0].measured_hz - 4000000) <= 40000
+    p.close()
+
+
+def test_snap_standard(pdk_sim, tmp_path):
+    sim, p, prog = master(pdk_sim, tmp_path)
+    r = p.copy(0, COPY_SNAP)
+    assert r.status == Status.OK and r.calib[0].target_hz == 0xFF000000 | prog.calib[0].value
+    for offset in (-4, 5):   # copies whose oscillators differ: each lands on the nearest standard 8 MHz
+        swap(sim, p, f"PFS154:offset={offset}")
+        c = program(p)
+        assert c.status == Status.OK and c.warnings & WARN_CALIB_SNAPPED
+        assert c.calib[0].target_hz == 8000000 and abs(c.calib[0].measured_hz - 8000000) <= 80000
+    p.close()
+
+
+def test_local_copy_uses_the_configuration(pdk_sim, tmp_path, capsys):
+    sim, p, prog = master(pdk_sim, tmp_path)
+    p.close()
+    assert cli.main(["-p", sim.url, "config", "copy", "--ihrc", "snap", "--bg", "keep"]) == 0
+    assert "IHRC snap, ILRC keep, BandGap keep" in capsys.readouterr().out
+    p = sim.connect()
+    assert p.config_get() == (2, 0, 0)
+    before = p.op_result(0).op_id
+    sim.proc.stdin.write("local-start copy\n")
+    sim.proc.stdin.flush()
+    import time
+    deadline = time.monotonic() + 20
+    while (p.op_result(0) or prog).op_id == before:
+        assert time.monotonic() < deadline
+        time.sleep(0.05)
+    r = p.op_result(0)
+    assert r.op_type == Op.COPY and r.source == 1 and r.status == Status.OK
+    assert [(c.kind, c.mode) for c in r.calib] == [(1, 2), (2, 0), (3, 0)]
+    p.close()
+
+
+def test_copy_of_a_protected_chip(pdk_sim, tmp_path):
+    state = str(tmp_path / "chip.bin")
+    write_chip_memory(state, [0x3FFF] * 0x800)
+    sim = pdk_sim("--chip", "PFS154:protected", "--chip-state", state)
+    p = sim.connect()
+    crc = p.package_info()["crc32"]
+    assert p.copy(CHIPS["PFS154"]["id"]).status == Status.CHIP_PROTECTED
+    assert p.package_info()["crc32"] == crc
+    p.close()

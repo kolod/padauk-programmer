@@ -23,6 +23,15 @@ typedef struct {
     uint8_t len;    /* CALIB_RC_LEN or CALIB_BG_LEN */
 } calib_match_t;
 
+/* MOV A,#imm and MOV IO(reg),A opcodes for the core width (0 if unsupported). */
+uint16_t calib_mov_a_imm(uint8_t code_bits);
+uint16_t calib_mov_io_a(uint8_t code_bits, uint8_t reg);
+
+/* Target frequency of a placeholder COPY made with SNAP_STANDARD: 0xFF0000kk, kk = the master's value
+ * (impossible for a real program: > 4 GHz). */
+#define CALIB_SNAP_TAG 0xFF000000u
+static inline bool calib_is_snap(uint32_t target_hz) { return (target_hz & 0xFFFFFF00u) == CALIB_SNAP_TAG; }
+
 /* Measurement loop for `site` at site->addr; `imm` is the immediate of its MOV A,#… (CALIB_LOOP_IMM,
  * or k − 1 to start counting from k). Returns the length, 0 if the core width has no loop. */
 uint8_t calib_loop_words(uint8_t code_bits, const calib_site_t *site, uint8_t imm, uint16_t *out);

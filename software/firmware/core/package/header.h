@@ -47,6 +47,10 @@ uint32_t pkg_mask_offset(uint16_t image_words);
 uint16_t pkg_header_parse(const uint8_t *raw, bool from_host, uint32_t max_package_size,
                           pkg_header_t *h, const chip_info_t **chip);
 
+/* Encodes a header (magic, version, sizes, fields, header_crc32) — packages the programmer makes itself
+ * (COPY). Text fields are copied up to their size. */
+void pkg_header_build(const pkg_header_t *h, uint8_t raw[PKG_HEADER_SIZE]);
+
 /* True if the fuse value enables read protection (bit 0 = 0). */
 static inline bool pkg_fuse_is_secure(uint16_t fuse) { return (fuse & 1u) == 0; }
 

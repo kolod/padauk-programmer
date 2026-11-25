@@ -10,7 +10,8 @@ import time
 import zlib
 
 from . import __version__, ihex, package
-from .protocol import (CALIB_KINDS, CAP_SUPPLY_CAL, CAP_SUPPLY_SET, FAMILY_NAMES, OPF_CALIB_FINALIZE_ON_FAIL,
+from .protocol import (CALIB_KINDS, COPY_ALLOW_MASTER_LOOP, COPY_ALLOW_MODIFY_MASTER, COPY_KEEP, COPY_MEASURE, COPY_SNAP,
+                       COPY_TARGET, CAP_SUPPLY_CAL, CAP_SUPPLY_SET, FAMILY_NAMES, OPF_CALIB_FINALIZE_ON_FAIL,
                        OPF_SKIP_BLANK_CHECK, OPF_SKIP_ERASE, OPF_SKIP_VERIFY, PATCH_EXPECT_ACTIVE_PACKAGE,
                        PATCH_EXPECT_NORMALIZED, PATCH_EXPECT_RAW, SITE_STATUS, Op, PkgState, Programmer,
                        EVT_OP_DONE, EVT_OP_STARTED, EVT_PROGRESS, Progress, ProgrammerError, ProtocolError, Result,
@@ -539,6 +540,99 @@ def cmd_read(prog: Programmer, a) -> int:
     return 0
 
 
+COPY_MODES = {"keep": COPY_KEEP, "target": COPY_TARGET, "snap": COPY_SNAP, "measure": COPY_MEASURE}
+
+
+def print_copy_result(r: Result) -> None:
+    for c in r.calib:
+        kind = CALIB_KINDS.get(c.kind, str(c.kind))
+        status = SITE_STATUS.get(c.site_status, c.site_status)
+        if c.site_status == 5:
+            print(f"{kind}: measurement loop in the master (MOV A,#0x{c.master_value:02X}) [{status}]")
+            continue
+        if c.target_hz and c.target_hz >> 24 == 0xFF:
+            target = "nearest standard frequency when each copy is programmed"
+        elif c.target_hz:
+            target = f"target {c.target_hz} Hz"
+        elif c.kind == 3 and c.site_status == 0:
+            target = "restored"
+        else:
+            target = "master value copied"
+        print(f"{kind}: master value 0x{c.master_value:02X}, {target} [{status}]")
+    if r.warnings & (1 << 5):
+        print("note: a serial number of the master, if it has one, is copied as it is (SERIAL_DUPLICATED)")
+    if r.warnings & (1 << 6):
+        print(f"note: the master writes a constant into a trim register at 0x{r.fail_addr:04X} outside a "
+              "calibration footprint; copies get the master's value (CALIB_UNRECOGNIZED)")
+
+
+def cmd_copy(prog: Programmer, a) -> int:
+    chip_id = prog.find_chip(a.icname).id12 if a.icname else 0
+    mode_ihrc, mode_ilrc = COPY_MODES[a.ihrc], COPY_MODES[a.ilrc]
+    if mode_ilrc == COPY_SNAP:
+        raise CliError("--ilrc snap is not available: ILRC varies too much between chips")
+    if (mode_ihrc == COPY_TARGET and not a.ihrc_freq) or (mode_ilrc == COPY_TARGET and not a.ilrc_freq):
+        raise CliError("'target' needs --ihrc-freq / --ilrc-freq")
+    flags = 0
+    if COPY_MEASURE in (mode_ihrc, mode_ilrc):
+        if not a.allow_modify_master:
+            raise CliError("'measure' rewrites the master: add --allow-modify-master")
+        print("WARNING: 'measure' erases and rewrites the FLASH master once per measured placeholder plus once to "
+              "restore it - erase cycles of the master are spent.")
+        if not a.yes and ask("Continue? [y/N] ").strip().lower() not in ("y", "yes"):
+            print("Cancelled.")
+            return 1
+        flags |= COPY_ALLOW_MODIFY_MASTER
+    targets = {1: a.ihrc_freq or 0, 2: a.ilrc_freq or 0}
+    progress = None if a.quiet else show_progress
+    while True:
+        r = prog.copy(chip_id, mode_ihrc, mode_ilrc, a.bg == "restore", flags, targets[1], targets[2],
+                      a.calib_mv or 0, a.name or "", on_progress=progress)
+        if progress:
+            print(file=sys.stderr)
+        if r.status != Status.COPY_MASTER_UNCALIBRATED:
+            break
+        # FR-051: the master is not calibrated; ask for the targets and copy again with ALLOW_MASTER_LOOP
+        print_copy_result(r)
+        print("The master holds measurement loops: it was never calibrated, so there is no frequency to copy.")
+        if ask("Cancel (c) or give the target frequencies (t)? [c/t] ").strip().lower() != "t":
+            print("Cancelled, the stored package is unchanged.")
+            return 1
+        for c in r.calib:
+            if c.site_status == 5 and c.kind in (1, 2):
+                answer = ask(f"{CALIB_KINDS[c.kind]} target in Hz: ").strip()
+                try:
+                    targets[c.kind] = int(answer)
+                except ValueError:
+                    raise CliError("the target must be a number in Hz") from None
+                if c.kind == 1:
+                    mode_ihrc = COPY_TARGET
+                else:
+                    mode_ilrc = COPY_TARGET
+        flags |= COPY_ALLOW_MASTER_LOOP
+    print_copy_result(r)
+    if not r.ok:
+        print(f"error: {describe_result(r)}", file=sys.stderr)
+        return 1
+    h = package.Header.parse(prog.package_info()["header"])
+    print(f"Copied into package '{h.name}' ({r.data_words} words, master CRC 0x{r.image_crc_raw:08X}, "
+          f"normalized 0x{r.image_crc_norm:08X})")
+    return 0
+
+
+def cmd_config(prog: Programmer, a) -> int:
+    ihrc, ilrc, bg = prog.config_get()
+    if a.ihrc or a.bg:
+        ihrc = COPY_MODES[a.ihrc] if a.ihrc else ihrc
+        bg = (a.bg == "restore") if a.bg else bool(bg)
+        prog.config_set(ihrc, 0, bg)
+        ihrc, ilrc, bg = prog.config_get()
+    names = {v: k for k, v in COPY_MODES.items()}
+    print(f"Local COPY: IHRC {names.get(ihrc, ihrc)}, ILRC {names.get(ilrc, ilrc)}, "
+          f"BandGap {'restore' if bg else 'keep'}")
+    return 0
+
+
 def cmd_stats(prog: Programmer, a) -> int:
     if a.action == "reset":
         prog.stats_reset()
@@ -751,6 +845,26 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("-b", "--binary", action="store_true", help="raw little-endian words instead of Intel HEX")
     q.add_argument("-q", "--quiet", action="store_true", help="no progress line")
     q.set_defaults(func=cmd_read)
+
+    q = sub.add_parser("copy", help="copy the chip in the socket into a new stored package")
+    q.add_argument("-n", "--icname", help="chip type (default: the one PROBE finds)")
+    q.add_argument("--ihrc", choices=["keep", "target", "snap", "measure"], default="keep")
+    q.add_argument("--ilrc", choices=["keep", "target", "measure"], default="keep")
+    q.add_argument("--bg", choices=["keep", "restore"], default="restore")
+    q.add_argument("--ihrc-freq", type=int, metavar="HZ", help="IHRC target for 'target'")
+    q.add_argument("--ilrc-freq", type=int, metavar="HZ", help="ILRC target for 'target'")
+    q.add_argument("--calib-mv", type=int, metavar="MV", help="calibration voltage of the copies (default 5000)")
+    q.add_argument("--allow-modify-master", action="store_true", help="'measure' may rewrite a FLASH master")
+    q.add_argument("--name", help="name of the new package (default: copy <chip> <crc>)")
+    q.add_argument("--yes", action="store_true", help="do not ask before rewriting the master")
+    q.add_argument("-q", "--quiet", action="store_true", help="no progress line")
+    q.set_defaults(func=cmd_copy)
+
+    q = sub.add_parser("config", help="settings: config copy [--ihrc keep|snap] [--bg keep|restore]")
+    q.add_argument("what", choices=["copy"])
+    q.add_argument("--ihrc", choices=["keep", "snap"])
+    q.add_argument("--bg", choices=["keep", "restore"])
+    q.set_defaults(func=cmd_config)
 
     q = sub.add_parser("stats", help="chips programmed ok / failed: stats | stats reset")
     q.add_argument("action", nargs="?", choices=["show", "reset"], default="show")
