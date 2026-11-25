@@ -359,7 +359,8 @@ COPIED`, попередження `CALIB_VALUE_COPIED`; решта вставо�
   з застосованими `value`; інакше `VERIFY_FAILED`.
 - Слова, що вже дорівнюють `value`, не пишуться. Інші пишуться блоками мікросхеми, решта слів блоку —
   усі одиниці (без змін).
-- `addr` у службовій області → `PKG_RESERVED_AREA` з `fail_addr`; `addr` ≥ `code_words` → `BAD_PAYLOAD`.
+- `addr` у службовій області → `PKG_RESERVED_AREA` з `fail_addr`; `addr` ≥ `code_words` або та сама адреса
+  двічі → `BAD_PAYLOAD`.
 - Слово fuse з увімкненням захисту без `ALLOW_SECURITY_FUSE` → `PKG_SECURITY_NOT_ALLOWED`.
 - Дозволено для OTP і FLASH (для FLASH — без стирання). Лише з PC; не запускається локально.
 - `RESULT.data_words` = кількість фактично записаних слів.

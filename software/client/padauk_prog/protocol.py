@@ -140,6 +140,12 @@ OPF_SKIP_BLANK_CHECK = 1 << 1
 OPF_SKIP_VERIFY = 1 << 2
 OPF_CALIB_FINALIZE_ON_FAIL = 1 << 4
 
+# PATCH ext
+PATCH_CHECK_ONLY = 1 << 0
+PATCH_ALLOW_SECURITY_FUSE = 1 << 1
+PATCH_EXPECT_RAW, PATCH_EXPECT_NORMALIZED, PATCH_EXPECT_ACTIVE_PACKAGE = 0, 1, 2
+CAP_PATCH = 1 << 6
+
 # RESULT.warnings
 WARN_NAMES = ("CALIB_VALUE_COPIED", "CALIB_SNAPPED", "MASTER_MODIFIED", "RESUMED", "CALIB_FORCED",
               "SERIAL_DUPLICATED", "CALIB_UNRECOGNIZED")
@@ -593,6 +599,16 @@ class Programmer:
     def run_op(self, op_type: int, flags: int = 0, chip_id12: int = 0, param: int = 0, ext: bytes = b"",
                on_progress=None, timeout: float = 600.0) -> Result:
         return self.wait_op(self.start_op(op_type, flags, chip_id12, param, ext), on_progress, timeout)
+
+    def patch(self, chip_id12: int, words: dict, expect_mode: int = PATCH_EXPECT_ACTIVE_PACKAGE,
+              expected_crc32: int = 0, check_only: bool = False, allow_security_fuse: bool = False,
+              on_progress=None, timeout: float = 120.0) -> Result:
+        """PATCH: writes {address: new full value} (only 1→0 changes) after checking the chip content
+        against `expected_crc32` (RAW / NORMALIZED) or the active package (ACTIVE_PACKAGE)."""
+        flags = (PATCH_CHECK_ONLY if check_only else 0) | (PATCH_ALLOW_SECURITY_FUSE if allow_security_fuse else 0)
+        ext = struct.pack("<BBIB", flags, expect_mode, expected_crc32, len(words))
+        ext += b"".join(struct.pack("<HH", a, v & 0xFFFF) for a, v in sorted(words.items()))
+        return self.run_op(Op.PATCH, chip_id12=chip_id12, ext=ext, on_progress=on_progress, timeout=timeout)
 
     # ---------------------------------------------------------------- manual supplies
     @staticmethod

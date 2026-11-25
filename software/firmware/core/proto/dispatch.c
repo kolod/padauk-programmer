@@ -54,6 +54,9 @@ static uint32_t capabilities(void)
     hal_power_limits(&vdd_max, &vpp_max);
     if (vdd_max && vpp_max)   /* a board without the supply front end reports 0 V limits */
         caps |= PDK_CAP_MEASURE_POWER | PDK_CAP_SUPPLY_CAL | PDK_CAP_SUPPLY_SET;
+#ifdef PDK_FEATURE_PATCH
+    caps |= PDK_CAP_PATCH;
+#endif
     return caps;
 }
 
