@@ -7,6 +7,7 @@
 #include "proto/proto_defs.h"
 
 static int8_t cal[4];
+static power_fault_t last_fault = {0xFF, 0, 0};
 
 void power_set_calibration(const int8_t c[4]) { memcpy(cal, c, sizeof cal); }
 void power_get_calibration(int8_t c[4]) { memcpy(c, cal, sizeof cal); }
@@ -34,6 +35,8 @@ uint16_t power_tolerance_mV(uint16_t target_mV)
     uint32_t pct = (uint32_t)target_mV * POWER_TOL_PERCENT / 100u;
     return (uint16_t)(pct > POWER_TOL_MIN_MV ? pct : POWER_TOL_MIN_MV);
 }
+
+const power_fault_t *power_last_fault(void) { return &last_fault; }
 
 void power_off_all(void)
 {
@@ -69,10 +72,8 @@ uint16_t power_apply(pdk_rail_t rail, uint16_t mV, uint32_t min_pause_us, power_
     }
 
     hal_power_off_all();
-    if (fault) {
-        fault->rail = (uint8_t)rail;
-        fault->set_mV = mV;
-        fault->meas_mV = meas;
-    }
+    last_fault = (power_fault_t){(uint8_t)rail, mV, meas};
+    if (fault)
+        *fault = last_fault;
     return rail == PDK_RAIL_VDD ? PDK_VDD_FAULT : PDK_VPP_FAULT;
 }
