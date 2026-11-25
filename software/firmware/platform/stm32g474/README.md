@@ -5,10 +5,11 @@
 WeAct. Рушій мікросхем тут — заглушка (`platform/common/chip_engine_stub.c`): усі операції з
 мікросхемою відповідають `OP_UNSUPPORTED`.
 
-Драйвер живлення вмикається опцією збірки `-DPDK_G474_SUPPLIES=ON` (типово `OFF`, бо на голій
-платі WeAct аналогової частини немає). Без неї програматор повідомляє межі напруг 0 В, не виставляє
-`MEASURE_POWER` в `INFO`, і будь-яка ненульова напруга завершується `VDD_FAULT`/`VPP_FAULT`. Для плати
-`hardware/stm32g474-board` прошивку треба збирати з `ON`.
+Драйвер живлення плати `hardware/stm32g474-board` вмикає опція збірки `PDK_G474_SUPPLIES` (типово
+`ON`). Для голої плати WeAct без аналогової частини її треба вимкнути (`-DPDK_G474_SUPPLIES=OFF`), бо
+інакше входи АЦП висять у повітрі й можуть пройти перевірки живлення. З `OFF` програматор повідомляє
+межі напруг 0 В, не виставляє `MEASURE_POWER` в `INFO`, і будь-яка ненульова напруга завершується
+`VDD_FAULT`/`VPP_FAULT`.
 
 ## Піни
 
@@ -257,7 +258,7 @@ SYSCLK 170 МГц (діапазон 1, режим boost): HSE 8 МГц / 2 × 85
 ## Збірка
 
 ```
-cmake -B build/g474 -G Ninja -DPLATFORM=stm32g474 [-DPDK_G474_SUPPLIES=ON] \
+cmake -B build/g474 -G Ninja -DPLATFORM=stm32g474 [-DPDK_G474_SUPPLIES=OFF] \
       -DCMAKE_TOOLCHAIN_FILE=<абсолютний шлях>/software/firmware/cmake/arm-cortex-m4f.cmake software/firmware
 cmake --build build/g474
 ```
