@@ -186,6 +186,26 @@ static uint16_t verify(bool final)
     return v.status;
 }
 
+/* SNAP_STANDARD (research R9): the engine measured the copy at the master's value and calibrated to the
+ * nearest standard SYSCLK if that was within 10 %; otherwise the master's value stayed. */
+static void snap_result(op_calib_result_t *e, uint8_t *warnings, uint32_t hz)
+{
+    static const uint32_t standard[] = {16000000, 8000000, 4000000, 2000000, 1000000, 500000};
+    uint32_t std = standard[0];
+    for (unsigned i = 1; i < sizeof standard / sizeof standard[0]; i++)
+        if ((hz > standard[i] ? hz - standard[i] : standard[i] - hz) < (hz > std ? hz - std : std - hz))
+            std = standard[i];
+    if ((hz > std ? hz - std : std - hz) <= std / 10u) {
+        e->target_hz = std;
+        e->site_status = PDK_SITE_OK;
+        *warnings |= PDK_WARN_CALIB_SNAPPED;
+    } else {
+        e->target_hz = 0;
+        e->site_status = PDK_SITE_COPIED;
+        *warnings |= PDK_WARN_CALIB_VALUE_COPIED;
+    }
+}
+
 /* ---------------------------------------------------------------- the pipeline */
 
 uint16_t op_program_run(void)
@@ -317,6 +337,8 @@ uint16_t op_program_run(void)
                 final_status = PDK_CALIB_FAILED;
             } else if (st != PDK_OK) {
                 return st;   /* nothing more is written: the loop stays for a later retry */
+            } else if (calib_is_snap(s->target_hz)) {
+                snap_result(&r->calib[i], &r->warnings, hz);
             } else {
                 r->calib[i].site_status = PDK_SITE_OK;
             }

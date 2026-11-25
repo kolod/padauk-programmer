@@ -327,6 +327,38 @@ uint16_t chip_engine_calibrate(const struct chip_info *chip, uint16_t site_addr,
         return PDK_OK;
     }
 
+    if (calib_is_snap(target_hz)) {
+        /* SNAP_STANDARD: run the loop up to the master's value kk and measure; the nearest standard SYSCLK
+         * within 10 % becomes the target (the counter wraps through 255 to reach a lower k), else kk stays */
+        static const uint32_t standard[] = {16000000, 8000000, 4000000, 2000000, 1000000, 500000};
+        if (run.kind != kind || c.deaf)
+            return fail(PDK_CALIB_WRONG_SITE);
+        unsigned kk = target_hz & 0xFFu;
+        uint32_t f_kk = sysclk(run.kind, (uint8_t)~run.kind, 0, kk);
+        uint32_t std = standard[0];
+        for (unsigned i = 1; i < sizeof standard / sizeof standard[0]; i++)
+            if ((f_kk > standard[i] ? f_kk - standard[i] : standard[i] - f_kk) < (f_kk > std ? f_kk - std : std - f_kk))
+                std = standard[i];
+        unsigned best = kk;
+        if ((f_kk > std ? f_kk - std : std - f_kk) <= std / 10u) {
+            uint32_t best_d = 0xFFFFFFFFu;
+            for (unsigned k = 0; k < 256; k++) {
+                uint32_t f = sysclk(run.kind, (uint8_t)~run.kind, 0, k);
+                uint32_t d = f > std ? f - std : std - f;
+                if (d < best_d) {
+                    best_d = d;
+                    best = k;
+                }
+            }
+        }
+        if (poll && !poll())
+            return fail(PDK_CANCELLED);
+        *value = (uint8_t)best;
+        *measured_hz = sysclk(run.kind, (uint8_t)~run.kind, 0, best);
+        chip_engine_safe_state();
+        return PDK_OK;
+    }
+
     uint32_t f_prev = sysclk(run.kind, kind, target_hz, 0);
     *measured_hz = f_prev;
     if (run.kind == CALIB_KIND_BG || f_prev < target_hz / 4u || f_prev > target_hz * 4u)

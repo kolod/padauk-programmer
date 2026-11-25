@@ -124,6 +124,7 @@ uint16_t op_verify_run(void);
 uint16_t op_patch_run(void);
 uint16_t op_selftest_run(void);
 uint16_t op_read_run(void);
+uint16_t op_copy_run(void);
 
 /* STATUS.selftest_state: PDK_SELFTEST_* of the last SELF_TEST (RAM only). */
 uint8_t op_selftest_state(void);

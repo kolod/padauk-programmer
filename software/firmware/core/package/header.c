@@ -104,3 +104,29 @@ uint16_t pkg_header_parse(const uint8_t *raw, bool from_host, uint32_t max_packa
     *chip = c;
     return PDK_OK;
 }
+
+static void put_text(uint8_t *dst, size_t field, const char *src)
+{
+    size_t n = strlen(src);
+    memcpy(dst, src, n < field ? n : field);
+}
+
+void pkg_header_build(const pkg_header_t *h, uint8_t raw[PKG_HEADER_SIZE])
+{
+    memset(raw, 0, PKG_HEADER_SIZE);
+    memcpy(raw, "PDKP", 4);
+    put16(raw + 4, PKG_FORMAT_VERSION);
+    put16(raw + 6, PKG_HEADER_SIZE);
+    put32(raw + 8, h->package_size);
+    put16(raw + 12, h->chip_id12);
+    put16(raw + 14, h->image_words);
+    put32(raw + 16, h->flags);
+    put16(raw + 20, h->fuse);
+    put16(raw + 22, h->run_vdd_mV);
+    put32(raw + 40, h->source_crc32);
+    put32(raw + 44, h->created_unix);
+    put_text(raw + 48, 16, h->chip_name);
+    put_text(raw + 64, 32, h->name);
+    put_text(raw + 96, 28, h->label);
+    put32(raw + 124, crc32_compute(raw, 124));
+}

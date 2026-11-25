@@ -3,6 +3,7 @@
 
 #include <string.h>
 
+#include "chips/calib_footprint.h"
 #include "proto/crc32.h"
 #include "proto/le.h"
 #include "proto/proto_defs.h"
@@ -137,6 +138,11 @@ uint16_t pkg_validate(const pkg_header_t *h, const chip_info_t *c, word_get_fn g
     uint16_t st = calib_find_sites(c->code_bits, get, ctx, h->image_words, plan->calib, &plan->calib_count, bad_addr);
     if (st != PDK_OK)
         return st;
+    for (uint8_t i = 0; i < plan->calib_count; i++)   /* "measure at the master's value": COPY packages only */
+        if (calib_is_snap(plan->calib[i].target_hz) && !(h->flags & PKG_F_CREATED_BY_COPY)) {
+            *bad_addr = plan->calib[i].addr;
+            return PDK_PKG_CALIB_UNKNOWN;
+        }
     plan->serial_count = serial_find_sites(c->code_bits, get, ctx, h->image_words, plan->serial_addr, SERIAL_MAX_SITES);
 
     plan->effective_words = written;

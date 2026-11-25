@@ -139,12 +139,15 @@ TEST(restore_pending_comes_first_and_restore_alone_is_ignored)
     ASSERT_EQ(d.status, PDK_OP_UNSUPPORTED);
 }
 
-TEST(copy_is_not_available_yet)
+TEST(local_copy_runs_copy)
 {
-    ASSERT_TRUE(local(PDK_LOCAL_COPY) == NULL);
+    const op_result_t *r = local(PDK_LOCAL_COPY);   /* empty socket */
+    ASSERT_EQ(r->op_type, PDK_OP_COPY);
+    ASSERT_EQ(r->source, PDK_SOURCE_LOCAL);
+    ASSERT_EQ(r->status, PDK_CHIP_NOT_FOUND);
     pdk_ui_detail_t d;
     ASSERT_EQ(last_ui(&d), PDK_UI_FAIL);
-    ASSERT_EQ(d.status, PDK_OP_UNSUPPORTED);
+    ASSERT_EQ(d.fail, PDK_UI_FAIL_CHIP);
 }
 
 TEST(missing_or_broken_package_gets_no_voltage)

@@ -18,12 +18,13 @@ CHIPS = {
     "PMS150C": dict(id=0xA16, bits=13, words=0x400, flash=False, fuse_addr=0x3FF, fuse=0x1FFD, res=(0x3F6, 0x400)),
 }
 GOTO = {13: 0x1800, 14: 0x3000, 15: 0x6000}
-IHRC_SITE, ILRC_SITE, SERIAL_SITE = 0x40, 0x50, 0x60
+IHRC_SITE, ILRC_SITE, SERIAL_SITE, BG_SITE = 0x40, 0x50, 0x60, 0x70
 IHRC_HZ, ILRC_HZ, CAL_MV = 8000000, 62500, 4000
 
 
-def image(chip: str, ihrc: bool = True, ilrc: bool = False, serial: bool = True, code: int = 0x100) -> dict:
-    """{addr: word}: GOTO code with an IHRC (and ILRC) placeholder and a serial number placeholder."""
+def image(chip: str, ihrc: bool = True, ilrc: bool = False, serial: bool = True, code: int = 0x100,
+          bg: bool = False) -> dict:
+    """{addr: word}: GOTO code with an IHRC (and ILRC, BandGap) placeholder and a serial number placeholder."""
     c = CHIPS[chip]
     bits = c["bits"]
     w = {a: GOTO[bits] | (a * 37 & 0x3FF) | 1 for a in range(code)}
@@ -37,6 +38,9 @@ def image(chip: str, ihrc: bool = True, ilrc: bool = False, serial: bool = True,
     if ilrc:
         for i, x in enumerate(ref.placeholder(bits, ref.ILRC, ILRC_HZ, CAL_MV, regs["ilrcr"])):
             w[ILRC_SITE + i] = x
+    if bg:
+        for i, x in enumerate(ref.placeholder(bits, ref.BG, 0, 3950, regs["bgtr"], regs["gpcc"], regs["gpcs"])):
+            w[BG_SITE + i] = x
     if serial:
         for i, ch in enumerate("FPSERIAL"):
             w[SERIAL_SITE + i] = ref.RET_IMM[bits] | ord(ch)
