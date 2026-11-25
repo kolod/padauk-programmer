@@ -3,6 +3,7 @@
 
 #include <string.h>
 
+#include "proto/crc32.h"
 #include "proto/le.h"
 #include "proto/proto_defs.h"
 #include "storage/slots.h"
@@ -18,6 +19,40 @@ void pkg_slot_reader_init(pkg_slot_reader_t *r, uint8_t slot, uint16_t image_wor
     memset(r->mask, 0, sizeof r->mask);
     slots_read(slot, r->mask_offset, r->mask, mask_bytes);
     r->win_first = 0xFFFF;
+    r->crc_on = false;
+}
+
+/* Adds slot bytes [crc_pos, to) to the streaming CRC. */
+static void crc_advance(pkg_slot_reader_t *r, uint32_t to)
+{
+    uint8_t buf[64];
+    while (r->crc_pos < to) {
+        uint32_t n = to - r->crc_pos;
+        if (n > sizeof buf)
+            n = sizeof buf;
+        slots_read(r->slot, r->crc_pos, buf, n);
+        r->crc = crc32_update(r->crc, buf, n);
+        r->crc_pos += n;
+    }
+}
+
+void pkg_slot_crc_begin(pkg_slot_reader_t *r, uint32_t package_size)
+{
+    r->crc_on = true;
+    r->crc = crc32_init();
+    r->crc_pos = 0;
+    r->crc_end = package_size - 4u;
+    r->win_first = 0xFFFF;   /* the words written from now on are read (and summed) again */
+    crc_advance(r, PKG_HEADER_SIZE);
+}
+
+bool pkg_slot_crc_end(pkg_slot_reader_t *r)
+{
+    crc_advance(r, r->crc_end);
+    uint8_t trailer[4];
+    slots_read(r->slot, r->crc_end, trailer, 4);
+    r->crc_on = false;
+    return crc32_final(r->crc) == le32(trailer);
 }
 
 uint16_t pkg_slot_word(void *reader, uint16_t addr, bool *defined)
@@ -32,7 +67,16 @@ uint16_t pkg_slot_word(void *reader, uint16_t addr, bool *defined)
         if (n > PKG_READER_WINDOW)
             n = PKG_READER_WINDOW;
         uint8_t buf[2u * PKG_READER_WINDOW];
-        slots_read(r->slot, PKG_HEADER_SIZE + 2u * first, buf, 2u * n);
+        uint32_t off = PKG_HEADER_SIZE + 2u * first;
+        slots_read(r->slot, off, buf, 2u * n);
+        if (r->crc_on) {
+            if (off > r->crc_pos)
+                crc_advance(r, off);
+            if (off == r->crc_pos) {
+                r->crc = crc32_update(r->crc, buf, 2u * n);
+                r->crc_pos += 2u * n;
+            }
+        }
         for (uint32_t i = 0; i < n; i++)
             r->win[i] = le16(buf + 2u * i);
         r->win_first = first;

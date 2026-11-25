@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "pdk_core.h"
 
+#include "ops/op_manager.h"
 #include "package/upload.h"
 #include "power/power.h"
 #include "power/supply_cal.h"
@@ -17,6 +18,7 @@ void pdk_core_init(void)
     supply_cal_init();   /* stored supply calibration → power layer */
     supply_set_init();
     upload_init();
+    op_manager_init();
     session_init();
 }
 
@@ -26,6 +28,7 @@ void pdk_core_poll(void)
     housekeeping_poll();   /* background erase, one step per loop */
     supply_cal_poll();
     supply_set_poll();
+    op_manager_poll();   /* a started operation runs to the end here */
 }
 
 void pdk_core_on_session_reset(void)

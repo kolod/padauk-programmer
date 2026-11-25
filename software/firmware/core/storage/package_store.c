@@ -91,3 +91,22 @@ void package_store_read(uint32_t offset, uint8_t *buf, size_t len)
 {
     slots_read(journal_get()->active_slot, offset, buf, len);
 }
+
+bool package_store_bump(uint32_t *rec_seq)
+{
+    journal_state_t st = *journal_get();
+    if (!journal_append(&st))
+        return false;
+    *rec_seq = journal_get()->seq;
+    return true;
+}
+
+bool package_store_count(bool ok)
+{
+    journal_state_t st = *journal_get();
+    if (ok)
+        st.ok_count++;
+    else
+        st.fail_count++;
+    return journal_append(&st);
+}
