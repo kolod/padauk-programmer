@@ -8,7 +8,7 @@
  * Storage: packages and the state journal live in flash bank 2 (0x08040000…), the firmware runs from
  * bank 1, so erasing and programming bank 2 does not stall the CPU (read-while-write, DBANK = 1).
  *
- * Supplies (provisional pins, only with -DPDK_G474_SUPPLIES=ON): DAC1_OUT1 PA4 → VPP regulator,
+ * Supplies (hardware/stm32g474-board; off with -DPDK_G474_SUPPLIES=OFF): DAC1_OUT1 PA4 → VPP regulator,
  * DAC1_OUT2 PA5 → VDD regulator, ADC1_IN1 PA0 = VDD/6, ADC1_IN2 PA1 = VPP/6 (Easy PDK scaling);
  * +15 V boost: TIM1_CH1 PA8 gate, COMP4_INP PB0 = +15 V/6 (regulation), COMP1_INP PB1 = +15 V/14
  * (overvoltage); -2.5 V charge pump: TIM16_CH1 PB4.

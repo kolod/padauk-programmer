@@ -5,9 +5,9 @@
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/stm32_common.cmake)
 pdk_fetch(cmsis_device_g4 https://github.com/STMicroelectronics/cmsis-device-g4.git v1.2.6)
 
-# The VDD/VPP front end (DAC → regulators, ADC on dividers) is not built yet: keep it off until the
-# board exists, otherwise floating ADC pins could pass the supply checks.
-option(PDK_G474_SUPPLIES "Drive VDD/VPP through DAC1 and measure them with ADC1" OFF)
+# The VDD/VPP front end (DAC → regulators, ADC on dividers) of hardware/stm32g474-board. Turn it off
+# for a bare WeAct board: there the ADC pins float and could pass the supply checks.
+option(PDK_G474_SUPPLIES "Drive VDD/VPP through DAC1 and measure them with ADC1" ON)
 
 target_compile_definitions(pdk_core PUBLIC PDK_PLATFORM_STM32G474=1)
 
