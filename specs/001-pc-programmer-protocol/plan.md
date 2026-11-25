@@ -27,7 +27,7 @@
 
 ## Technical Context
 
-**Language/Version**: прошивка — C11 (`arm-none-eabi-gcc` ≥ 12; хост — gcc/clang/MSVC); клієнт — Python ≥ 3.10
+**Language/Version**: прошивка — C11 (`arm-none-eabi-gcc` ≥ 12; хост — gcc/clang/MSVC); клієнт — Python ≥ 3.8 (останній з підтримкою Windows 7)
 
 **Primary Dependencies**: TinyUSB (MIT) — CDC ACM; STM32 LL/CMSIS лише в шарі платформи; клієнт — `pyserial`
 

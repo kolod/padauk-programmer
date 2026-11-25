@@ -1,0 +1,56 @@
+;------------------------------------------------------------------------------
+; PADAUK Programmer: USB CDC ACM (virtual COM port), VID/PID 1209:0001
+; Windows 7 / 8.1 only: Windows 10+ binds usbser.sys on its own.
+; Uses the in-box usbser.sys, nothing is copied. Unsigned: Windows warns once.
+;------------------------------------------------------------------------------
+
+[Version]
+Signature="$Windows NT$"
+Class=Ports
+ClassGuid={4D36E978-E325-11CE-BFC1-08002BE10318}
+Provider=%PRVDR%
+DriverVer=11/25/2026,1.0.0.0
+
+[Manufacturer]
+%MFGNAME%=DeviceList,NTx86,NTamd64
+
+[DestinationDirs]
+DefaultDestDir=12
+
+; MI_00: the CDC function of the composite (IAD) device; the plain ID is a fallback
+[DeviceList.NTx86]
+%DESCRIPTION%=DriverInstall,USB\VID_1209&PID_0001&MI_00
+%DESCRIPTION%=DriverInstall,USB\VID_1209&PID_0001
+
+[DeviceList.NTamd64]
+%DESCRIPTION%=DriverInstall,USB\VID_1209&PID_0001&MI_00
+%DESCRIPTION%=DriverInstall,USB\VID_1209&PID_0001
+
+[DriverInstall.NT]
+Include=mdmcpq.inf
+CopyFiles=FakeModemCopyFileSection
+AddReg=DriverInstall.NT.AddReg
+
+[DriverInstall.NT.AddReg]
+HKR,,DevLoader,,*ntkern
+HKR,,NTMPDriver,,usbser.sys
+HKR,,EnumPropPages32,,"MsPorts.dll,SerialPortPropPageProvider"
+
+[DriverInstall.NT.Services]
+AddService=usbser,0x00000002,DriverServiceInst
+
+[DriverServiceInst]
+DisplayName=%SERVICE%
+ServiceType=1      ; SERVICE_KERNEL_DRIVER
+StartType=3        ; SERVICE_DEMAND_START
+ErrorControl=1     ; SERVICE_ERROR_NORMAL
+ServiceBinary=%12%\usbser.sys
+LoadOrderGroup=Base
+
+[FakeModemCopyFileSection]
+
+[Strings]
+PRVDR="padauk-programmer"
+MFGNAME="padauk-programmer"
+DESCRIPTION="PADAUK Programmer"
+SERVICE="USB Serial (CDC ACM)"
