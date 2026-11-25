@@ -44,7 +44,8 @@ uint16_t op_manager_start(const op_request_t *req, uint16_t *op_id)
     case PDK_OP_ERASE:
     case PDK_OP_BLANK_CHECK:
     case PDK_OP_PROGRAM:
-    case PDK_OP_VERIFY: break;
+    case PDK_OP_VERIFY:
+    case PDK_OP_SELF_TEST: break;
 #ifdef PDK_FEATURE_PATCH
     case PDK_OP_PATCH:
         if (req->source != PDK_SOURCE_HOST || !req->chip_id12)   /* PC only, chip type required */
@@ -226,6 +227,7 @@ void op_manager_poll(void)
     case PDK_OP_ERASE: st = op_erase_run(); break;
     case PDK_OP_BLANK_CHECK: st = op_blank_check_run(); break;
     case PDK_OP_VERIFY: st = op_verify_run(); break;
+    case PDK_OP_SELF_TEST: st = op_selftest_run(); break;
 #ifdef PDK_FEATURE_PATCH
     case PDK_OP_PATCH: st = op_patch_run(); break;
 #endif

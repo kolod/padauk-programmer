@@ -55,6 +55,22 @@ if(PLATFORM STREQUAL "host")
         target_link_libraries(pdk-sim PRIVATE Threads::Threads)
     endif()
 
+    # SC-006: the same simulator with one more chip in the table (PTEST1), unknown to every client build
+    add_library(pdk_core_extra STATIC ${PDK_CORE_SOURCES})
+    target_include_directories(pdk_core_extra PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/core ${CMAKE_CURRENT_SOURCE_DIR}/hal)
+    target_compile_definitions(pdk_core_extra PUBLIC $<TARGET_PROPERTY:pdk_core,INTERFACE_COMPILE_DEFINITIONS>
+                               PDK_TEST_EXTRA_CHIP=1)
+    target_compile_options(pdk_core_extra PRIVATE ${PDK_WARNINGS})
+    add_executable(pdk-sim-extra ${PDK_HOST_SOURCES})
+    target_include_directories(pdk-sim-extra PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/platform/common)
+    target_link_libraries(pdk-sim-extra PRIVATE pdk_core_extra)
+    target_compile_options(pdk-sim-extra PRIVATE ${PDK_WARNINGS})
+    if(WIN32)
+        target_link_libraries(pdk-sim-extra PRIVATE ws2_32 bcrypt)
+    else()
+        target_link_libraries(pdk-sim-extra PRIVATE Threads::Threads)
+    endif()
+
     enable_testing()
     add_subdirectory(tests)
 

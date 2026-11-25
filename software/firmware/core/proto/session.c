@@ -120,7 +120,7 @@ void session_poll(void)
 
 void session_send_event(uint16_t code, const uint8_t *payload, uint16_t len)
 {
-    if (!s.open || len > PDK_MAX_PAYLOAD)
+    if (!s.open || !s.established || len > PDK_MAX_PAYLOAD)   /* events belong to a session (after HELLO) */
         return;
     pdk_frame_t f = {.type = PDK_FT_EVT, .seq = s.evt_seq++, .code = code, .status = 0, .len = len,
                      .payload = payload};

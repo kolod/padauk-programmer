@@ -105,6 +105,7 @@ int main(int argc, char **argv)
         return 1;
     }
     pdk_core_init();
+    pdk_core_poll();   /* the start-up SELF_TEST is done before anyone can connect */
     printf("listening %s:%u\n", host, port);
     fflush(stdout);
 

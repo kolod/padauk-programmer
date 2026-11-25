@@ -177,14 +177,45 @@ def cmd_pkg(prog: Programmer, a) -> int:
     raise CliError(a.action)
 
 
+CAP_NAMES = ("autonomous", "calibration", "run/uart", "copy", "supply measurement", "self-test", "patch",
+             "supply calibration", "manual supplies")
+SELFTEST_STATES = {0: "not run", 1: "running", 2: "passed", 3: "FAILED", 4: "a chip was in the socket"}
+
+
 def cmd_info(prog: Programmer, a) -> int:
     i = prog.info
     print(f"Programmer: {i.platform}, firmware {i.firmware_version}, protocol {i.proto_major}.{i.proto_minor}")
-    print(f"Max payload {i.max_payload} B, package {i.max_package_size} B, read {i.max_read_words} words, "
-          f"capabilities 0x{i.capabilities:08X}, chips {i.chip_table_size}")
-    p = prog.package_info()
-    print(f"Package: {p['state'].name}" + (f", CRC 0x{p['crc32']:08X}" if p["state"] != PkgState.EMPTY else ""))
+    print(f"Limits: payload {i.max_payload} B, package {i.max_package_size} B, read {i.max_read_words} words, "
+          f"{i.chip_table_size} chips")
+    caps = [n for b, n in enumerate(CAP_NAMES) if i.capabilities & (1 << b)]
+    print(f"Capabilities: {', '.join(caps) or '-'} (0x{i.capabilities:08X})")
+    s = prog.get_status()
+    print(f"Package: {PkgState(s.pkg_state).name}" + (f", CRC 0x{s.pkg_crc32:08X}" if s.pkg_state else ""))
+    print(f"Self-test: {SELFTEST_STATES.get(s.selftest_state, s.selftest_state)}"
+          + (" - local programming is blocked until it passes" if s.flags & 2 else ""))
     return 0
+
+
+def cmd_selftest(prog: Programmer, a) -> int:
+    print("The self-test raises VDD and VPP to every level of the chip table: the socket must be empty.")
+    if not a.yes and ask("Nothing is in the socket or on the ICP lines? [y/N] ").strip().lower() not in ("y", "yes"):
+        print("Cancelled.")
+        return 1
+    r = run_operation(prog, a, Op.SELF_TEST)
+    if r.levels:
+        print("Rail   set V   measured V   settle ms")
+        for lv in r.levels:
+            mark = "" if lv.ok else "   <- not reached"
+            print(f"{RAILS[lv.rail]:<5} {lv.set_mV / 1000:6.2f}   {lv.meas_mV / 1000:9.3f}   {lv.settle_us / 1000:8.2f}{mark}")
+    if r.ok:
+        print("Self-test passed")
+        return 0
+    if r.status == Status.SELFTEST_CHIP_PRESENT:
+        print(f"error: a chip answered (ID 0x{r.chip_id_found:03X}) - remove it; no high voltage was applied",
+              file=sys.stderr)
+        return 1
+    print(f"error: {describe_result(r)}", file=sys.stderr)
+    return 1
 
 
 def cmd_list(prog: Programmer, a) -> int:
@@ -304,6 +335,7 @@ OP_MESSAGES = {
     Status.VDD_FAULT: "VDD did not settle - check the supply and the board",
     Status.VPP_FAULT: "VPP did not settle - check the supply and the board",
     Status.OP_UNSUPPORTED: "this programmer or chip does not support the operation",
+    Status.SELFTEST_FAILED: "a supply level was not reached - see the table",
 }
 
 
@@ -641,6 +673,11 @@ def build_parser() -> argparse.ArgumentParser:
         q.add_argument("-q", "--quiet", action="store_true", help="no progress line")
         q.set_defaults(func=func)
     sub.add_parser("status", help="programmer state and the last operation").set_defaults(func=cmd_status)
+
+    q = sub.add_parser("selftest", help="check every supply level with an empty socket")
+    q.add_argument("--yes", action="store_true", help="do not ask whether the socket is empty")
+    q.add_argument("-q", "--quiet", action="store_true", help="no progress line")
+    q.set_defaults(func=cmd_selftest)
 
     t = sub.add_parser("patch", help="change single words of a programmed chip (1 -> 0 only)")
     t.add_argument("-n", "--icname", required=True, help="chip type")

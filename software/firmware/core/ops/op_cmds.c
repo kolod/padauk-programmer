@@ -64,10 +64,12 @@ uint16_t op_cmd_status(const uint8_t *req, uint16_t len, uint8_t *rsp, uint16_t 
     put32(rsp + 11, j->ok_count);
     put32(rsp + 15, j->fail_count);
     rsp[19] = (uint8_t)(j->flags & PDK_FLAG_MASTER_RESTORE_PENDING);
+    if (op_selftest_state() != PDK_SELFTEST_PASSED)   /* a local start would run SELF_TEST instead (R16) */
+        rsp[19] |= PDK_FLAG_LOCAL_START_BLOCKED;
     rsp[20] = j->cfg_copy_ihrc;
     rsp[21] = j->cfg_copy_ilrc;
     rsp[22] = j->cfg_copy_bg;
-    rsp[23] = PDK_SELFTEST_NOT_RUN;   /* SELF_TEST comes with US4 */
+    rsp[23] = op_selftest_state();
     *rsp_len = 24;
     return PDK_OK;
 }

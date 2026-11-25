@@ -75,12 +75,13 @@ class Sim:
 
 @pytest.fixture
 def pdk_sim(request, tmp_path):
-    """Factory: pdk_sim(*args, flash=None) -> started Sim. All processes are killed at teardown."""
-    exe = request.config.getoption("--sim")
+    """Factory: pdk_sim(*args, flash=None, exe=None) -> started Sim. All processes are killed at teardown.
+    `exe` replaces the simulator given with --sim (e.g. pdk-sim-extra)."""
+    default_exe = request.config.getoption("--sim")
     sims: list[Sim] = []
 
-    def make(*args: str, flash: str | None = None, start: bool = True) -> Sim:
-        s = Sim(exe, flash or str(tmp_path / f"flash{len(sims)}.bin"), list(args))
+    def make(*args: str, flash: str | None = None, start: bool = True, exe: str | None = None) -> Sim:
+        s = Sim(exe or default_exe, flash or str(tmp_path / f"flash{len(sims)}.bin"), list(args))
         sims.append(s)
         return s.start() if start else s
 
