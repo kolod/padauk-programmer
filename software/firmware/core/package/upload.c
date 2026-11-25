@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "header.h"
+#include "ops/op_read.h"
 #include "pkg_cmds.h"
 #include "proto/le.h"
 #include "proto/proto_defs.h"
@@ -26,8 +27,9 @@ static struct {
 void upload_init(void) { memset(&up, 0, sizeof up); }
 void upload_abort(void)
 {
-    up.state = UP_IDLE;
-    slots_set_upload(SLOT_NONE);   /* pages written so far are erased in the background */
+    if (up.state != UP_IDLE)
+        slots_set_upload(SLOT_NONE);   /* pages written so far are erased in the background */
+    up.state = UP_IDLE;                /* (an idle abort keeps a READ result in its slot) */
 }
 bool upload_active(void) { return up.state != UP_IDLE; }
 
@@ -36,6 +38,7 @@ uint16_t pkg_cmd_begin(const uint8_t *req, uint16_t len, uint8_t *rsp, uint16_t 
     upload_abort();
     if (len != PKG_HEADER_SIZE)
         return PDK_BAD_PAYLOAD;
+    op_read_invalidate();   /* the upload takes the slot of a READ result */
     if (package_store_flags() & PDK_FLAG_MASTER_RESTORE_PENDING)
         return PDK_MASTER_RESTORE_PENDING;
     uint16_t st = pkg_header_parse(req, true, slots_size(), &up.header, &up.chip);

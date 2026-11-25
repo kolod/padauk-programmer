@@ -33,6 +33,11 @@ uint16_t chip_engine_write_block(const struct chip_info *chip, uint16_t addr, co
 uint16_t chip_engine_calibrate(const struct chip_info *chip, uint16_t site_addr, uint8_t kind,
                                uint32_t target_hz, uint16_t mV, uint8_t *value, uint32_t *measured_hz,
                                chip_poll_fn poll);
+/* SYSCLK of the measurement loop at `site_addr` running at trim value `start_value`, without "+1" pulses on
+ * PA4 (research R9, MEASURE_MASTER). PDK_CALIB_FAILED = no signal on PA3 within 1 s (the program does
+ * not reach that loop). */
+uint16_t chip_engine_measure_freq(const struct chip_info *chip, uint16_t site_addr, uint8_t kind, uint8_t start_value,
+                                  uint16_t mV, uint32_t *hz, chip_poll_fn poll);
 uint16_t chip_engine_run_start(uint16_t vdd_mV);
 void chip_engine_run_stop(void);
 void chip_engine_safe_state(void);

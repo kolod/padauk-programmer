@@ -14,7 +14,7 @@ void host_flash_power_fail_after(long n);     /* -1: off; counts flash and chip 
 bool host_power_fail_now(void);               /* true: this operation is the one cut by the power loss */
 void host_power_die(void);                    /* closes the backing files, exits with code 99 */
 
-/* Chip model (chip_model.c): "none" or NAME[:offset=±N,osc=broken,weak=ADDR,order=reverse,deaf,pa0=float,slow=US]. */
+/* Chip model (chip_model.c): "none" or NAME[:offset=±N,osc=broken,weak=ADDR,order=reverse,deaf,pa0=float,slow=US,protected]. */
 bool host_chip_config(const char *spec);
 bool host_chip_state(const char *path);       /* chip memory kept in this file across runs */
 void host_flash_corrupt_during_write(bool on);   /* flash reads disturbed while the chip is written */

@@ -23,6 +23,7 @@ static struct {
     bool weak;
     void (*hook)(void);
     uint32_t writes, erases, safe, calibrations;
+    uint32_t measure_hz;   /* what measure_freq reports (0 = no signal) */
 } c;
 
 void fake_chip_reset(void) { memset(&c, 0, sizeof c); }
@@ -55,6 +56,7 @@ void fake_chip_weak(uint16_t addr)
 }
 
 void fake_chip_hook(void (*fn)(void)) { c.hook = fn; }
+void fake_chip_measure(uint32_t hz) { c.measure_hz = hz; }
 uint32_t fake_chip_writes(void) { return c.writes; }
 uint32_t fake_chip_erases(void) { return c.erases; }
 uint32_t fake_chip_safe_states(void) { return c.safe; }
@@ -161,6 +163,22 @@ uint16_t chip_engine_calibrate(const struct chip_info *chip, uint16_t site_addr,
     case FAKE_CAL_WRONG_SITE: *measured_hz = target_hz * 100u; return PDK_CALIB_WRONG_SITE;
     default: return PDK_OK;
     }
+}
+
+uint16_t chip_engine_measure_freq(const struct chip_info *chip, uint16_t site_addr, uint8_t kind, uint8_t start_value,
+                                  uint16_t mV, uint32_t *hz, chip_poll_fn poll)
+{
+    if (!poll_now(poll))
+        return cancelled();
+    chip_engine_safe_state();
+    calib_match_t m;
+    if (!c.chip || !calib_match(chip, c.mem + site_addr, chip->code_words - site_addr, site_addr, &m) ||
+        m.form != CALIB_FORM_LOOP || c.measure_hz == 0) {
+        *hz = 0;
+        return PDK_CALIB_FAILED;   /* no signal */
+    }
+    *hz = c.measure_hz;
+    return PDK_OK;
 }
 
 uint16_t chip_engine_run_start(uint16_t vdd_mV)
