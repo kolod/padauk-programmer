@@ -41,6 +41,14 @@ uint16_t pkg_slot_word(void *reader, uint16_t addr, bool *defined)
     return r->win[addr - r->win_first];
 }
 
+uint16_t pkg_fill_end(const chip_info_t *c)
+{
+    uint16_t end = (uint16_t)(c->code_words - 8u);
+    if (c->excl_end > c->excl_start && c->excl_start < end)
+        end = c->excl_start;
+    return end;
+}
+
 uint16_t pkg_validate(const pkg_header_t *h, const chip_info_t *c, word_get_fn get, void *ctx,
                       pkg_plan_t *plan, uint16_t *bad_addr)
 {
@@ -48,11 +56,8 @@ uint16_t pkg_validate(const pkg_header_t *h, const chip_info_t *c, word_get_fn g
     *bad_addr = 0xFFFF;
     uint16_t mask = chip_word_mask(c);
     uint16_t fuse_addr = chip_fuse_addr(c);
-    /* SECURE_FILL: unused words below fill_end become NOP (up to the reserved area or code_words - 8). */
     bool fill = (h->flags & PKG_F_SECURE_FILL) != 0;
-    uint16_t fill_end = (uint16_t)(c->code_words - 8u);
-    if (c->excl_end > c->excl_start && c->excl_start < fill_end)
-        fill_end = c->excl_start;
+    uint16_t fill_end = pkg_fill_end(c);
     uint16_t written = fill ? fill_end : 0;
 
     for (uint16_t a = 0; a < h->image_words; a++) {

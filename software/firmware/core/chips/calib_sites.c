@@ -2,8 +2,8 @@
 /*
  * Placeholder layout ported from easy-pdk-programmer-software/fpdkiccalib.c and
  * Examples/src/easypdk/pdkcommon.h, Copyright (C) 2019-2020 freepdk https://free-pdk.github.io
- * (GPL-3.0-or-later). Only the search part is here; loop/finalisation opcodes come with the
- * effective image.
+ * (GPL-3.0-or-later). Only the search part is here; loop/finalisation opcodes are in
+ * calib_footprint.c.
  */
 #include "calib_sites.h"
 

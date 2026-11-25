@@ -41,6 +41,10 @@ static struct {
     uint32_t off_calls;
     uint32_t out_ppm[2], meas_ppm[2];   /* scale errors: output (DAC/stage) and measurement (ADC) */
 
+    fake_entropy_mode_t entropy_mode;
+    uint32_t entropy_x;
+    uint8_t uid[12];
+
     pdk_ui_state_t ui;
 } f;
 
@@ -61,6 +65,9 @@ void fake_reset(void)
     f.open = true;
     f.settle_us = 200;
     f.out_ppm[0] = f.out_ppm[1] = f.meas_ppm[0] = f.meas_ppm[1] = 1000000u;
+    f.entropy_x = 0x12345678u;
+    for (int i = 0; i < 12; i++)
+        f.uid[i] = (uint8_t)(0xA0 + i);
 }
 
 /* ---------------- transport ---------------- */
@@ -114,21 +121,31 @@ void hal_delay_us(uint32_t us) { f.now_us += us; }
 uint32_t hal_crc32_update(uint32_t state, const void *data, size_t len) { return crc32_sw_update(state, data, len); }
 const char *hal_platform_name(void) { return "fake"; }
 
-bool hal_entropy_raw(uint8_t *buf, size_t len)
+void fake_entropy(fake_entropy_mode_t mode, uint32_t seed)
 {
-    static uint32_t x = 0x12345678u;
-    for (size_t i = 0; i < len; i++) {
-        x ^= x << 13; x ^= x >> 17; x ^= x << 5;
-        buf[i] = (uint8_t)x;
-    }
-    return true;
+    f.entropy_mode = mode;
+    f.entropy_x = seed ? seed : 0x12345678u;
 }
 
-void hal_uid(uint8_t uid[12])
+void fake_uid(const uint8_t uid[12]) { memcpy(f.uid, uid, 12); }
+
+bool hal_entropy_raw(uint8_t *buf, size_t len)
 {
-    for (int i = 0; i < 12; i++)
-        uid[i] = (uint8_t)(0xA0 + i);
+    for (size_t i = 0; i < len; i++) {
+        uint32_t x = f.entropy_x;
+        x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+        f.entropy_x = x;
+        switch (f.entropy_mode) {
+        case FAKE_ENTROPY_CONSTANT: buf[i] = 0x5A; break;
+        case FAKE_ENTROPY_PERIODIC: buf[i] = (uint8_t)(0x30 + i % 4); break;
+        case FAKE_ENTROPY_BIASED: buf[i] = (x % 8u) ? 0x00 : (uint8_t)x; break;
+        default: buf[i] = (uint8_t)x; break;
+        }
+    }
+    return f.entropy_mode != FAKE_ENTROPY_FAIL;
 }
+
+void hal_uid(uint8_t uid[12]) { memcpy(uid, f.uid, 12); }
 
 void hal_ui_state(pdk_ui_state_t state, const pdk_ui_detail_t *detail)
 {
