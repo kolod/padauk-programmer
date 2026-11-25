@@ -48,6 +48,17 @@ void fake_power_settle_us(uint32_t us);   /* time constant of an ideal supply */
 uint16_t fake_power_set_value(pdk_rail_t rail);
 uint32_t fake_power_off_calls(void);
 
+/* --- entropy (default: xorshift noise; seed 0 = the reset seed) --- */
+typedef enum {
+    FAKE_ENTROPY_NOISE = 0,
+    FAKE_ENTROPY_CONSTANT,   /* stuck source */
+    FAKE_ENTROPY_PERIODIC,   /* short repeating pattern */
+    FAKE_ENTROPY_BIASED,     /* mostly one value */
+    FAKE_ENTROPY_FAIL,       /* hal_entropy_raw() reports failure */
+} fake_entropy_mode_t;
+void fake_entropy(fake_entropy_mode_t mode, uint32_t seed);
+void fake_uid(const uint8_t uid[12]);
+
 /* --- ui --- */
 pdk_ui_state_t fake_ui_last(void);
 

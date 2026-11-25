@@ -38,6 +38,9 @@ typedef struct {
 void pkg_slot_reader_init(pkg_slot_reader_t *r, uint8_t slot, uint16_t image_words);
 uint16_t pkg_slot_word(void *reader, uint16_t addr, bool *defined);
 
+/* SECURE_FILL: unused words below this address become NOP (the reserved area or code_words - 8). */
+uint16_t pkg_fill_end(const chip_info_t *c);
+
 /* Checks reserved areas, fuse conflict/security and placeholders. On error *bad_addr is the word
  * address (0xFFFF if not applicable). */
 uint16_t pkg_validate(const pkg_header_t *h, const chip_info_t *c, word_get_fn get, void *ctx,
