@@ -6,10 +6,11 @@ import argparse
 import os
 import struct
 import sys
+import time
 import zlib
 
 from . import __version__, ihex, package
-from .protocol import (CAP_SUPPLY_CAL, FAMILY_NAMES, PkgState, Programmer, ProgrammerError, ProtocolError, Status,
+from .protocol import (CAP_SUPPLY_CAL, CAP_SUPPLY_SET, FAMILY_NAMES, PkgState, Programmer, ProgrammerError, ProtocolError, Status,
                        connect, status_name)
 from .transport import TransportError
 
@@ -204,10 +205,10 @@ def ask(prompt: str) -> str:
         return ""
 
 
-def parse_volts(text: str) -> int:
+def parse_volts(text: str, allow_zero: bool = False) -> int:
     """'5.32', '5,32' or '5.32 V' → millivolts."""
     v = float(text.strip().lower().rstrip("v").strip().replace(",", "."))
-    if not 0.0 < v < 30.0:
+    if not (0.0 <= v if allow_zero else 0.0 < v) or v >= 30.0:
         raise ValueError(text)
     return round(v * 1000)
 
@@ -285,6 +286,98 @@ def cmd_calibrate(prog: Programmer, a) -> int:
     return 1
 
 
+RAILS = ("VDD", "VPP")
+
+
+def show_supplies(s: dict) -> None:
+    """One line per rail: set point, average reading, its deviation and the spread (min..max) of the samples."""
+    for rail in RAILS:
+        key = rail.lower()
+        set_mV, avg, lo, hi = (s[f"{key}_{f}_mV"] for f in ("set", "meas", "min", "max"))
+        dev = f"{avg - set_mV:+5d} mV" if set_mV else "  (off) "
+        print(f"{rail} set {set_mV / 1000:6.3f} V  reads {avg / 1000:6.3f} V {dev}  "
+              f"spread {lo / 1000:.3f}..{hi / 1000:.3f} V ({hi - lo} mV)")
+
+
+def apply_supplies(prog: Programmer, vdd_mV: int, vpp_mV: int, check: bool = True) -> bool:
+    """Applies the voltages and prints them; a refusal is printed and gives False (supplies are off then)."""
+    try:
+        show_supplies(prog.supply_set(vdd_mV, vpp_mV, check))
+        return True
+    except ProgrammerError as e:
+        if e.status in (Status.VDD_FAULT, Status.VPP_FAULT) and len(e.payload) >= 5:
+            rail, set_mV, meas_mV = struct.unpack_from("<BHH", e.payload)
+            print(f"{RAILS[rail]} did not settle within tolerance: set {set_mV / 1000:.3f} V, "
+                  f"measured {meas_mV / 1000:.3f} V. All supplies are off.")
+            if not prog.cal_get()["valid"]:
+                print("The supplies are not calibrated - run 'pdkprog calibrate' first.")
+            return False
+        if e.status == Status.BAD_PAYLOAD and e.payload and e.payload[0] < len(RAILS):
+            print(f"{RAILS[e.payload[0]]} is above the limit of the programmer.")
+            return False
+        raise
+
+
+def parse_supplies(text: str) -> tuple[int, int]:
+    """'3.3' or '5 12,5' → (VDD mV, VPP mV)."""
+    words = text.replace(";", " ").split()
+    if not 1 <= len(words) <= 2:
+        raise ValueError(text)
+    vdd = parse_volts(words[0], allow_zero=True)
+    vpp = parse_volts(words[1], allow_zero=True) if len(words) == 2 else 0
+    return vdd, vpp
+
+
+def cmd_supply(prog: Programmer, a) -> int:
+    if not prog.info.capabilities & CAP_SUPPLY_SET:
+        raise CliError("this programmer cannot set the supplies manually")
+    print("WARNING: disconnect the programmer from any target board: the voltages go to the output pins.")
+    if not a.yes and ask("Nothing is connected to the output pins? [y/N] ").strip().lower() not in ("y", "yes"):
+        print("Cancelled.")
+        return 1
+    if a.no_check:
+        print("Tolerance check off: the voltages stay up even if they are wrong - compare them with a meter.")
+    try:
+        if a.vdd is not None:   # one setting, held for --hold seconds (or until Enter)
+            try:
+                vdd = parse_volts(a.vdd, allow_zero=True)
+                vpp = parse_volts(a.vpp, allow_zero=True) if a.vpp is not None else 0
+            except ValueError:
+                raise CliError("voltages must be numbers in volts") from None
+            if not apply_supplies(prog, vdd, vpp, not a.no_check):
+                return 1
+            if a.hold is None:
+                ask("Press Enter to switch the supplies off. ")
+            else:
+                end = time.monotonic() + a.hold
+                while time.monotonic() < end:
+                    time.sleep(min(1.0, max(0.0, end - time.monotonic())))
+                    show_supplies(prog.supply_get())
+            return 0
+
+        print("Enter VDD [VPP] in volts (e.g. '3.3' or '5 12.5'; VPP 0 when omitted), 'm' to measure again, "
+              "Enter to switch off and quit. Supplies drop after 5 minutes without commands.")
+        while True:
+            line = ask("VDD [VPP]> ").strip()
+            if not line:
+                return 0
+            if line.lower() in ("m", "measure"):
+                show_supplies(prog.supply_get())
+                continue
+            try:
+                vdd, vpp = parse_supplies(line)
+            except ValueError:
+                print("Please enter one or two numbers in volts, e.g. 3.3 or 5 12.5")
+                continue
+            apply_supplies(prog, vdd, vpp, not a.no_check)
+    finally:
+        try:
+            prog.supply_set(0, 0)
+            print("Supplies off.")
+        except Exception:
+            pass   # the session is gone: the programmer switches them off by itself
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="pdkprog", description="PADAUK programmer client")
     p.add_argument("--version", action="version", version=f"pdkprog {__version__}")
@@ -324,6 +417,16 @@ def build_parser() -> argparse.ArgumentParser:
                    help="store without asking (the check voltages were verified)")
     g.add_argument("--reject", dest="accept", action="store_false", help="discard without asking")
     c.set_defaults(func=cmd_calibrate)
+
+    s = sub.add_parser("supply", help="apply arbitrary VDD/VPP for checking the supplies (nothing connected!)")
+    s.add_argument("vdd", nargs="?", help="VDD in volts; without it the voltages are asked interactively")
+    s.add_argument("vpp", nargs="?", help="VPP in volts (default 0 = off)")
+    s.add_argument("--hold", type=float, metavar="SECONDS",
+                   help="keep the voltages for SECONDS, printing readings every second (default: until Enter)")
+    s.add_argument("--no-check", action="store_true",
+                   help="keep the voltages up even outside the +-2 %% tolerance (diagnostics with a meter)")
+    s.add_argument("--yes", action="store_true", help="do not ask whether the outputs are disconnected")
+    s.set_defaults(func=cmd_supply)
 
     sub.add_parser("info", help="programmer information").set_defaults(func=cmd_info)
     sub.add_parser("list", help="chips supported by the programmer").set_defaults(func=cmd_list)

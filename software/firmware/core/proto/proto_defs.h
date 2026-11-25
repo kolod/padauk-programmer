@@ -46,6 +46,8 @@ enum {
     PDK_CMD_CAL_CONFIRM = 0x0042,
     PDK_CMD_CAL_GET = 0x0043,
     PDK_CMD_CAL_CLEAR = 0x0044,
+    PDK_CMD_SUPPLY_SET = 0x0045,
+    PDK_CMD_SUPPLY_GET = 0x0046,
 };
 
 /* Events (§5) */
@@ -189,6 +191,7 @@ enum {
     PDK_CAP_SELF_TEST = 1u << 5,
     PDK_CAP_PATCH = 1u << 6,
     PDK_CAP_SUPPLY_CAL = 1u << 7,
+    PDK_CAP_SUPPLY_SET = 1u << 8,
 };
 
 /* CHIP_DESC.ops bits */
