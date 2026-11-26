@@ -42,6 +42,9 @@ endif()
 # ---------------------------------------------------------------------------
 if(PLATFORM STREQUAL "host")
     target_compile_definitions(pdk_core PUBLIC PDK_PLATFORM_HOST=1)
+    if(NOT WIN32)
+        add_compile_definitions(_DEFAULT_SOURCE)   # clock_gettime, usleep, sockets under -std=c11
+    endif()
 
     file(GLOB PDK_HOST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/platform/host/*.c)
     add_executable(pdk-sim ${PDK_HOST_SOURCES})   # chip engine: platform/host/chip_model.c

@@ -180,7 +180,7 @@ def cmd_pkg(prog: Programmer, a) -> int:
 
 
 CAP_NAMES = ("autonomous", "calibration", "run/uart", "copy", "supply measurement", "self-test", "patch",
-             "supply calibration", "manual supplies")
+             "supply calibration", "manual supplies", "copy measure-master")
 SELFTEST_STATES = {0: "not run", 1: "running", 2: "passed", 3: "FAILED", 4: "a chip was in the socket"}
 
 
@@ -1055,8 +1055,30 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def easypdkprog_order(argv: list[str], commands) -> list[str]:
+    """`easypdkprog -n PFS154 write f.ihx` puts the chip before the command: move -n/--icname after it."""
+    for i, arg in enumerate(argv):
+        if arg in commands:
+            head, moved = [], []
+            j = 0
+            while j < i:
+                if argv[j] in ("-n", "--icname") and j + 1 < i:
+                    moved += argv[j:j + 2]
+                    j += 2
+                    continue
+                if argv[j].startswith("--icname=") or (argv[j].startswith("-n") and len(argv[j]) > 2):
+                    moved.append(argv[j])
+                else:
+                    head.append(argv[j])
+                j += 1
+            return head + [arg] + moved + argv[i + 1:]
+    return argv
+
+
 def main(argv: list[str] | None = None) -> int:
-    a = build_parser().parse_args(argv)
+    parser = build_parser()
+    sub = next(x for x in parser._actions if isinstance(x, argparse._SubParsersAction))
+    a = parser.parse_args(easypdkprog_order(list(sys.argv[1:] if argv is None else argv), sub.choices))
     try:
         prog = connect(a.port, client=f"pdkprog {__version__}")
     except (TransportError, ProtocolError) as e:

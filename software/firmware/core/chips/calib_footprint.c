@@ -174,7 +174,7 @@ static bool regs_of(const chip_info_t *chip, uint8_t kind, uint8_t regs[3])
 void calib_site_from_match(const chip_info_t *chip, uint16_t addr, const calib_match_t *m, uint32_t target_hz,
                            uint16_t mV, calib_site_t *site)
 {
-    uint8_t regs[3];
+    uint8_t regs[3] = {0, 0, 0};   /* an unknown kind leaves them 0 */
     regs_of(chip, m->kind, regs);
     site->addr = addr;
     site->kind = m->kind;
