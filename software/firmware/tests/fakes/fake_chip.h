@@ -26,7 +26,7 @@ void fake_chip_calib(fake_cal_t outcome, uint8_t value);
 /* Writes to `addr` after the first one do not stick (a weak cell, FR-048). */
 void fake_chip_weak(uint16_t addr);
 
-/* What chip_engine_measure_freq() reports for a measurement loop (0 = no signal). */
+/* What chip_engine_measure_freq() reports for an IHRC measurement loop (ILRC: hz / 128; 0 = no signal). */
 void fake_chip_measure(uint32_t hz);
 
 /* Called inside every primitive before each poll(). */

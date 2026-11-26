@@ -133,10 +133,11 @@ TEST(restore_pending_comes_first_and_restore_alone_is_ignored)
     journal_state_t st = *journal_get();
     st.flags |= PDK_FLAG_MASTER_RESTORE_PENDING;
     ASSERT_TRUE(journal_append(&st));
-    ASSERT_TRUE(local(PDK_LOCAL_PROGRAM) == NULL);   /* RESTORE_MASTER: not in this build */
-    pdk_ui_detail_t d;
-    ASSERT_EQ(last_ui(&d), PDK_UI_FAIL);
-    ASSERT_EQ(d.status, PDK_OP_UNSUPPORTED);
+    const op_result_t *r = local(PDK_LOCAL_PROGRAM);   /* replaced by RESTORE_MASTER */
+    ASSERT_EQ(r->op_type, PDK_OP_RESTORE_MASTER);
+    ASSERT_EQ(r->source, PDK_SOURCE_LOCAL);
+    ASSERT_EQ(r->status, PDK_STORE_EMPTY);   /* no dump stored here */
+    ASSERT_EQ(last_ui(NULL), PDK_UI_FAIL);
 }
 
 TEST(local_copy_runs_copy)

@@ -608,6 +608,10 @@ class Programmer:
             ext += name.encode()[:32].ljust(32, bytes(1))
         return self.run_op(Op.COPY, chip_id12=chip_id12, ext=ext, on_progress=on_progress, timeout=timeout)
 
+    def restore_master(self, on_progress=None, timeout: float = 120.0) -> Result:
+        """RESTORE_MASTER: writes the stored master dump back after an interrupted MEASURE_MASTER."""
+        return self.run_op(Op.RESTORE_MASTER, on_progress=on_progress, timeout=timeout)
+
     def config_get(self) -> tuple:
         """(mode_ihrc, mode_ilrc, bg_restore) of a local COPY."""
         return tuple(self.call(Cmd.CONFIG_GET)[:3])

@@ -109,6 +109,10 @@ uint16_t chip_engine_erase(const struct chip_info *chip, chip_poll_fn poll)
 {
     if (!poll_now(poll))
         return cancelled();
+    if (!c.chip) {
+        chip_engine_safe_state();
+        return PDK_CHIP_NOT_FOUND;
+    }
     c.erases++;
     for (unsigned i = 0; i < chip->code_words; i++) {
         c.mem[i] = chip_word_mask(chip);
@@ -123,6 +127,10 @@ uint16_t chip_engine_write_block(const struct chip_info *chip, uint16_t addr, co
 {
     if (!poll_now(poll))
         return cancelled();
+    if (!c.chip) {
+        chip_engine_safe_state();
+        return PDK_CHIP_NOT_FOUND;
+    }
     c.writes++;
     for (unsigned i = 0; i < count; i++) {
         uint16_t a = (uint16_t)(addr + i);
@@ -177,7 +185,7 @@ uint16_t chip_engine_measure_freq(const struct chip_info *chip, uint16_t site_ad
         *hz = 0;
         return PDK_CALIB_FAILED;   /* no signal */
     }
-    *hz = c.measure_hz;
+    *hz = kind == CALIB_KIND_ILRC ? c.measure_hz / 128u : c.measure_hz;
     return PDK_OK;
 }
 

@@ -552,6 +552,8 @@ def print_copy_result(r: Result) -> None:
             continue
         if c.target_hz and c.target_hz >> 24 == 0xFF:
             target = "nearest standard frequency when each copy is programmed"
+        elif c.target_hz and c.mode == COPY_MEASURE:
+            target = f"target {c.target_hz} Hz (measured on the master)"
         elif c.target_hz:
             target = f"target {c.target_hz} Hz"
         elif c.kind == 3 and c.site_status == 0:
@@ -559,6 +561,8 @@ def print_copy_result(r: Result) -> None:
         else:
             target = "master value copied"
         print(f"{kind}: master value 0x{c.master_value:02X}, {target} [{status}]")
+    if r.warnings & (1 << 2):
+        print("note: the master was rewritten for the measurement and restored (MASTER_MODIFIED)")
     if r.warnings & (1 << 5):
         print("note: a serial number of the master, if it has one, is copied as it is (SERIAL_DUPLICATED)")
     if r.warnings & (1 << 6):
@@ -617,6 +621,20 @@ def cmd_copy(prog: Programmer, a) -> int:
     h = package.Header.parse(prog.package_info()["header"])
     print(f"Copied into package '{h.name}' ({r.data_words} words, master CRC 0x{r.image_crc_raw:08X}, "
           f"normalized 0x{r.image_crc_norm:08X})")
+    return 0
+
+
+def cmd_restore_master(prog: Programmer, a) -> int:
+    r = prog.restore_master(on_progress=None if a.quiet else show_progress)
+    if not a.quiet:
+        print(file=sys.stderr)
+    if r.status == Status.NOT_ALLOWED_NOW:
+        print("Nothing to restore: no master restore is pending.")
+        return 0
+    if not r.ok:
+        print(f"error: {describe_result(r)}", file=sys.stderr)
+        return 1
+    print("The master chip is restored from the stored dump.")
     return 0
 
 
@@ -859,6 +877,10 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--yes", action="store_true", help="do not ask before rewriting the master")
     q.add_argument("-q", "--quiet", action="store_true", help="no progress line")
     q.set_defaults(func=cmd_copy)
+
+    q = sub.add_parser("restore-master", help="write the stored master dump back after an interrupted copy")
+    q.add_argument("-q", "--quiet", action="store_true", help="no progress line")
+    q.set_defaults(func=cmd_restore_master)
 
     q = sub.add_parser("config", help="settings: config copy [--ihrc keep|snap] [--bg keep|restore]")
     q.add_argument("what", choices=["copy"])
