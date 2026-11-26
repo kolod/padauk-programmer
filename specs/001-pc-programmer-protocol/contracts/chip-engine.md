@@ -55,6 +55,22 @@ Guarantees (verified by unit tests on a fake `hal_power` and an IC model):
    by the IC (switching a weak pull-up/pull-down, the level must not follow it). A violation →
    `CALIB_WRONG_SITE` with no further pulse and no write.
 
+### 3.1 Engine notes (the PADAUK implementation, feature `002-chip-engine`)
+
+- **Session continuation.** Consecutive calls of the same primitive with the same mode on the same IC (`write_block`
+  block after block, `read` chunk after chunk) continue one programming session: the ID check and the voltage ramps
+  happen once. Any other primitive, `safe_state()` or a cancellation leaves the session first. An OTP session always
+  starts with its own GetID pass.
+- **Lazy post-leave pause.** Leaving the mode removes VDD and VPP at once (the safe state is immediate); the mandatory
+  free-pdk pause after leaving (10 ms; +100 ms after erase/write; +40 ms after calibration) is waited for by the **next**
+  enter, with `poll()` called every millisecond, so a cancel during the pause is still honoured.
+- **VDD limit for the lines the IC drives.** In calibration and in `run_start` the IC drives the programmer's inputs
+  (PA3, PA0, the UART lines) at its VDD. `hal_icp_vdd_max_mV()` (G474: 5.0 V, PB6 is FT_c) caps that VDD: a higher
+  request is refused with `OP_UNSUPPORTED` before any voltage. Programming itself is not limited (the programmer drives
+  the lines then).
+- **VDD only.** Calibration, `measure_freq` and `run_start` apply VDD alone (VPP stays 0): the IC runs its program
+  instead of entering programming mode.
+
 ## 4. The controls platform (local start)
 
 The core receives only the events `local_start(request)` and `local_cancel()` from the platform and reports the indication state

@@ -599,8 +599,8 @@ data the IC sends over the serial port, and can also send data to it.
 - **SC-003**: Uploading a maximum-size package that the programmer accepts for programming
   (reported to the client; on the reference platform — 8 KB), with confirmation, takes at most 3 s.
 - **SC-004**: A full programming of a PFS154 with a full image (erase, check, write, verify, one
-  calibration, fuse) from pressing "Program" to the summary takes at most 10 s. *Verified on a
-  real IC together with feature `002-chip-engine`; in this feature — on the IC model.*
+  calibration, fuse) from pressing "Program" to the summary takes at most 10 s. *In this feature — on the IC model;
+  on a real PFS154 confirmed in feature `002-chip-engine` (4.6 s, 2026-11-26, see its `hw-validation.md`).*
 - **SC-005**: During any operation longer than 1 s the user sees progress updates at least
   once per second.
 - **SC-006**: Adding support for a new IC requires only a programmer firmware update:
@@ -620,7 +620,7 @@ data the IC sends over the serial port, and can also send data to it.
 - **SC-009**: For a calibrated FLASH reference in the "measure the reference" mode, the IHRC frequency of the copies
   differs from the reference's frequency (measured by the same programmer) by no more than 1 %, and the
   reference after copying is bit-for-bit identical to its contents before copying. *In this feature — on the IC
-  model; on real PFS154s — together with `002-chip-engine`.*
+  model; on real PFS154s — in feature `002-chip-engine`, not yet confirmed (see its `hw-validation.md`).*
 - **SC-010**: A power cut at any moment of copying in the "measure the reference" mode (≥ 100
   trials) never leads to a loss of the reference's contents: it can always be restored from the dump.
 - **SC-011**: No exchange of data with the IC begins until VDD and VPP are within

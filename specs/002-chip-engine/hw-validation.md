@@ -7,8 +7,10 @@ Results of the hardware steps of [quickstart.md](quickstart.md) (constitution VI
 
 | Family | Status |
 |---|---|
-| FLASH_1 (PFS154) | probe, read, erase, write confirmed on hardware (2026-11-26); calibration pending (US3) |
-| FLASH_1 (PFS173), FLASH_2 (PFS172), OTP1_2, OTP2_1, OTP2_2, OTP3_1 | trace- and model-tested only — not confirmed on hardware (no IC on hand) |
+| FLASH_1 (PFS154) | probe, read, erase, write, IHRC calibration confirmed on hardware (2026-11-26); clock against a frequency counter, ILRC/BandGap pending |
+| FLASH_1 (PFS173), FLASH_2 (PFS172) | trace- and model-tested only — not confirmed on hardware (no IC on hand) |
+| OTP1_2, OTP2_2 (write + read) | implemented (user story 4), trace- and model-tested — **not confirmed on hardware** (no IC on hand) |
+| OTP2_1, OTP3_1 (read only) | trace- and model-tested only — not confirmed on hardware |
 
 ## User story 1 — identify and read (T019)
 
@@ -25,8 +27,24 @@ Results of the hardware steps of [quickstart.md](quickstart.md) (constitution VI
 | Step | Result | Date |
 |---|---|---|
 | `pdkprog --trace -n PFS154 write firmware.bin` (beeper, 488 words, one IHRC stub) — firmware built with `PDK_VDD_TOL_MV=300` | **OK up to CALIBRATE** — probe; ERASE (VDD 3000 → 3102 mV, VPP 9000 → 8996 mV, 2 clocks, 110 ms pause); BLANK_CHECK ≈ 214 ms; WRITE (VDD 5800 → 5809 mV, VPP 8500 → 8490 mV, 122 blocks in one session ≈ 83 ms); VERIFY ≈ 280 ms passed; stopped at CALIBRATE with `OP_UNSUPPORTED` (user story 3). Total 0.9 s | 2026-11-26 |
-| SC-001 (full write with one IHRC calibration ≤ 10 s) | pending (needs user story 3) | |
+| SC-001 (full write with one IHRC calibration ≤ 10 s) | **OK** — 4.6 s for the beeper `firmware.bin` (see user story 3) | 2026-11-26 |
 | SC-008 (interoperability with Easy PDK) | pending | |
+
+## User story 3 — calibrate (T030)
+
+| Step | Result | Date |
+|---|---|---|
+| `pdkprog --trace -n PFS154 write firmware.bin` (beeper, one IHRC stub, 1 MHz) | **OK** — erase, blank check, write, verify, then CALIBRATE with VDD only (4000 mV set, VPP 0): IHRC value 0x80, measured 998 022 Hz for the 1 MHz target (−0.2 %), search ≈ 3.2 s; the result written into the stub, final verify passed; content CRC raw 0x39EA92C5 ≠ normalized 0x49EB88A3 (the finished stub is ignored by the normalized CRC, as specified). Total 4.6 s — SC-001 | 2026-11-26 |
+| SC-003: the IC clock against a frequency counter (1 MHz ± 1 %) | pending | |
+| ILRC and BandGap stubs | pending | |
+| SC-002: `copy --ihrc measure`, three copies within 1 %, master bit-identical | pending (needs more PFS154) | |
+
+## User story 4 — OTP (T034)
+
+Written from the document only: the OTP write block (data then address on PA4, CLK held high during 8 × 30 µs/30 µs
+programming pulses on PA4) and the GetID pass before every session are checked against the generator's traces
+(`otp12_write_block`, `otp12_fuse`, `otp22_write_block`, `otp22_fuse`) and the bit-level IC model
+(`test_engine_otp.c`). No OTP IC was available: **not confirmed on hardware.**
 
 ## Findings during bring-up
 
@@ -42,6 +60,6 @@ Results of the hardware steps of [quickstart.md](quickstart.md) (constitution VI
 - **Erase blocked by the VDD reading (2026-11-26).** The first `write` stopped before the first erase clock: VDD 3000 mV was
   read as 3100 mV (the deviation even changes sign: 2000 → 1970, 2500 → 2464, 3000 → 3100 mV) → `VDD_FAULT`. The user
   chose a temporary board workaround: the firmware for this board is built with `-DPDK_VDD_TOL_MV=300` (VDD settle check
-  ±300 mV instead of ±2 %); the fault itself stays open for the second board.
+  ±300 mV instead of ±2 %); the fault itself stays open for the second board. During calibration VDD 4000 mV was read as 3732 mV (−6.7 %).
 - **Diagnostics.** `pdkprog --trace` (protocol 1.1) was added during bring-up: every supply step with its measured value,
   enter/leave, raw IC answers.

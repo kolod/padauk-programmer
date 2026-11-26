@@ -72,7 +72,8 @@ void eng_leave(void)
     hal_power_off_all();
     if (was_open) {
         eng_ses.left_at_us = hal_time_us();
-        eng_ses.pause_us = ENG_PAUSE_LEAVE_US + (hv_op ? ENG_PAUSE_LEAVE_HV_US : 0u);
+        eng_ses.pause_us = ENG_PAUSE_LEAVE_US + (hv_op ? ENG_PAUSE_LEAVE_HV_US : 0u) +
+                           (eng_ses.mode == MODE_CALIB ? ENG_PAUSE_LEAVE_CALIB_US : 0u);
         trace_emit(TRACE_LEAVE, (uint8_t)eng_ses.mode, (uint16_t)(eng_ses.pause_us / 1000u), 0, 0);
     }
     eng_ses.state = SES_IDLE;
@@ -168,8 +169,6 @@ uint16_t chip_engine_read(const struct chip_info *chip, uint16_t addr, uint16_t 
     return PDK_OK;
 }
 
-/* ---------------------------------------------------------------- not yet implemented (later stories) */
-
 /* ---------------------------------------------------------------- erase (FLASH, §4.8) */
 
 uint16_t chip_engine_erase(const struct chip_info *chip, chip_poll_fn poll)
@@ -197,10 +196,11 @@ uint16_t chip_engine_erase(const struct chip_info *chip, chip_poll_fn poll)
 uint16_t chip_engine_write_block(const struct chip_info *chip, uint16_t addr, const uint16_t *words, uint8_t count,
                                  chip_poll_fn poll)
 {
-    if (!chip_can_write(chip) || !fam_is_flash(chip->family) || count != chip->write_block || count > 16)
-        return eng_fail(PDK_OP_UNSUPPORTED);   /* OTP writing: user story 4 */
+    /* OTP3_1 writing is not documented (free-pdk TODO): read-only, like the ICs the chip table gives no write voltages */
+    if (!chip_can_write(chip) || chip->family == CHIP_OTP3_1 || count != chip->write_block || count > 16)
+        return eng_fail(PDK_OP_UNSUPPORTED);
     uint16_t st;
-    if (!eng_continues(chip, MODE_WRITE)) {   /* consecutive blocks share one session (research R4) */
+    if (!eng_continues(chip, MODE_WRITE)) {   /* consecutive blocks share one session (research R4); OTP: GetID first */
         eng_leave();
         if ((st = open_session(chip, MODE_WRITE, CMD_WRITE, chip->vpp_cmd_write, chip->vdd_cmd_write, chip->vdd_write,
                                chip->vpp_write, POWER_PAUSE_HV_US, poll)) != PDK_OK)
@@ -213,27 +213,34 @@ uint16_t chip_engine_write_block(const struct chip_info *chip, uint16_t addr, co
     return PDK_OK;
 }
 
-uint16_t chip_engine_calibrate(const struct chip_info *chip, uint16_t site_addr, uint8_t kind, uint32_t target_hz,
-                               uint16_t mV, uint8_t *value, uint32_t *measured_hz, chip_poll_fn poll)
+/* ---------------------------------------------------------------- VDD only: calibration and RUN */
+
+uint16_t eng_supply(const struct chip_info *chip, ses_mode_t mode, uint16_t vdd_mV, chip_poll_fn poll)
 {
-    (void)chip, (void)site_addr, (void)kind, (void)target_hz, (void)mV, (void)poll;
-    *value = 0;
-    *measured_hz = 0;
-    return eng_fail(PDK_OP_UNSUPPORTED);
+    if (eng_ses.state != SES_IDLE)
+        eng_leave();
+    uint16_t st = wait_pause(poll);
+    if (st != PDK_OK)
+        return st;
+    hal_icp_idle();
+    eng_ses.chip = chip;
+    eng_ses.family = chip ? chip->family : 0;
+    eng_ses.mode = mode;
+    eng_ses.state = SES_OPEN;
+    if ((st = power_apply(PDK_RAIL_VDD, vdd_mV, POWER_PAUSE_READ_US, NULL)) != PDK_OK)   /* VPP stays 0 */
+        return eng_fail(st);
+    trace_emit(TRACE_ENTER, eng_ses.family, 0, vdd_mV, mode);
+    return PDK_OK;
 }
 
-uint16_t chip_engine_measure_freq(const struct chip_info *chip, uint16_t site_addr, uint8_t kind, uint8_t start_value,
-                                  uint16_t mV, uint32_t *hz, chip_poll_fn poll)
-{
-    (void)chip, (void)site_addr, (void)kind, (void)start_value, (void)mV, (void)poll;
-    *hz = 0;
-    return eng_fail(PDK_OP_UNSUPPORTED);
-}
-
+/* RUN (feature 001): VDD only, the programming lines released for the UART bridge (research R10: the pin limit). */
 uint16_t chip_engine_run_start(uint16_t vdd_mV)
 {
-    (void)vdd_mV;
-    return eng_fail(PDK_OP_UNSUPPORTED);
+    uint16_t limit = hal_icp_vdd_max_mV();
+    eng_leave();
+    if (limit && vdd_mV > limit)
+        return eng_fail(PDK_OP_UNSUPPORTED);
+    return eng_supply(NULL, MODE_RUN, vdd_mV, NULL);
 }
 
 void chip_engine_run_stop(void) { eng_leave(); }

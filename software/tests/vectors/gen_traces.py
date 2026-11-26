@@ -212,6 +212,28 @@ def write_block(t, c, aligned, words):
             for _ in range(4):
                 t.add("clock", min_ns=2000)
                 t.add("delay", min_us=2)
+    elif fam not in FLASH:
+        # OTP1_2 / OTP2_x: data then address on PA4 (forced to 0 after each send), +1 clock, 4 µs, then per group CLK
+        # held high with the programming pulses on PA4 (30 µs high / 30 µs low), CLK low, 4 µs, +1 clock, 4 µs; 25 µs
+        for v, bits in [(w, c["db"]) for w in words] + [(aligned, c["ab"])]:
+            t.add("send", data="PA4", clk="CLK", value=v, bits=bits)
+            t.add("mode", line="PA4", dir="out_low")
+        t.add("clock", min_ns=1000)
+        t.add("delay", min_us=4)
+        for _ in range(groups):
+            t.add("mode", line="CLK", dir="out_high")
+            for _ in range(clocks):
+                t.add("mode", line="PA4", dir="out_high")
+                t.add("delay", min_us=30)
+                t.add("mode", line="PA4", dir="out_low")
+                t.add("delay", min_us=30)
+            t.add("mode", line="CLK", dir="out_low")
+            t.add("delay", min_us=4)
+            t.add("clock", min_ns=1000)
+            t.add("delay", min_us=4)
+        t.add("delay", min_us=25)
+        t.add("delay", min_us=100)
+        return
     else:
         for w in words:
             t.add("send", data="DAT", clk="CLK", value=w, bits=c["db"])
@@ -230,14 +252,23 @@ def write_block(t, c, aligned, words):
 
 
 def write(name, addrs):
-    """§4.9 WRITE: enter at the write command voltages, command, ACK, hv (≥ 10 ms each), blocks, leave."""
+    """§4.9 WRITE: [OTP GetID pass at the write command voltages], enter at the write command voltages, command,
+    [FLASH ACK], hv (≥ 10 ms each), blocks, leave."""
     c = CHIPS[name]
     fam = c["fam"]
     vdd_c, vpp_c, vdd_h, vpp_h = c["wr"]
     t = Trace()
-    t.enter(fam, vpp_c, vdd_c)
+    gap = 0
+    if fam not in FLASH:
+        t.enter(fam, vpp_c, vdd_c)
+        t.command(fam, "write")
+        t.otp_id(fam, c["db"], reply=c["id"])
+        t.leave()
+        gap = PAUSE_LEAVE
+    t.enter(fam, vpp_c, vdd_c, gap)
     t.command(fam, "write")
-    t.ack(17 if fam == "FLASH_2" else 16, reply=c["id"])
+    if fam in FLASH:
+        t.ack(17 if fam == "FLASH_2" else 16, reply=c["id"])
     t.add("vdd", mV=vdd_h, min_us=10000)
     t.add("vpp", mV=vpp_h, min_us=10000)
     for a in addrs:
@@ -306,8 +337,11 @@ def traces():
     for name in ("PFS154", "PFS172"):
         fam = CHIPS[name]["fam"].lower().replace("_", "")
         out[f"{fam}_erase"] = dict(family=CHIPS[name]["fam"], chip=name, operation="erase", input={}, t=erase(name))
+    for name in ("PFS154", "PFS172", "PMS150C", "PMS152"):
+        fam = CHIPS[name]["fam"].lower().replace("_", "")
+        n = CHIPS[name]["blk"][0]
         out[f"{fam}_write_block"] = dict(family=CHIPS[name]["fam"], chip=name, operation="write",
-                                         input={"addrs": [0x40, 0x44]}, t=write(name, [0x40, 0x44]))
+                                         input={"addrs": [0x40, 0x40 + n]}, t=write(name, [0x40, 0x40 + n]))
         fuse = CHIPS[name]["words"] - CHIPS[name]["blk"][0]   # the block holding the fuse word
         out[f"{fam}_fuse"] = dict(family=CHIPS[name]["fam"], chip=name, operation="write",
                                   input={"addrs": [fuse]}, t=write(name, [fuse]))

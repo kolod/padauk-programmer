@@ -22,3 +22,6 @@ __pycache__/
 *.[Ss][Ll][Dd][Ll][Ff][Pp]
 *.[Ss][Ll][Dd][Bb][Ll][Kk]
 ~$*.SLD*
+
+# DipTrace backups
+~*.dchxml~

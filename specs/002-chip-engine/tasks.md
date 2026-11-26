@@ -110,13 +110,13 @@ half of the G474 HAL — needed by every story
 
 ### Tests for User Story 3
 
-- [ ] T026 [P] [US3] Add a fake calibration counter to `software/firmware/tests/fakes/fake_icp.c`: a configurable curve `SYSCLK(k)` (linear, flat = "deaf", broken = never reaching the target, none = no loop), the trim value advanced by `hal_icp_calib_pulses`, edge counts for a window from the curve, a PA0 level for BandGap that flips at a configured `k` (or is not driven)
-- [ ] T027 [P] [US3] Unit test `software/firmware/tests/test_engine_calib.c`: IHRC search picks the closest trim on a linear curve (and the reported frequency), ILRC steps of 0x10, BandGap first `k` with PA0 = 0 after ≥ 500 µs, SNAP_STANDARD picks the nearest standard frequency within 10 % else keeps `kk`, `measure_freq` without pulses and "no signal" after 1 s, FR-055 refusals (first reading outside ¼…4 → `CALIB_WRONG_SITE`, no response to steps → `CALIB_WRONG_SITE`, PA0 not driven → `CALIB_WRONG_SITE`, target unreachable → `CALIB_FAILED` with the best value), VDD above `hal_icp_vdd_max_mV` refused, windows split into ≤ 100 ms polled steps, cancel → `CANCELLED` + safe state
+- [X] T026 [P] [US3] Add a fake calibration counter to `software/firmware/tests/fakes/fake_icp.c`: a configurable curve `SYSCLK(k)` (linear, flat = "deaf", broken = never reaching the target, none = no loop), the trim value advanced by `hal_icp_calib_pulses`, edge counts for a window from the curve, a PA0 level for BandGap that flips at a configured `k` (or is not driven)
+- [X] T027 [P] [US3] Unit test `software/firmware/tests/test_engine_calib.c`: IHRC search picks the closest trim on a linear curve (and the reported frequency), ILRC steps of 0x10, BandGap first `k` with PA0 = 0 after ≥ 500 µs, SNAP_STANDARD picks the nearest standard frequency within 10 % else keeps `kk`, `measure_freq` without pulses and "no signal" after 1 s, FR-055 refusals (first reading outside ¼…4 → `CALIB_WRONG_SITE`, no response to steps → `CALIB_WRONG_SITE`, PA0 not driven → `CALIB_WRONG_SITE`, target unreachable → `CALIB_FAILED` with the best value), VDD above `hal_icp_vdd_max_mV` refused, windows split into ≤ 100 ms polled steps, cancel → `CANCELLED` + safe state
 
 ### Implementation for User Story 3
 
-- [ ] T028 [US3] Implement the calibration half of the G474 HAL in `software/firmware/platform/stm32g474/hal_g474_icp.c`: SPI3 slave (SCK = PB3 ← IC PA3, MISO = PC11 → IC PA4, MSB first, CPOL 0 / CPHA 0) with a DMA transmit buffer holding exactly `n` one-bits then zeros for `hal_icp_calib_pulses` (timeout when the IC does not clock them out), TIM2 external clock mode 1 on TI1 = PA15 counting PA3 edges for `hal_icp_calib_count` with the window timed by DWT, `hal_icp_calib_begin/end` restoring the lines to idle
-- [ ] T029 [US3] Implement `software/firmware/core/engine/calibrate.c`: `chip_engine_calibrate()` (VDD = the stub's mV via `power_apply`, VPP 0, ≥ 1 ms start-up, the window sizes of research R9, IHRC 1…0x9F step 1 closest to the target, ILRC 0x00…0xF0 step 0x10, BandGap 0x00…0xF0 step 0x10 reading PA0 after ≥ 500 µs, SNAP_STANDARD for the `0xFF0000kk` targets as in feature 001, the FR-055 plausibility / step-response / PA0-driven checks, `SYSCLK = edges × 7 / window`), `chip_engine_measure_freq()` (no pulses, start value from the loop, "no signal" → `CALIB_FAILED` after 1 s), and the VDD limit check against `hal_icp_vdd_max_mV()`
+- [X] T028 [US3] Implement the calibration half of the G474 HAL in `software/firmware/platform/stm32g474/hal_g474_icp.c`: SPI3 slave (SCK = PB3 ← IC PA3, MISO = PC11 → IC PA4, MSB first, CPOL 0 / CPHA 0) with a DMA transmit buffer holding exactly `n` one-bits then zeros for `hal_icp_calib_pulses` (timeout when the IC does not clock them out), TIM2 external clock mode 1 on TI1 = PA15 counting PA3 edges for `hal_icp_calib_count` with the window timed by DWT, `hal_icp_calib_begin/end` restoring the lines to idle
+- [X] T029 [US3] Implement `software/firmware/core/engine/calibrate.c`: `chip_engine_calibrate()` (VDD = the stub's mV via `power_apply`, VPP 0, ≥ 1 ms start-up, the window sizes of research R9, IHRC 1…0x9F step 1 closest to the target, ILRC 0x00…0xF0 step 0x10, BandGap 0x00…0xF0 step 0x10 reading PA0 after ≥ 500 µs, SNAP_STANDARD for the `0xFF0000kk` targets as in feature 001, the FR-055 plausibility / step-response / PA0-driven checks, `SYSCLK = edges × 7 / window`), `chip_engine_measure_freq()` (no pulses, start value from the loop, "no signal" → `CALIB_FAILED` after 1 s), and the VDD limit check against `hal_icp_vdd_max_mV()`
 - [ ] T030 [US3] Hardware validation per quickstart §6 with PFS154s: IHRC 8 MHz against a frequency counter (SC-003), ILRC and BandGap stubs, `copy --ihrc measure` with three copies within 1 % and the master bit-identical (SC-002), and SC-001 timing of a full `write` with the IHRC stub; record in `specs/002-chip-engine/hw-validation.md`
 
 **Checkpoint**: calibrated programming and copying work on real silicon
@@ -133,13 +133,13 @@ pipeline; on hardware when a PMS150C is available
 
 ### Tests for User Story 4
 
-- [ ] T031 [P] [US4] Generate the OTP1_2 and OTP2_2 write_block and fuse-write traces in `software/tests/vectors/gen_traces.py` (GetID pass first; data then address on PA4; +1 clock; 4 µs; CLK held high; 8 × (PA4 30 µs high / 30 µs low); CLK low; 4 µs; +1 clock; 4 µs; 25 µs) and commit them; extend `software/firmware/tests/test_engine_trace.c` with these cases
-- [ ] T032 [P] [US4] Functional test `software/firmware/tests/test_engine_otp.c` on `fake_icp_ic`: PMS150C and PMS152 write + read back, bits never return to 1, GetID before every session (a swapped IC is refused before the write command), erase refused without any voltage, a write interrupted after N blocks then finished by a second session
+- [X] T031 [P] [US4] Generate the OTP1_2 and OTP2_2 write_block and fuse-write traces in `software/tests/vectors/gen_traces.py` (GetID pass first; data then address on PA4; +1 clock; 4 µs; CLK held high; 8 × (PA4 30 µs high / 30 µs low); CLK low; 4 µs; +1 clock; 4 µs; 25 µs) and commit them; extend `software/firmware/tests/test_engine_trace.c` with these cases
+- [X] T032 [P] [US4] Functional test `software/firmware/tests/test_engine_otp.c` on `fake_icp_ic`: PMS150C and PMS152 write + read back, bits never return to 1, GetID before every session (a swapped IC is refused before the write command), erase refused without any voltage, a write interrupted after N blocks then finished by a second session
 
 ### Implementation for User Story 4
 
-- [ ] T033 [US4] Implement the OTP write-block sequence (OTP1_2 / OTP2_1 / OTP2_2) in `software/firmware/core/engine/family.c` and the GetID-guarded write session in `software/firmware/core/engine/engine.c`; OTP3_1 write → `OP_UNSUPPORTED` (read-only, as the chip table says)
-- [ ] T034 [US4] Document the OTP families as "implemented, trace- and model-tested, not confirmed on hardware" in `specs/002-chip-engine/hw-validation.md` and in `software/firmware/README.md` (engine section)
+- [X] T033 [US4] Implement the OTP write-block sequence (OTP1_2 / OTP2_1 / OTP2_2) in `software/firmware/core/engine/family.c` and the GetID-guarded write session in `software/firmware/core/engine/engine.c`; OTP3_1 write → `OP_UNSUPPORTED` (read-only, as the chip table says)
+- [X] T034 [US4] Document the OTP families as "implemented, trace- and model-tested, not confirmed on hardware" in `specs/002-chip-engine/hw-validation.md` and in `software/firmware/README.md` (engine section)
 
 **Checkpoint**: the OTP path is complete in software and waits for a real IC
 
@@ -151,8 +151,8 @@ pipeline; on hardware when a PMS150C is available
 
 **Independent Test**: `pdkprog start -r 3.3` with a firmware that sends `U` + text (quickstart §7)
 
-- [ ] T035 [P] [US5] Unit test `software/firmware/tests/test_engine_run.c`: `chip_engine_run_start(mV)` leaves any open session, applies VDD only (VPP 0) through `power_apply`, leaves the ICP lines idle, refuses VDD above `hal_icp_vdd_max_mV()`; `chip_engine_run_stop()` → safe state
-- [ ] T036 [US5] Implement `chip_engine_run_start()` / `chip_engine_run_stop()` in `software/firmware/core/engine/engine.c` (session mode RUN), consistent with `hal_uart_vdd_max_mV()` of feature 001
+- [X] T035 [P] [US5] Unit test `software/firmware/tests/test_engine_run.c`: `chip_engine_run_start(mV)` leaves any open session, applies VDD only (VPP 0) through `power_apply`, leaves the ICP lines idle, refuses VDD above `hal_icp_vdd_max_mV()`; `chip_engine_run_stop()` → safe state
+- [X] T036 [US5] Implement `chip_engine_run_start()` / `chip_engine_run_stop()` in `software/firmware/core/engine/engine.c` (session mode RUN), consistent with `hal_uart_vdd_max_mV()` of feature 001
 - [ ] T037 [US5] Hardware validation per quickstart §7 (bridge text and echo, VDD off on Esc and on USB unplug); record in `specs/002-chip-engine/hw-validation.md`
 
 ---
@@ -166,10 +166,10 @@ from the project together with the stub engine (constitution 1.5.0), so the form
 
 ## Phase 9: Polish & cross-cutting concerns
 
-- [ ] T041 [P] Update `software/firmware/platform/stm32g474/README.md` (the ICP lines, SPI3, TIM2/PA15 and TIM5 are now used; remove "not yet used by the firmware") and `software/firmware/README.md` (the engine, the confirmed families table, the trace generator)
-- [ ] T042 [P] Record the engine notes in the internal-interface contract `specs/001-pc-programmer-protocol/contracts/chip-engine.md` (session continuation across primitives, the lazy post-leave pause, the VDD limit for IC-driven lines) and regenerate `docs/protocol.md` with `python docs/gen_protocol.py`
-- [ ] T043 [P] Remove the "chip engine is a stub" notes from `specs/001-pc-programmer-protocol/plan.md` / `research.md` R19 references where they now point to this feature's results, and mark SC-004 / SC-009 of feature 001 as confirmed (or not) on hardware with a link to `specs/002-chip-engine/hw-validation.md`
-- [ ] T044 Run the complete validation: `ctest`, `pytest software/client/tests --sim build/host/pdk-sim`, `gen_traces.py --check`, `gen_protocol.py --check`, the G474 build with its size check; fix anything red
+- [X] T041 [P] Update `software/firmware/platform/stm32g474/README.md` (the ICP lines, SPI3, TIM2/PA15 and TIM5 are now used; remove "not yet used by the firmware") and `software/firmware/README.md` (the engine, the confirmed families table, the trace generator)
+- [X] T042 [P] Record the engine notes in the internal-interface contract `specs/001-pc-programmer-protocol/contracts/chip-engine.md` (session continuation across primitives, the lazy post-leave pause, the VDD limit for IC-driven lines) and regenerate `docs/protocol.md` with `python docs/gen_protocol.py`
+- [X] T043 [P] Remove the "chip engine is a stub" notes from `specs/001-pc-programmer-protocol/plan.md` / `research.md` R19 references where they now point to this feature's results, and mark SC-004 / SC-009 of feature 001 as confirmed (or not) on hardware with a link to `specs/002-chip-engine/hw-validation.md`
+- [X] T044 Run the complete validation: `ctest`, `pytest software/client/tests --sim build/host/pdk-sim`, `gen_traces.py --check`, `gen_protocol.py --check`, the G474 build with its size check; fix anything red
 - [ ] T045 Write `specs/002-chip-engine/hw-validation.md` as the final record: per success criterion (SC-001 … SC-008) the measured result, the instrument, and the date; per family "confirmed on hardware" / "trace- and model-tested only"
 
 ---

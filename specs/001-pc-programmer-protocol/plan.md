@@ -107,10 +107,8 @@ software/
 │   │   └── chips/                    # chip_table.c, calib_sites.c, calib_footprint.c, serial_sites.c
 │   ├── hal/                          # hal_flash.h, hal_crc.h, hal_transport.h, hal_power.h, hal_entropy.h, hal_ui.h, chip_engine.h
 │   ├── platform/
-│   │   ├── common/                   # shared by STM32: USB CDC (TinyUSB), the chip_engine stub
-│   │   ├── stm32f072/                # debug target: startup, linker (flash layout), LL, TinyUSB CDC, hal_*.c
-│   │   ├── stm32g474/                # candidate: WeAct STM32G474 (on-chip DAC/ADC, packages in bank 2 of the internal flash)
-│   │   ├── <main-mcu>/               # the primary MCU — the next specification
+│   │   ├── common/                   # shared by STM32: USB CDC (TinyUSB), the RUN USART bridge
+│   │   ├── stm32g474/                # the programmer: WeAct STM32G474 (on-chip DAC/ADC, packages in bank 2 of the internal flash)
 │   │   └── host/                     # a mock flash with a "power cut", a power model (with faults), an IC model, pdk-sim (stdio/TCP)
 │   └── tests/                        # core unit tests (CTest)
 ├── client/
@@ -132,8 +130,9 @@ docs/
 
 **Structure Decision**: the firmware and the client are separate subprojects in `software/`; shared test vectors in
 `software/tests/vectors/` guarantee that the C and Python implementations of frames and the package are bit-compatible.
-The IC engine plugs in through `hal/chip_engine.h`: in this feature — a model for the simulator and a
-stub for STM32; the real PADAUK algorithms are feature `002-chip-engine` (R14).
+The IC engine plugs in through `hal/chip_engine.h`: in this feature — a model for the simulator; the real PADAUK
+algorithms (`core/engine`, used on the STM32G474) are feature `002-chip-engine` (R14). The F072 debug target and its
+engine stub were removed later (constitution 1.5.0).
 
 ## Complexity Tracking
 

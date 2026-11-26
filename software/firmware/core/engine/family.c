@@ -123,7 +123,7 @@ uint16_t fam_read_word(const struct chip_info *chip, uint16_t addr)
 
 /* §4.9 WriteBlock. FLASH_1 (PFS154, PFS173): data words, address, DAT input, 4 µs, groups × (clocks × 15 µs / 15 µs,
  * one extra clock, 4 µs), DAT output, 25 µs. FLASH_2 (PFS172): address first, then the data words, DAT input,
- * groups × (an extra clock, 2 µs, clocks × 40 µs / 40 µs, 4 × 2 µs / 2 µs), DAT output, 25 µs. */
+ * groups × (an extra clock, 2 µs, clocks × 40 µs / 40 µs, 4 × 2 µs / 2 µs), DAT output, 25 µs. OTP: see below. */
 void fam_write_block(const struct chip_info *chip, uint16_t aligned_addr, const uint16_t *words)
 {
     uint8_t n = chip->write_block, groups = chip->write_groups ? chip->write_groups : 1u;
@@ -144,6 +144,33 @@ void fam_write_block(const struct chip_info *chip, uint16_t aligned_addr, const 
                 hal_icp_delay_ns(2000u);
             }
         }
+    } else if (!fam_is_flash(chip->family)) {
+        /* OTP1_2 / OTP2_1 / OTP2_2: data words then the address on PA4 (PA4 back to 0 after each send), one extra
+         * clock, 4 µs, then per group CLK held high while PA4 carries the programming pulses (30 µs high / 30 µs low),
+         * CLK low, 4 µs, one extra clock, 4 µs */
+        for (uint8_t i = 0; i < n; i++) {
+            hal_icp_send(ICP_PA4, ICP_CLK, words[i], chip->code_bits);
+            hal_icp_mode(ICP_PA4, ICP_OUT_LOW);
+        }
+        hal_icp_send(ICP_PA4, ICP_CLK, aligned_addr, chip->addr_bits);
+        hal_icp_mode(ICP_PA4, ICP_OUT_LOW);
+        hal_icp_clock(ENG_BIT_CLOCK_NS);
+        hal_icp_delay_ns(4000u);
+        for (uint8_t g = 0; g < groups; g++) {
+            hal_icp_mode(ICP_CLK, ICP_OUT_HIGH);
+            for (uint8_t c = 0; c < chip->write_clocks; c++) {
+                hal_icp_mode(ICP_PA4, ICP_OUT_HIGH);
+                hal_icp_delay_ns(ENG_OTP_PULSE_NS);
+                hal_icp_mode(ICP_PA4, ICP_OUT_LOW);
+                hal_icp_delay_ns(ENG_OTP_PULSE_NS);
+            }
+            hal_icp_mode(ICP_CLK, ICP_OUT_LOW);
+            hal_icp_delay_ns(4000u);
+            hal_icp_clock(ENG_BIT_CLOCK_NS);
+            hal_icp_delay_ns(4000u);
+        }
+        hal_icp_delay_ns(25000u);
+        return;
     } else {
         for (uint8_t i = 0; i < n; i++)
             hal_icp_send(ICP_DAT, ICP_CLK, words[i], chip->code_bits);
