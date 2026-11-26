@@ -1,4 +1,4 @@
-# Feature Specification: Протокол обміну PC ⇄ програматор
+# Feature Specification: PC ⇄ programmer exchange protocol
 
 **Feature Branch**: `001-pc-programmer-protocol`
 
@@ -6,667 +6,665 @@
 
 **Status**: Draft
 
-**Input**: User description: "Протокол обміну PC ⇄ програматор (USB CDC). Треба визначити: які дані
-передаються з PC на програматор (тип/ідентифікатор МК, образ прошивки, fuse, параметри калібрування,
-серійний номер, опції операцій тощо), протокол обміну (команди, кадри), як програматор відповідає
-(результати, коди помилок, прогрес довгих операцій) з урахуванням того, що всі знання про алгоритм
-роботи з конкретним чипом тепер знаходяться у програматорі, а клієнт на PC тонкий. Дані повинні
-передаватися без помилок: потрібен контроль цілісності кадрів, а також окремо — контроль цілісності
-образу прошивки та метаданих (від PC до збереження у пам'яті програматора і при автономному записі)."
+**Input**: User description: "The PC ⇄ programmer exchange protocol (USB CDC). It must define: what data
+is sent from the PC to the programmer (MCU type/identifier, firmware image, fuse, calibration parameters,
+serial number, operation options, etc.), the exchange protocol (commands, frames), and how the programmer replies
+(results, error codes, progress of long operations), given that all knowledge of how to work with a
+specific chip now lives in the programmer and the PC client is thin. Data must be
+transferred without errors: frame integrity checking is needed, and separately — integrity checking of the firmware
+image and metadata (from the PC until it is stored in the programmer's memory and during standalone programming)."
 
 ## Clarifications
 
 ### Session 2026-10-09
 
-- Q: Скільки пакетів прошивки програматор зберігає одночасно? → A: Один активний пакет; друге місце
-  лише для атомарної заміни (FR-016).
-- Q: Чи підтримувати оригінальний протокол Easy PDK 1.3 для `easypdkprog`? → A: Ні. Можливий окремий
-  CLI-клієнт, що імітує `easypdkprog`, але працює через новий протокол (FR-030).
-- Q: Чи можна при копіюванні відновити індивідуальне калібрування копій, якщо ціль еталона невідома?
-  → A: Так. Сліди калібрування в дампі замінюються калібрувальними вставками; ціль — виміряти на
-  FLASH-еталоні (тимчасово перезаписавши його й потім відновивши), задати з PC, округлити до
-  стандартної частоти або явно перенести значення еталона. BandGap відновлюється завжди (FR-031…FR-036).
-- Q: Чи дозволяти запис OTP без перевірки чистоти (`--noblankchk`)? → A: Ні (принцип III). Для
-  дописування окремих нулів у вже записану мікросхему — окрема операція дописування з перевіркою,
-  що всі зміни лише обнуляють біти (FR-037, FR-038).
-- Q: Як не дописати не ту мікросхему? → A: Дописування обов'язково перевіряє контрольну суму всієї
-  користувацької пам'яті (точну або нормалізовану без калібрувань і серійних номерів) проти очікуваної:
-  заданої клієнтом або обчисленої з активного пакета (FR-039).
-- Q: Чи можна пропускати окремі калібрування й як поводитися з OTP? → A: Режими копіювання — окремо для
-  IHRC/ILRC/BG (FR-042); при невдалому калібруванні нічого не записувати далі, сигнал
-  неуспіху, з PC — опційне примусове завершення (FR-043); перекалібрування завершеної OTP не
-  підтримується (FR-045).
-- Q: Чи потрібні прапорці пропуску калібрування? → A: Ні. Калібрується кожна вставка, знайдена в
-  прошивці; не потрібне калібрування — не ставити макрос. Для OTP кожне калібрування — це один повний
-  запис (з вимірювальним циклом на місці вставки) і один перезапис самої вставки (FR-006).
-- Q: Як поводитися з обривами? → A: Обрив USB не перериває операцію (дані завантажені до старту),
-  крім запуску з обміном даними (FR-023); після обриву живлення — повторна спроба, якщо записане
-  сумісне з образом (FR-044).
-- Q: Що робити, якщо в еталоні замість сліду калібрування — вимірювальний цикл? → A: Локально — не
-  копіювати, у сховище нічого не писати, сигнал неуспіху; з PC — запит користувачу: скасувати або задати
-  ціль калібрування й повторити копіювання з дозволом (FR-051).
-- Q: Як перевіряти мікросхему з каліброваними вставками й серійним номером? → A: Верифікація враховує
-  вставки (FR-047); після калібрування й fuse — фінальна точна перевірка всієї пам'яті (FR-048); CRC пакета
-  перевіряється й під час запису та перед fuse (FR-049); пакет без калібрувальних вставок дає попередження
+- Q: How many firmware packages does the programmer store at once? → A: One active package; the second place
+  is only for atomic replacement (FR-016).
+- Q: Should the original Easy PDK 1.3 protocol be supported for `easypdkprog`? → A: No. A separate
+  CLI client that imitates `easypdkprog` but works through the new protocol is possible (FR-030).
+- Q: Can the individual calibration of the copies be restored when copying, if the reference's target is unknown?
+  → A: Yes. Calibration traces in the dump are replaced by calibration stubs; the target is either measured on a
+  FLASH reference (temporarily rewriting it and then restoring it), given from the PC, rounded to a
+  standard frequency, or the reference's value is explicitly carried over. BandGap is always restored (FR-031…FR-036).
+- Q: Should OTP programming without a blank check (`--noblankchk`) be allowed? → A: No (principle III). For
+  appending individual zeros to an already programmed IC there is a separate append operation with a check
+  that all changes only clear bits (FR-037, FR-038).
+- Q: How do we avoid appending to the wrong IC? → A: The append mandatorily checks the checksum of all
+  user memory (exact, or normalized without calibrations and serial numbers) against the expected one:
+  given by the client or computed from the active package (FR-039).
+- Q: Can individual calibrations be skipped, and how do we treat OTP? → A: The copy modes are separate for
+  IHRC/ILRC/BG (FR-042); on a failed calibration nothing more is written, a failure signal,
+  and from a PC an optional forced finish (FR-043); recalibrating a finished OTP is not
+  supported (FR-045).
+- Q: Are calibration-skip flags needed? → A: No. Every stub found in the firmware is calibrated; if calibration is not needed, do not place
+  the macro. For OTP each calibration is one full write (with a measurement loop in place of the stub) and
+  one rewrite of the stub itself (FR-006).
+- Q: How do we treat drops? → A: A USB drop does not interrupt an operation (the data is uploaded before the start),
+  except a run with data exchange (FR-023); after a power cut — a retry if what was written is
+  compatible with the image (FR-044).
+- Q: What if the reference has a measurement loop instead of a calibration trace? → A: Locally — do not
+  copy, write nothing to storage, a failure signal; from a PC — ask the user: cancel or set the
+  calibration target and repeat the copy with permission (FR-051).
+- Q: How do we verify an IC with calibrated stubs and a serial number? → A: Verification takes stubs into account
+  (FR-047); after calibration and the fuse — a final exact check of all memory (FR-048); the package CRC
+  is also checked during programming and before the fuse (FR-049); a package without calibration stubs gives a warning
   (FR-050).
-- Q: Повторна спроба — у тій самій сесії? → A: Ні: пізніше або іншим програматором з тим самим пакетом.
-  FLASH/MTP — запис наново; OTP — перевірка, чи можна дописати нулі; уже записаний серійний номер
-  береться з мікросхеми (FR-044).
-- Q: Як формувати серійні номери? → A: Випадкове 64-бітне число для всіх режимів (FR-046). Копіювання
-  серійний номер не обробляє: локально — дублікат, з PC — пошук і заміна на користувачі (FR-052).
-- Q: Калібрування чужого формату в еталоні? → A: Копіювати як є з попередженням (FR-053).
-- Q: Як чекати встановлення VDD/VPP після зміни? → A: Не менше документованої паузи free-pdk **і** доки
-  виміряна напруга в допуску й стабільна; тайм-аут → помилка напруги живлення/програмування (FR-040).
-- Q: Допуск і тайм-аут встановлення напруги? → A: ±2 % або ±30 мВ (більше з двох), тайм-аут 20 мс (FR-040, SC-011).
-- Q: Що робити, якщо під час самоперевірки в панельці мікросхема? → A: Спершу визначення мікросхеми на
-  низьких напругах; якщо відповіла — відмова з окремим кодом; клієнт додатково просить підтвердити
-  порожню панельку (FR-041).
-- Q: Коли запускається самоперевірка? → A: Автоматично при кожному увімкненні та за командою з PC;
-  при невдачі автономний запис блокується (FR-041).
-- Q: Що, якщо при увімкненні мікросхема вже підключена? → A: Блокувати автономний запис, доки
-  самоперевірка не пройде; локальний запуск у цьому стані повторює самоперевірку. Типовий сценарій — програмування
-  в схемі через pogo-контакти: програматор увімкнено й перевірено, потім оператор або автомат на
-  конвеєрі притискає його до плати й запускає запис (FR-041).
-- Q: Які органи керування має автономний режим? → A: Поки не визначено; кількість кнопок і перемикачів
-  не обмежується оригіналом. Протокол MUST NOT залежати від конкретних органів керування: автономні дії
-  описуються як «локальний запуск» певної операції (`source` = локальний), а відображення дій на кнопки,
-  перемикачі чи сигнали конвеєра визначається окремою фічею.
-- Q: Що з локальних функцій реалізується зараз, якщо інтерфейс визначиться пізніше? → A: Ядро реалізує
-  повний набір локальних дій і станів індикації (FR-054); будь-який майбутній інтерфейс лише відображає
-  їх на свої органи керування. На еталонній платі тимчасово — одна кнопка → запис.
+- Q: Is the retry in the same session? → A: No: later or with another programmer with the same package.
+  FLASH/MTP — write again; OTP — a check whether zeros can be appended; an already written serial number
+  is taken from the IC (FR-044).
+- Q: How do we form serial numbers? → A: A random 64-bit number for all modes (FR-046). Copying does not
+  process the serial number: locally — a duplicate, from a PC — search and replace on the user's side (FR-052).
+- Q: Calibration in a foreign format in the reference? → A: Copy as is with a warning (FR-053).
+- Q: How do we wait for VDD/VPP to settle after a change? → A: At least the documented free-pdk pause **and** until the
+  measured voltage is within tolerance and stable; a timeout → a supply/programming voltage error (FR-040).
+- Q: The tolerance and timeout for voltage settling? → A: ±2 % or ±30 mV (whichever is larger), a 20 ms timeout (FR-040, SC-011).
+- Q: What if there is an IC in the socket during the self-test? → A: First identify the IC at
+  low voltages; if it responded — a refusal with a separate code; the client additionally asks the user to confirm
+  an empty socket (FR-041).
+- Q: When does the self-test run? → A: Automatically at every power-up and on a command from a PC;
+  on failure standalone programming is blocked (FR-041).
+- Q: What if an IC is already connected at power-up? → A: Block standalone programming until the
+  self-test passes; a local start in this state repeats the self-test. A typical scenario — in-circuit
+  programming through pogo contacts: the programmer is powered on and checked, then the operator or a handler on the
+  line presses it to the board and starts programming (FR-041).
+- Q: What controls does standalone mode have? → A: Not defined yet; the number of buttons and switches
+  is not limited to the original's. The protocol MUST NOT depend on specific controls: standalone actions
+  are described as a "local start" of a given operation (`source` = local), and the mapping of actions to buttons,
+  switches, or handler signals is defined by a separate feature.
+- Q: Which local functions are implemented now, if the interface is defined later? → A: The core implements the
+  full set of local actions and indication states (FR-054); any future interface only maps
+  them to its controls. On the reference board, temporarily — one button → programming.
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Завантаження пакета прошивки в програматор (Priority: P1)
+### User Story 1 - Uploading a firmware package to the programmer (Priority: P1)
 
-Розробник вибирає у клієнті на PC файл прошивки, тип мікросхеми, fuse та опції і завантажує все це
-в програматор одним «пакетом прошивки». Програматор перевіряє, що пакет дійшов без пошкоджень і
-сумісний із вибраною мікросхемою, зберігає його в енергонезалежній пам'яті й підтверджує
-збереження. Клієнт порівнює підтверджену програматором контрольну суму зі своєю і показує
-користувачу, що в програматорі саме той образ, який він обрав.
+A developer picks a firmware file, an IC type, a fuse, and options in the PC client and uploads all of this
+to the programmer as a single "firmware package". The programmer checks that the package arrived undamaged and is
+compatible with the chosen IC, stores it in non-volatile memory, and confirms the
+storage. The client compares the checksum confirmed by the programmer with its own and shows the
+user that the programmer holds exactly the image they chose.
 
-**Why this priority**: без надійно завантаженого пакета неможливі ані запис із PC, ані автономна
-робота — це фундамент усіх інших сценаріїв.
+**Why this priority**: without a reliably uploaded package neither programming from the PC nor standalone
+operation is possible — it is the foundation of all other scenarios.
 
-**Independent Test**: завантажити пакет, від'єднати програматор, підключити знову, прочитати
-метадані й контрольну суму збереженого пакета — вони мають збігтися з тими, що обчислив клієнт.
+**Independent Test**: upload a package, disconnect the programmer, reconnect it, and read the
+metadata and checksum of the stored package — they must match the ones the client computed.
 
 **Acceptance Scenarios**:
 
-1. **Given** програматор підключений і в ньому немає пакета, **When** клієнт завантажує коректний
-   пакет для PFS154, **Then** програматор зберігає його і повертає підтвердження з контрольною
-   сумою, що збігається з обчисленою клієнтом.
-2. **Given** під час передачі частина даних пошкоджена, **When** програматор отримує пошкоджений
-   фрагмент, **Then** він відхиляє цей фрагмент, клієнт передає його повторно, і зрештою пакет
-   зберігається без помилок.
-3. **Given** пакет призначений для мікросхеми, яку програматор не підтримує, або образ більший за
-   пам'ять мікросхеми, **When** клієнт завершує передачу, **Then** програматор відхиляє пакет із
-   конкретним кодом помилки, а раніше збережений пакет лишається незмінним.
-4. **Given** зв'язок обірвався посеред передачі нового пакета, **When** програматор знову
-   підключено, **Then** у пам'яті лишився попередній цілісний пакет (або порожньо, якщо його не
-   було), а не частково записаний новий.
+1. **Given** the programmer is connected and holds no package, **When** the client uploads a valid
+   package for a PFS154, **Then** the programmer stores it and returns a confirmation with a checksum
+   that matches the one computed by the client.
+2. **Given** part of the data is corrupted in transit, **When** the programmer receives the corrupted
+   fragment, **Then** it rejects that fragment, the client resends it, and in the end the package is
+   stored without errors.
+3. **Given** the package is for an IC the programmer does not support, or the image is larger than the
+   IC's memory, **When** the client finishes the transfer, **Then** the programmer rejects the package with a
+   specific error code, and the previously stored package stays unchanged.
+4. **Given** the connection dropped in the middle of transferring a new package, **When** the programmer is
+   reconnected, **Then** the memory holds the previous intact package (or is empty if there was none), not a partially
+   written new one.
 
 ---
 
-### User Story 2 - Запис мікросхеми з PC з прогресом і результатом (Priority: P1)
+### User Story 2 - Programming an IC from the PC with progress and a result (Priority: P1)
 
-Користувач вставляє мікросхему й натискає «Записати» в клієнті. Клієнт лише запускає операцію;
-програматор сам визначає й виконує всі кроки для цієї мікросхеми: перевірку ID, стирання (для
-FLASH), перевірку на чистоту, запис, верифікацію, калібрування, серійний номер, fuse. Під час
-роботи клієнт показує поточний етап і відсоток виконання, а наприкінці — підсумок: успіх або
-конкретна причина невдачі, адресу розбіжності, результати калібрування, записаний серійний номер.
+The user inserts an IC and presses "Program" in the client. The client only starts the operation;
+the programmer itself determines and performs all the steps for that IC: the ID check, erase (for
+FLASH), blank check, write, verify, calibration, serial number, fuse. While it works,
+the client shows the current stage and the percent complete, and at the end — a summary: success or a
+specific reason for failure, the address of a mismatch, the calibration results, and the serial number written.
 
-**Why this priority**: головний сценарій використання, і на ньому перевіряється, що вся логіка
-роботи з мікросхемою справді живе в програматорі.
+**Why this priority**: the main usage scenario, and it verifies that all the logic of
+working with the IC really lives in the programmer.
 
-**Independent Test**: записати PFS154 із клієнта, у якого немає жодних даних про мікросхеми, і
-переконатися, що мікросхема працює, а клієнт показав усі етапи й підсумок.
+**Independent Test**: program a PFS154 from a client that has no data about ICs at all, and
+make sure the IC works and the client showed all stages and the summary.
 
 **Acceptance Scenarios**:
 
-1. **Given** у програматорі збережено пакет і вставлено чисту мікросхему потрібного типу,
-   **When** клієнт запускає запис, **Then** програматор надсилає події прогресу з назвою етапу й
-   відсотком і завершує підсумком «успіх» з результатами калібрування та серійним номером.
-2. **Given** вставлено мікросхему іншого типу, **When** запускається запис, **Then** операція
-   зупиняється до подачі програмувальних напруг із кодом «невідповідність ID» і фактичним ID.
-3. **Given** OTP-мікросхема вже записана, **When** запускається запис, **Then** операція
-   зупиняється на етапі перевірки чистоти з відповідним кодом, мікросхема не змінюється.
-4. **Given** триває запис, **When** клієнт надсилає «скасувати», **Then** програматор безпечно
-   завершує операцію (знімає напруги) і повідомляє, що операцію скасовано, та на якому етапі.
-5. **Given** триває операція, **When** клієнт надсилає іншу команду, що потребує мікросхеми,
-   **Then** програматор відповідає «зайнято», не перериваючи поточну операцію.
-6. **Given** вставлено записану OTP-мікросхему, **When** клієнт дописує слова, що лише обнуляють
-   біти, **Then** програматор записує й верифікує тільки ці слова; **When** хоча б одне слово
-   потребує 0→1, **Then** нічого не записується, а підсумок вказує адресу конфлікту.
-7. **Given** клієнт передав очікувану контрольну суму прошивки, а в панельці мікросхема з іншою
-   програмою, **When** запускається дописування, **Then** програматор нічого не записує й повертає
-   фактичні контрольні суми мікросхеми.
-8. **Given** триває запис, **When** USB-з'єднання обривається (програматор живиться далі), **Then**
-   запис завершується так само, як без обриву, а після повторного підключення клієнт отримує підсумок.
-9. **Given** запис OTP-мікросхеми перервано вимкненням живлення, **When** ту саму мікросхему записують
-   повторно тим самим пакетом, **Then** програматор перевіряє сумісність записаного з образом, дописує
-   решту й завершує калібрування; підсумок позначає повторну спробу.
-10. **Given** калібрування не вдалося, **When** запис завершується, **Then** програматор повідомляє
-    невдачу з найкращим знайденим значенням і нічого не записує після вимірювального циклу; після
-    усунення причини повторний запис тієї самої мікросхеми завершує калібрування.
+1. **Given** a package is stored in the programmer and a blank IC of the right type is inserted,
+   **When** the client starts programming, **Then** the programmer sends progress events with the stage name and
+   percent and finishes with a "success" summary with the calibration results and the serial number.
+2. **Given** an IC of a different type is inserted, **When** programming starts, **Then** the operation
+   stops before the programming voltages are applied with an "ID mismatch" code and the actual ID.
+3. **Given** an OTP IC is already programmed, **When** programming starts, **Then** the operation
+   stops at the blank-check stage with the corresponding code, and the IC is not changed.
+4. **Given** programming is in progress, **When** the client sends "cancel", **Then** the programmer safely
+   ends the operation (removes the voltages) and reports that the operation was cancelled and at which stage.
+5. **Given** an operation is in progress, **When** the client sends another command that needs the IC,
+   **Then** the programmer answers "busy" without interrupting the current operation.
+6. **Given** a programmed OTP IC is inserted, **When** the client appends words that only clear
+   bits, **Then** the programmer writes and verifies only those words; **When** at least one word
+   needs 0→1, **Then** nothing is written, and the summary shows the address of the conflict.
+7. **Given** the client passed the expected firmware checksum, and the socket holds an IC with a different
+   program, **When** an append starts, **Then** the programmer writes nothing and returns the
+   IC's actual checksums.
+8. **Given** programming is in progress, **When** the USB connection drops (the programmer stays powered), **Then**
+   programming finishes the same as without the drop, and after reconnecting the client receives the summary.
+9. **Given** programming of an OTP IC was interrupted by a power cut, **When** the same IC is programmed
+   again with the same package, **Then** the programmer checks that what was written is compatible with the image, appends the
+   rest, and finishes the calibration; the summary marks a retry.
+10. **Given** calibration failed, **When** programming ends, **Then** the programmer reports the
+    failure with the best value found and writes nothing after the measurement loop; after the
+    cause is eliminated, programming the same IC again finishes the calibration.
 
 ---
 
-### User Story 3 - Автономний запис з перевіркою цілісності збереженого пакета (Priority: P2)
+### User Story 3 - Standalone programming with an integrity check of the stored package (Priority: P2)
 
-Оператор без PC підключає мікросхему й запускає запис локально (органом керування програматора або сигналом автомата). Перед кожним записом програматор
-перевіряє цілісність збереженого пакета та метаданих; пошкоджений пакет ніколи не записується в
-мікросхему. Якщо прошивка має вставку серійного номера, кожна мікросхема отримує власний випадковий
-64-бітний номер. Коли PC підключено пізніше, клієнт може прочитати статистику автономної роботи.
+An operator without a PC connects an IC and starts programming locally (with a programmer control or a handler signal). Before every write the programmer
+checks the integrity of the stored package and metadata; a corrupted package is never written to the
+IC. If the firmware has a serial-number stub, each IC receives its own random
+64-bit number. When the PC is connected later, the client can read the standalone operation statistics.
 
-**Why this priority**: автономність — ключова відмінність продукту, але вона спирається на
-P1 (наявність цілісного пакета).
+**Why this priority**: standalone operation is a key differentiator of the product, but it relies on
+P1 (the presence of an intact package).
 
-**Independent Test**: навмисно пошкодити збережений пакет (тестовою командою або тестовою
-прошивкою), виконати локальний запуск — запис не має початися, індикатор має показати помилку цілісності.
+**Independent Test**: deliberately corrupt the stored package (with a test command or a test
+firmware), do a local start — programming must not start, and the indicator must show an integrity error.
 
 **Acceptance Scenarios**:
 
-1. **Given** збережено цілісний пакет із вставкою серійного номера, **When** оператор записує три
-   мікросхеми поспіль (з вимкненням живлення між ними), **Then** вони отримують три різні випадкові
-   серійні номери.
-2. **Given** збережений пакет пошкоджено, **When** оператор виконує локальний запуск, **Then** запис не
-   починається, напруги не подаються, і локальна індикація показує помилку цілісності.
-3. **Given** після автономної роботи PC знову підключено, **When** клієнт запитує статистику,
-   **Then** він отримує кількість успішних і невдалих записів.
+1. **Given** an intact package with a serial-number stub is stored, **When** the operator programs three
+   ICs in a row (with a power-off between them), **Then** they receive three different random
+   serial numbers.
+2. **Given** the stored package is corrupted, **When** the operator does a local start, **Then** programming does not
+   start, no voltages are applied, and the local indication shows an integrity error.
+3. **Given** the PC is connected again after standalone work, **When** the client requests statistics,
+   **Then** it receives the number of successful and failed programmings.
 
 ---
 
-### User Story 4 - Інформація про програматор і підтримувані мікросхеми (Priority: P2)
+### User Story 4 - Information about the programmer and the supported ICs (Priority: P2)
 
-Клієнт при підключенні дізнається в програматора версію протоколу й прошивки, апаратні
-можливості, перелік підтримуваних мікросхем (назва, ID, обсяг пам'яті, тип — FLASH/OTP, які
-операції доступні) та стан збереженого пакета. Так клієнт може показати користувачу список мікросхем
-і перевірити розмір образу, не маючи власної таблиці.
+On connecting, the client learns from the programmer the protocol and firmware version, the hardware
+capabilities, the list of supported ICs (name, ID, memory size, type — FLASH/OTP, which
+operations are available), and the state of the stored package. This way the client can show the user a list of ICs
+and check the image size without a table of its own.
 
-**Why this priority**: потрібно, щоб клієнт лишався тонким; без цього він мусив би дублювати таблицю
-мікросхем.
+**Why this priority**: it is needed for the client to stay thin; otherwise it would have to duplicate the
+IC table.
 
-**Independent Test**: оновити прошивку програматора з новою мікросхемою в таблиці — клієнт без змін
-показує її у списку й може з нею працювати.
+**Independent Test**: update the programmer firmware with a new IC in the table — the client, unchanged,
+shows it in the list and can work with it.
 
 **Acceptance Scenarios**:
 
-1. **Given** клієнт і програматор мають сумісні версії протоколу, **When** клієнт підключається,
-   **Then** він отримує версії, можливості, список мікросхем і опис збереженого пакета.
-2. **Given** мажорні версії протоколу несумісні, **When** клієнт підключається, **Then** обидві
-   сторони повідомляють про несумісність і жодних операцій із мікросхемою не виконують, крім
-   отримання версії.
-3. **Given** панелька порожня, **When** користувач запускає самоперевірку, **Then** клієнт показує для
-   кожного рівня VDD і VPP задану й виміряну напругу, час встановлення та загальний результат.
-4. **Given** у панельці мікросхема, **When** запускається самоперевірка, **Then** програматор
-   відмовляє після визначення мікросхеми на низьких напругах, не подаючи вищих.
+1. **Given** the client and the programmer have compatible protocol versions, **When** the client connects,
+   **Then** it receives the versions, capabilities, the list of ICs, and a description of the stored package.
+2. **Given** the major protocol versions are incompatible, **When** the client connects, **Then** both
+   sides report the incompatibility and perform no IC operations, apart from
+   fetching the version.
+3. **Given** the socket is empty, **When** the user starts the self-test, **Then** the client shows for
+   each VDD and VPP level the set and measured voltage, the settling time, and the overall result.
+4. **Given** an IC is in the socket, **When** the self-test starts, **Then** the programmer
+   refuses after identifying the IC at low voltages, without applying higher ones.
 
 ---
 
-### User Story 5 - Читання та копіювання мікросхеми (Priority: P3)
+### User Story 5 - Reading and copying an IC (Priority: P3)
 
-Користувач читає незахищену мікросхему: або в клієнт (щоб зберегти файл), або одразу в пам'ять
-програматора як новий пакет (копіювання). Отриманий образ має контрольну суму, яку клієнт
-перевіряє, а скопійований пакет зберігається з тими самими гарантіями цілісності, що й завантажений
-з PC.
+The user reads an unprotected IC: either into the client (to save a file), or straight into the programmer's memory
+as a new package (copying). The image obtained has a checksum that the client
+verifies, and the copied package is stored with the same integrity guarantees as one uploaded
+from the PC.
 
-Еталон уже відкалібровано: замість калібрувальних вставок у ньому лише записане значення регістра
-підстроювання, яке підходить тільки цьому екземпляру. Тому при копіюванні програматор розпізнає ці
-«сліди» калібрування й відновлює в пакеті калібрувальні вставки, щоб кожна копія калібрувалася
-індивідуально. Ціль калібрування визначається в одному з режимів: виміряти фактичну частоту
-еталона (лише для перезаписуваного еталона і з явного дозволу тимчасово змінити його), взяти ціль,
-задану користувачем, округлити до стандартної частоти або (явно) лише перенести значення еталона.
+The reference is already calibrated: instead of calibration stubs it only has a written trim register
+value that suits only this sample. So when copying, the programmer recognizes these calibration
+"traces" and restores the calibration stubs in the package so that each copy is calibrated
+individually. The calibration target is determined in one of these modes: measure the reference's actual frequency
+(only for a rewritable reference and with explicit permission to temporarily modify it), take the target
+set by the user, round to a standard frequency, or (explicitly) only carry over the reference's value.
 
-**Why this priority**: корисно для аналізу та копіювання, але не потрібно для базового запису.
+**Why this priority**: useful for analysis and copying, but not needed for basic programming.
 
-**Independent Test**: прочитати записану мікросхему в клієнт і порівняти з вихідним файлом;
-скопіювати мікросхему в програматор і записати нею іншу; для каліброваного FLASH-еталона в режимі
-вимірювання частота копій має збігатися з частотою еталона.
+**Independent Test**: read a programmed IC into the client and compare with the source file;
+copy an IC into the programmer and program another one with it; for a calibrated FLASH reference in the
+measurement mode, the frequency of the copies must match the reference's frequency.
 
 **Acceptance Scenarios**:
 
-1. **Given** вставлено незахищену мікросхему, **When** клієнт запитує читання, **Then** він
-   отримує повний образ, fuse і контрольну суму, що збігається з обчисленою на прийнятих даних.
-2. **Given** вставлено мікросхему зі встановленим захистом від читання, **When** запитується
-   читання або копіювання, **Then** програматор повідомляє, що мікросхема захищена, і не створює
-   пакет.
-3. **Given** вставлено відкалібрований FLASH-еталон (наприклад, PFS154 з IHRC на 8 МГц) і користувач
-   дозволив тимчасово змінювати еталон, **When** запускається копіювання в режимі вимірювання,
-   **Then** програматор вимірює фактичну частоту еталона, відновлює еталон побітово ідентичним
-   початковому (з верифікацією) і створює пакет, у якому калібрувальна вставка має виміряну ціль.
-4. **Given** еталон — OTP-мікросхема, **When** запитується режим вимірювання, **Then** програматор
-   відмовляє з поясненням, що еталон неперезаписуваний, і не змінює мікросхему.
-5. **Given** користувач задав цільову частоту й напругу, **When** виконується копіювання,
-   **Then** у пакеті відновлено вставки з цією ціллю, а калібрування BandGap відновлено з його
-   фіксованою ціллю.
-6. **Given** вимкнулося живлення після того, як еталон стерто для вимірювання, **When** програматор
-   знову увімкнено, **Then** він повідомляє, що еталон не відновлено, і може відновити його з
-   уже збереженого дампу (з PC або локальним запуском).
+1. **Given** an unprotected IC is inserted, **When** the client requests a read, **Then** it
+   receives the full image, the fuse, and a checksum that matches the one computed on the received data.
+2. **Given** an IC with read protection set is inserted, **When** a read
+   or a copy is requested, **Then** the programmer reports that the IC is protected and does not create a
+   package.
+3. **Given** a calibrated FLASH reference is inserted (for example a PFS154 with IHRC at 8 MHz) and the user
+   allowed the reference to be temporarily modified, **When** copying starts in the measurement mode,
+   **Then** the programmer measures the reference's actual frequency, restores the reference bit-for-bit identical to the
+   original (with verification), and creates a package in which the calibration stub has the measured target.
+4. **Given** the reference is an OTP IC, **When** the measurement mode is requested, **Then** the programmer
+   refuses, explaining that the reference is not rewritable, and does not change the IC.
+5. **Given** the user set a target frequency and voltage, **When** copying runs,
+   **Then** the package has the stubs restored with that target, and the BandGap calibration is restored with its
+   fixed target.
+6. **Given** the power went off after the reference was erased for measurement, **When** the programmer is
+   powered on again, **Then** it reports that the reference was not restored and can restore it from the
+   already stored dump (from a PC or with a local start).
 
 ---
 
-### User Story 6 - Запуск мікросхеми з обміном даними (Priority: P3)
+### User Story 6 - Running an IC with data exchange (Priority: P3)
 
-Розробник запускає записану мікросхему в панельці з заданою напругою живлення й бачить у клієнті
-дані, які мікросхема надсилає через послідовний порт, а також може надсилати їй дані.
+A developer runs a programmed IC in the socket at a set supply voltage and sees in the client the
+data the IC sends over the serial port, and can also send data to it.
 
-**Why this priority**: зручно для налагодження, але не впливає на програмування.
+**Why this priority**: convenient for debugging, but does not affect programming.
 
-**Independent Test**: запустити приклад «hello world» і побачити його вивід у клієнті.
+**Independent Test**: run the "hello world" example and see its output in the client.
 
 **Acceptance Scenarios**:
 
-1. **Given** у панельці записана мікросхема, **When** клієнт запускає її з напругою 5.0 В,
-   **Then** програматор повідомляє визначену швидкість обміну й пересилає дані в обидва боки до
-   команди зупинки.
+1. **Given** a programmed IC is in the socket, **When** the client runs it at 5.0 V,
+   **Then** the programmer reports the baud rate it detected and forwards data both ways until a
+   stop command.
 
 ---
 
 ### Edge Cases
 
-- Кадр прийшов пошкодженим, неповним або продубльованим (після повтору) — пошкоджений
-  відкидається з проханням повторити, дублікат розпізнається й не виконується вдруге.
-- Клієнт не отримав відповіді (втрачена відповідь) — повторний запит з тим самим номером
-  повертає збережену відповідь, а не виконує команду повторно.
-- Зв'язок обривається посеред операції з мікросхемою — операція продовжується до кінця (усі дані вже в
-  програматорі); при наступному підключенні клієнт отримує її результат. Виняток — запуск мікросхеми з
-  обміном даними, який зупиняється.
-- Живлення програматора зникає посеред запису (зокрема коли програматор живиться від USB і кабель
-  висмикнуто) — після увімкнення повторний запис тієї самої мікросхеми можливий, якщо записане не
-  суперечить образу (FR-044).
-- Калібрування не вдалося — у мікросхему більше нічого не записується (вимірювальний цикл лишається,
-  fuse не пишеться), сигналізується невдача; мікросхему можна відкалібрувати повторно пізніше (FR-043).
-- В еталоні на місці калібрування — вимірювальний цикл — копіювання зупиняється до збереження пакета
+- A frame arrives corrupted, incomplete, or duplicated (after a retry) — the corrupted one
+  is discarded with a request to repeat, a duplicate is recognized and not executed twice.
+- The client received no response (a lost response) — a repeated request with the same number
+  returns the stored response rather than executing the command again.
+- The connection drops in the middle of an IC operation — the operation continues to the end (all data is already in
+  the programmer); at the next connection the client receives its result. The exception is running an IC with
+  data exchange, which stops.
+- The programmer's power disappears in the middle of programming (including when the programmer is powered from USB and the cable
+  is pulled) — after power-up a repeated programming of the same IC is possible if what was written
+  does not contradict the image (FR-044).
+- Calibration failed — nothing more is written to the IC (the measurement loop stays, the
+  fuse is not written), a failure is signalled; the IC can be calibrated again later (FR-043).
+- The reference has a measurement loop in place of calibration — copying stops before the package is stored
   (FR-051).
-- Калібрувальна вставка в образі є, але програма до неї не доходить (вимірювальний сигнал відсутній) —
-  калібрування цієї вставки вважається невдалим (FR-043); при копіюванні в режимі вимірювання еталона —
-  значення еталона з попередженням, інші вставки обробляються далі.
-- Вимкнення живлення під час збереження пакета — попередній пакет лишається цілісним.
-- Запит пропустити перевірку чистоти для OTP-мікросхеми — відхиляється; для дописування в уже
-  записану OTP існує лише окрема операція дописування з перевіркою сумісності.
-- Дописування потребує хоча б в одному слові переходу біта 0→1 — жодне слово не записується,
-  мікросхема лишається без змін.
-- Образ виходить за межі пам'яті мікросхеми або перекриває службові області (наприклад, заводські
-  калібрувальні значення) — пакет відхиляється з поясненням.
-- У пакеті задано fuse із захистом від читання без явного дозволу — пакет відхиляється.
-- Обрив живлення або USB між стиранням еталона й його відновленням при вимірюванні калібрування —
-  дамп еталона вже збережено, стан «еталон не відновлено» переживає вимкнення, відновлення
-  доступне явною дією.
-- У дампі еталона кілька калібрувань (наприклад, IHRC і ILRC) — кожне вимірюється окремо, еталон
-  наприкінці відновлюється один раз.
-- Виміряна частота еталона не близька до жодної стандартної в режимі округлення — пакет зберігає
-  значення еталона, а підсумок містить попередження.
-- Образ містить калібрувальну вставку невідомого формату — пакет відхиляється з поясненням.
-- Калібрування не досягає частоти в межах допуску — операція завершується помилкою з
-  виміряною частотою; мікросхема позначається як невдала.
-- Клієнт надсилає невідому команду або команду новішої мінорної версії — програматор відповідає
-  «не підтримується», не розриваючи сесію.
-- Самоперевірку при увімкненні не пройдено (несправне джерело або підключена мікросхема) —
-  автономний запис заблоковано, індикація показує причину, локальний запуск повторює самоперевірку.
-- Локальний запуск виконано, коли підключено PC і триває сесія — програматор
-  повідомляє клієнту і не запускає дві операції одночасно.
+- A calibration stub is in the image, but the program never reaches it (no measurement signal) —
+  the calibration of this stub is considered failed (FR-043); when copying in the reference measurement mode —
+  the reference's value with a warning, and the other stubs are processed further.
+- A power cut while storing a package — the previous package stays intact.
+- A request to skip the blank check for an OTP IC — rejected; for appending to an already
+  programmed OTP there is only the separate append operation with a compatibility check.
+- An append needs a 0→1 bit transition in at least one word — no word is written,
+  and the IC is left unchanged.
+- The image goes beyond the IC's memory or overlaps reserved areas (for example, factory
+  calibration values) — the package is rejected with an explanation.
+- A fuse with read protection is set in the package without explicit permission — the package is rejected.
+- A power or USB drop between erasing the reference and restoring it when measuring calibration —
+  the reference dump is already stored, the "reference not restored" state survives power-off, and a restore
+  is available as an explicit action.
+- The reference dump has several calibrations (for example IHRC and ILRC) — each is measured separately, and the reference
+  is restored once at the end.
+- The measured reference frequency is not close to any standard one in the rounding mode — the package keeps the
+  reference's value, and the summary contains a warning.
+- The image contains a calibration stub of an unknown format — the package is rejected with an explanation.
+- Calibration does not reach a frequency within tolerance — the operation ends with an error with the
+  measured frequency; the IC is marked as failed.
+- The client sends an unknown command or a command of a newer minor version — the programmer answers
+  "not supported" without dropping the session.
+- The self-test at power-up did not pass (a faulty supply or a connected IC) —
+  standalone programming is blocked, the indication shows the reason, and a local start repeats the self-test.
+- A local start is done while a PC is connected and a session is in progress — the programmer
+  informs the client and does not run two operations at once.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-**Сесія та сумісність**
+**Session and compatibility**
 
-- **FR-001**: Програматор MUST на запит повідомляти версію протоколу (мажорну й мінорну), версію
-  прошивки, ідентифікатор апаратної платформи та перелік можливостей.
-- **FR-002**: Сторони MUST відмовлятися від операцій із мікросхемою при несумісній мажорній версії
-  протоколу; запит версії MUST працювати завжди.
-- **FR-003**: Програматор MUST надавати перелік підтримуваних мікросхем із назвою (та
-  варіантами назв), ідентифікатором, обсягом пам'яті програм, розрядністю слова, типом
-  (FLASH/OTP), доступними операціями та службовими областями пам'яті, які не можна перезаписувати.
+- **FR-001**: The programmer MUST, on request, report the protocol version (major and minor), the firmware
+  version, the hardware platform identifier, and the list of capabilities.
+- **FR-002**: The sides MUST refuse IC operations on an incompatible major protocol
+  version; the version request MUST always work.
+- **FR-003**: The programmer MUST provide a list of supported ICs with the name (and
+  name variants), identifier, program memory size, word width, type
+  (FLASH/OTP), available operations, and the reserved memory areas that must not be overwritten.
 
-**Вміст пакета прошивки (дані від PC)**
+**Firmware package contents (data from the PC)**
 
-- **FR-004**: Пакет прошивки MUST містити: ідентифікатор цільової мікросхеми; образ пам'яті
-  програм із позначенням, які слова задані, а які ні; значення fuse або ознаку «fuse не
-  записувати»; ознаку дозволу на захист від читання; опції операцій (пропустити стирання,
-  перевірку чистоти — лише для FLASH, верифікацію; заповнювати незадіяну пам'ять); напругу живлення
-  для режиму запуску;
-  **ім'я пакета** (обов'язкове, коротке, для показу користувачу й вибору пакета), необов'язковий опис і
-  контрольну суму вихідного файлу.
-- **FR-005**: Пакет MUST NOT містити напруг, таймингів чи алгоритмів програмування — їх
-  програматор визначає сам за ідентифікатором мікросхеми.
-- **FR-006**: Параметри калібрування (тип осцилятора, цільова частота, напруга) MUST визначатися
-  програматором зі вставок у самому образі. Калібрується **кожна** знайдена вставка; способу пропустити
-  калібрування наявної вставки немає — щоб не калібрувати параметр, розробник не ставить для нього
-  макрос (або завантажує заводське значення відповідним макросом).
-- **FR-007**: Програматор MUST перевіряти пакет при отриманні: підтримуваність мікросхеми, розмір
-  образу, неперекриття службових областей, допустимість fuse, розпізнаваність усіх калібрувальних
-  вставок. Невідповідність MUST
-  призводити до відхилення пакета з конкретним кодом і, де можливо, адресою.
+- **FR-004**: The firmware package MUST contain: the target IC identifier; the program memory
+  image with a marking of which words are defined and which are not; the fuse value or a "do not
+  write the fuse" flag; the read-protection permission flag; operation options (skip erase,
+  blank check — for FLASH only, verification; fill unused memory); the supply voltage
+  for run mode;
+  a **package name** (mandatory, short, for showing to the user and choosing a package), an optional description, and the
+  checksum of the source file.
+- **FR-005**: The package MUST NOT contain voltages, timings, or programming algorithms — the
+  programmer determines them itself from the IC identifier.
+- **FR-006**: Calibration parameters (the oscillator type, target frequency, voltage) MUST be determined by the
+  programmer from stubs in the image itself. **Every** stub found is calibrated; there is no way to skip the
+  calibration of an existing stub — to not calibrate a parameter, the developer does not place a
+  macro for it (or loads the factory value with the corresponding macro).
+- **FR-007**: The programmer MUST validate the package on receipt: IC support, image size,
+  no overlap with reserved areas, fuse validity, and recognizability of all calibration
+  stubs. A mismatch MUST
+  lead to the package being rejected with a specific code and, where possible, an address.
 
-**Передача та цілісність**
+**Transfer and integrity**
 
-- **FR-008**: Кожен кадр в обох напрямах MUST мати явну довжину, порядковий номер і контроль
-  цілісності, що виявляє будь-які помилки в одному кадрі довжиною до максимального розміру
-  (гарантовано — усі одно-, дво- й трибітові помилки та пакети помилок довжиною до 32 біт; інші
-  помилки — з імовірністю пропуску не більше 2⁻³²).
-- **FR-009**: Пошкоджений або неповний кадр MUST відкидатися з повідомленням, що дозволяє клієнту
-  повторити передачу; повторно отриманий кадр з тим самим номером MUST NOT виконуватися вдруге —
-  програматор MUST повертати попередню відповідь.
-- **FR-010**: Пакет прошивки MUST мати наскрізну контрольну суму, обчислену клієнтом над образом і
-  всіма метаданими, незалежну від контролю кадрів. Програматор MUST перевіряти її після отримання
-  всіх даних і до збереження.
-- **FR-011**: Збереження нового пакета MUST бути атомарним: до успішної перевірки й запису
-  попередній збережений пакет лишається чинним; незавершене збереження MUST NOT робити пакет
-  пошкодженим чи частково новим.
-- **FR-012**: Програматор MUST перевіряти цілісність збереженого пакета при увімкненні, перед
-  кожним записом мікросхеми (з PC і автономним) та на запит клієнта; пошкоджений пакет MUST NOT
-  використовуватися для запису.
-- **FR-013**: Програматор MUST повертати контрольну суму збереженого пакета, щоб клієнт міг
-  підтвердити, що збережено саме його пакет.
-- **FR-014**: Образ, прочитаний з мікросхеми й переданий клієнту, MUST супроводжуватися
-  контрольною сумою.
+- **FR-008**: Every frame in both directions MUST have an explicit length, a sequence number, and an integrity
+  check that detects any errors in a single frame up to the maximum size
+  (guaranteed — all one-, two-, and three-bit errors and burst errors up to 32 bits; other
+  errors — with a miss probability of at most 2⁻³²).
+- **FR-009**: A corrupted or incomplete frame MUST be discarded with a message that lets the client
+  retry the transfer; a frame received again with the same number MUST NOT be executed twice —
+  the programmer MUST return the previous response.
+- **FR-010**: The firmware package MUST have an end-to-end checksum computed by the client over the image and
+  all metadata, independent of the frame checks. The programmer MUST verify it after receiving
+  all the data and before storing.
+- **FR-011**: Storing a new package MUST be atomic: until a successful check and write, the
+  previous stored package stays valid; an unfinished store MUST NOT make the package
+  corrupted or partially new.
+- **FR-012**: The programmer MUST check the integrity of the stored package at power-up, before
+  every IC programming (from the PC and standalone), and on the client's request; a corrupted package MUST NOT
+  be used for programming.
+- **FR-013**: The programmer MUST return the checksum of the stored package so that the client can
+  confirm that exactly its package was stored.
+- **FR-014**: An image read from an IC and passed to the client MUST be accompanied by a
+  checksum.
 
-**Сховище**
+**Storage**
 
-- **FR-015**: Програматор MUST зберігати пакет прошивки й статистику (кількість успішних і невдалих
-  записів) у енергонезалежній пам'яті.
-- **FR-016**: Програматор MUST зберігати рівно один активний пакет прошивки. Додаткове місце в
-  сховищі MAY використовуватися лише для атомарної заміни пакета (FR-011) і MUST NOT бути видимим
-  клієнту як другий пакет. Завантаження або копіювання нового пакета замінює активний.
-- **FR-017**: Клієнт MUST мати змогу прочитати опис збереженого пакета (метадані, контрольну суму,
-  стан цілісності), прочитати сам образ і видалити пакет.
+- **FR-015**: The programmer MUST keep the firmware package and statistics (the number of successful and failed
+  programmings) in non-volatile memory.
+- **FR-016**: The programmer MUST store exactly one active firmware package. Extra space in the
+  storage MAY be used only for atomic package replacement (FR-011) and MUST NOT be visible to the
+  client as a second package. Uploading or copying a new package replaces the active one.
+- **FR-017**: The client MUST be able to read a description of the stored package (metadata, checksum,
+  integrity state), read the image itself, and delete the package.
 
-**Операції з мікросхемою**
+**IC operations**
 
-- **FR-018**: Програматор MUST підтримувати операції: визначення мікросхеми, читання (у клієнт або
-  в сховище як новий пакет), стирання (FLASH), перевірку чистоти, повний запис зі збереженого пакета,
-  верифікацію, запуск мікросхеми з обміном даними та зупинку, відновлення еталона з дампу,
-  дописування, самоперевірку програматора.
-- **FR-019**: Операція «повний запис» MUST виконувати всі специфічні для мікросхеми кроки в
-  програматорі (перевірка ID, стирання, чистота, запис, верифікація, калібрування, серійний номер,
-  fuse) без участі клієнта між кроками.
-- **FR-020**: Перед подачею програмувальних напруг програматор MUST перевіряти, що ID вставленої
-  мікросхеми відповідає пакету.
-- **FR-040**: Після кожної зміни VDD або VPP програматор MUST продовжувати роботу з мікросхемою
-  лише тоді, коли минула щонайменше документована для цього етапу пауза (як у free-pdk: 100 мкс,
-  500 мкс, 1 мс, 10 мс) **і** виміряна напруга відрізняється від заданої не більше ніж на ±2 % або
-  ±30 мВ (більше з двох) протягом кількох послідовних вимірів. Якщо цього не досягнуто за 20 мс від
-  зміни, операція MUST завершуватися безпечно з
-  помилкою напруги живлення або програмування, а підсумок MUST містити задану й останню виміряну
-  напругу.
-- **FR-041**: Програматор MUST мати операцію **самоперевірки** без мікросхеми: послідовно задати
-  VDD і VPP на кількох рівнях від 0 В до максимальних, що використовуються таблицею мікросхем,
-  переконатися за FR-040, що кожен рівень досягнуто, і що після вимкнення напруга спадає до
-  безпечного рівня; підсумок MUST містити для кожного рівня задану й виміряну напругу, час
-  встановлення та результат. Перед подачею будь-якої напруги вище рівнів визначення мікросхеми
-  програматор MUST виконати визначення мікросхеми; якщо мікросхема відповіла — самоперевірка MUST
-  відмовити з окремим кодом без подачі вищих напруг. Клієнт MUST перед запуском просити користувача
-  підтвердити, що панелька порожня. Самоперевірка MUST також виконуватися автоматично при кожному
-  увімкненні програматора; поки останню самоперевірку не пройдено, автономний запис MUST бути
-  заблокований (з відповідною індикацією), а результат MUST бути видимий клієнту у стані програматора.
-  Якщо при увімкненні мікросхему виявлено й самоперевірка відмовила, автономний запис лишається
-  заблокованим; локальний запуск запису в цьому стані MUST натомість виконувати повторну самоперевірку,
-  і лише після її успіху наступний локальний запуск виконує запис.
-- **FR-054**: Програматор MUST реалізовувати такий набір **локальних дій** (без PC), незалежний від
-  конкретних органів керування: запис активного пакета; копіювання (з режимами з налаштування);
-  верифікація підключеної мікросхеми проти активного пакета; самоперевірка; відновлення еталона;
-  скасування поточної локальної операції. Програматор MUST повідомляти платформі стан для індикації:
-  готовий, йде операція (етап і відсоток), успіх, а також невдача з класом причини — цілісність
-  сховища, мікросхема (ID, не чиста, верифікація, захищена), калібрування, напруга/самоперевірка,
-  еталон не відновлено, немає пакета; і стан «локальний запис заблоковано». Майбутній інтерфейс
-  (кнопки, перемикачі, дисплей, сигнали конвеєра) MUST відкривати всі ці дії; до його появи на
-  еталонній платформі достатньо однієї кнопки для запису.
-- **FR-055**: Програматор не аналізує хід програми й калібрує вставки в порядку адрес, тому MUST
-  перевіряти, що мікросхема справді виконує вимірювальний цикл саме тієї вставки, яку він калібрує:
-  (1) **правдоподібність частоти** — перший вимір (до будь-якого імпульсу «+1») MUST лежати в межах від
-  1/4 до 4 очікуваної частоти циклу для цієї вставки (ціль / тривалість проходу циклу); (2) **відгук на
-  крок** — під час підбору частота MUST змінюватися з кроками калібрувального значення в одному напрямку
-  (з урахуванням шуму виміру), а для BandGap лінія PA0 MUST вестися мікросхемою (вихід компаратора), а не
-  «висіти». Невиконання будь-якої умови → окремий код `CALIB_WRONG_SITE`; далі діє FR-043 (нічого не
-  записується), і примусове завершення найкращим значенням (FR-043) для цього коду MUST NOT
-  застосовуватися.
-- **FR-037**: Для OTP-мікросхем повний запис MUST NOT виконуватися без перевірки чистоти або перевірки
-  сумісності для повторної спроби (FR-044); пакет або команда, що просить пропустити ці перевірки для
-  OTP-мікросхеми, MUST відхилятися з окремим кодом помилки.
-- **FR-042**: Режим калібрування при копіюванні MUST задаватися окремо для IHRC, ILRC і BandGap (у
-  команді копіювання й у налаштуванні локального копіювання).
-- **FR-043**: Якщо калібрування не вдалося (частота поза допуском, немає сигналу), програматор MUST NOT
-  записувати нічого далі — ні завершення калібрувальної вставки, ні решти калібрувань, ні fuse — і MUST
-  повідомити невдачу з найкращим знайденим значенням і виміряною частотою. Локально запущений запис MUST завершуватися лише так. Запис, запущений з PC, MAY явно
-  дозволити завершити вставку найкращим знайденим значенням (окремий прапорець), що позначається в
-  підсумку як примусове завершення.
-- **FR-044**: **Повторна спроба** запису MUST визначатися лише вмістом мікросхеми й пакетом і MUST NOT
-  залежати від сесії, часу чи екземпляра програматора: невдалу мікросхему можна дописати пізніше й іншим
-  програматором із тим самим пакетом. Для перезаписуваних (FLASH/MTP) мікросхем повторна спроба — це
-  звичайний повний запис зі стиранням. Для OTP-мікросхеми, яка не чиста, запис MUST бути дозволений,
-  лише якщо кожне вже записане слово сумісне з ефективним образом пакета: для слова потрібні тільки
-  переходи 1→0 до цільового значення; калібрувальна вставка може бути в будь-якому проміжному стані —
-  чиста, вимірювальний цикл або завершена; вставка серійного номера — чиста (тоді генерується новий
-  випадковий номер) або вже записана (тоді **зберігається серійний номер із мікросхеми**). Тоді програматор дописує решту, калібрує незавершені вставки й верифікує;
-  підсумок позначає повторну спробу й фактичний серійний номер. Якщо записувати нічого й калібрування
-  завершені — результат «мікросхему вже записано» без зміни лічильників. Несумісний вміст → «мікросхема
-  не чиста» з адресою першої розбіжності, без жодного запису.
-- **FR-046**: Якщо прошивка містить вставку серійного номера (макрос free-pdk), програматор MUST
-  записувати в неї **випадкове 64-бітне число**, згенероване з апаратного джерела ентропії
-  програматора окремо для кожної мікросхеми, в усіх режимах (з PC і локально). Параметрів серійного
-  номера в пакеті немає; лічильника немає. При повторній спробі вже записаний у мікросхему номер
-  зберігається (FR-044).
-- **FR-052**: Копіювання MUST NOT розпізнавати чи змінювати серійний номер еталона: при локальному
-  копіюванні байти номера переносяться як є (копії отримують номер еталона); при роботі з PC пошук і
-  заміна серійного номера — відповідальність користувача (наприклад, прочитати еталон у файл, замінити
-  номер на вставку free-pdk і завантажити як звичайний пакет). Підсумок копіювання й клієнт MUST
-  попереджати, що серійний номер, якщо він є, буде продубльовано.
-- **FR-053**: Якщо в дампі еталона є запис константи в регістр підстроювання (IHRC, ILRC, BandGap), який
-  не розпізнано як слід калібрування free-pdk (наприклад, калібрування іншого інструмента), копіювання
-  MUST виконуватися як звичайно (код переноситься як є), а підсумок і клієнт MUST попереджати з адресою,
-  що копії матимуть значення підстроювання еталона без індивідуального калібрування.
-- **FR-045**: Перекалібрування OTP-мікросхеми з уже завершеною калібрувальною вставкою MUST NOT
-  підтримуватися (окрім випадку FR-044, коли вставку ще не завершено).
-- **FR-047**: Порівняння мікросхеми з пакетом (верифікація) MUST враховувати калібрувальні вставки й
-  вставки серійного номера: на місці калібрувальної вставки приймається завершена форма з будь-яким
-  значенням регістра, на місці вставки серійного номера — будь-який записаний номер; решта слів — точний
-  збіг. Підсумок MUST містити фактичні значення калібрування й серійний номер мікросхеми, а також
-  позначку, якщо якусь вставку не завершено.
-- **FR-048**: Повний запис MUST завершуватися фінальною перевіркою: після калібрування й запису fuse
-  програматор MUST прочитати всю користувацьку пам'ять і точно порівняти її з ефективним образом, у
-  який підставлено фактичні значення калібрування й серійний номер; розбіжність → помилка верифікації.
-  Контрольні суми вмісту в підсумку MUST обчислюватися з цього читання.
-- **FR-049**: Програматор MUST повторно перевіряти контрольну суму пакета під час запису (потоково, за
-  даними, які фактично пишуться) і перед записом fuse; розбіжність → операція зупиняється до запису fuse
-  з помилкою цілісності сховища.
-- **FR-050**: Якщо в пакеті немає жодної калібрувальної вставки, програматор MUST повідомляти це в
-  підтвердженні збереження пакета, а клієнт MUST показувати користувачу попередження (можливо, забуто
-  макрос калібрування).
-- **FR-038**: Програматор MUST надавати окрему операцію **дописування** («патч»): клієнт задає список
-  слів (адреса й нове значення, до 64 слів), програматор перевіряє ID, читає поточні значення цих слів і
-  виконує запис лише якщо для **кожного** слова нове значення отримується з поточного тільки
-  обнуленням бітів; інакше нічого не записується, а підсумок містить адресу, поточне й бажане значення
-  першого конфліктного слова. Після запису змінені слова MUST верифікуватися. Дописування в службові
-  області заборонене; дописування fuse з увімкненням захисту — лише з явним дозволом. Операція
-  доступна лише з PC і MUST мати режим «лише перевірити» без запису.
-- **FR-039**: Перед дописуванням програматор MUST прочитати всю користувацьку пам'ять мікросхеми
-  (усе, крім службових областей) і порівняти її контрольну суму з очікуваною, переданою клієнтом;
-  при розбіжності MUST NOT записуватися жодне слово. Підтримуються два види контрольної суми:
-  **точна** (вміст як є) і **нормалізована** (значення калібрування в слідах калібрування й байти
-  серійного номера замінено нулями), щоб одна очікувана сума підходила для всієї партії мікросхем з
-  однаковою прошивкою. Очікувану суму клієнт MAY задати явно або попросити програматор обчислити її з
-  активного пакета («дописувати лише мікросхеми, записані цим пакетом»). Режим «лише перевірити» та
-  читання мікросхеми MUST повертати обидві суми поточного вмісту. Після запису програматор MUST
-  перевірити, що вся користувацька пам'ять дорівнює початковій із застосованим дописуванням.
-- **FR-021**: Одночасно MUST виконуватися не більше однієї операції з мікросхемою; інші такі
-  команди під час операції MUST отримувати відповідь «зайнято». Запити стану, версії й скасування
-  MUST оброблятися під час операції.
-- **FR-022**: Клієнт MUST мати змогу скасувати операцію; програматор MUST безпечно завершити її
-  (знявши напруги) і повідомити, на якому етапі її зупинено.
-- **FR-023**: Обрив зв'язку з клієнтом MUST NOT переривати операцію з мікросхемою: усі потрібні дані
-  передаються до її старту, а зупинити операцію може лише явне скасування. Результат останньої
-  операції MUST бути доступний клієнту після повторного підключення. Виняток — запуск мікросхеми з
-  обміном даними, який при обриві зв'язку зупиняється з безпечним зняттям напруг.
+- **FR-018**: The programmer MUST support the operations: IC identification, read (into the client or
+  into storage as a new package), erase (FLASH), blank check, full programming from the stored package,
+  verification, running an IC with data exchange and stopping it, restoring the reference from a dump,
+  appending, and a self-test of the programmer.
+- **FR-019**: The "full programming" operation MUST perform all IC-specific steps in the
+  programmer (ID check, erase, blank check, write, verify, calibration, serial number,
+  fuse) with no client involvement between steps.
+- **FR-020**: Before applying programming voltages, the programmer MUST check that the ID of the inserted
+  IC matches the package.
+- **FR-040**: After every change of VDD or VPP the programmer MUST continue working with the IC
+  only when at least the pause documented for that stage has elapsed (as in free-pdk: 100 µs,
+  500 µs, 1 ms, 10 ms) **and** the measured voltage differs from the set one by no more than ±2 % or
+  ±30 mV (whichever is larger) over several consecutive measurements. If this is not reached within 20 ms of the
+  change, the operation MUST end safely with a
+  supply or programming voltage error, and the summary MUST contain the set and last measured
+  voltage.
+- **FR-041**: The programmer MUST have a **self-test** operation without an IC: sequentially set
+  VDD and VPP at several levels from 0 V up to the maximums used by the IC table,
+  verify by FR-040 that each level is reached and that after switch-off the voltage falls to a
+  safe level; the summary MUST contain for each level the set and measured voltage, the settling
+  time, and the result. Before applying any voltage above the IC identification levels, the
+  programmer MUST perform IC identification; if an IC responded — the self-test MUST
+  refuse with a separate code without applying higher voltages. Before starting, the client MUST ask the user to
+  confirm that the socket is empty. The self-test MUST also run automatically at every
+  power-up of the programmer; until the latest self-test passes, standalone programming MUST be
+  blocked (with a corresponding indication), and the result MUST be visible to the client in the programmer state.
+  If an IC is detected at power-up and the self-test refused, standalone programming stays
+  blocked; a local programming start in this state MUST instead perform a repeated self-test,
+  and only after it succeeds does the next local start perform programming.
+- **FR-054**: The programmer MUST implement the following set of **local actions** (without a PC), independent of
+  specific controls: programming the active package; copying (with the modes from settings);
+  verifying the connected IC against the active package; the self-test; restoring the reference;
+  and cancelling the current local operation. The programmer MUST report to the platform the state for indication:
+  ready, an operation in progress (stage and percent), success, and a failure with a cause class — storage
+  integrity, IC (ID, not blank, verification, protected), calibration, voltage/self-test,
+  reference not restored, no package; and the state "local programming blocked". A future interface
+  (buttons, switches, a display, handler signals) MUST expose all these actions; until it appears, one button
+  for programming is enough on the reference platform.
+- **FR-055**: The programmer does not analyze the program flow and calibrates stubs in address order, so it MUST
+  verify that the IC is really running the measurement loop of exactly the stub it is calibrating:
+  (1) **frequency plausibility** — the first measurement (before any "+1" pulse) MUST lie between
+  1/4 and 4 of the loop's expected frequency for that stub (target / loop pass duration); (2) **response to a
+  step** — during the search the frequency MUST change in one direction with the steps of the calibration value
+  (allowing for measurement noise), and for BandGap the PA0 line MUST be driven by the IC (the comparator output), not
+  floating. A failure of any condition → a separate code `CALIB_WRONG_SITE`; then FR-043 applies (nothing is
+  written), and a forced finish with the best value (FR-043) MUST NOT
+  be applied for this code.
+- **FR-037**: For OTP ICs, full programming MUST NOT be performed without a blank check or a compatibility
+  check for a retry (FR-044); a package or command that asks to skip these checks for an
+  OTP IC MUST be rejected with a separate error code.
+- **FR-042**: The calibration mode when copying MUST be set separately for IHRC, ILRC, and BandGap (in
+  the copy command and in the local copy setting).
+- **FR-043**: If calibration failed (frequency out of tolerance, no signal), the programmer MUST NOT
+  write anything further — neither the finishing of the calibration stub, nor the remaining calibrations, nor the fuse — and MUST
+  report the failure with the best value found and the measured frequency. A locally started programming MUST end only this way. Programming started from a PC MAY explicitly
+  allow finishing the stub with the best value found (a separate flag), which is marked in the
+  summary as a forced finish.
+- **FR-044**: A **retry** of programming MUST be determined only by the IC contents and the package and MUST NOT
+  depend on the session, time, or the programmer instance: a failed IC can be completed later by another
+  programmer with the same package. For rewritable (FLASH/MTP) ICs a retry is
+  an ordinary full write with an erase. For an OTP IC that is not blank, programming MUST be allowed
+  only if every word already written is compatible with the package's effective image: a word needs only
+  1→0 transitions to the target value; a calibration stub may be in any intermediate state —
+  blank, a measurement loop, or finished; a serial-number stub — blank (then a new
+  random number is generated) or already written (then **the serial number from the IC is kept**). The programmer then appends the rest, calibrates the unfinished stubs, and verifies;
+  the summary marks the retry and the actual serial number. If there is nothing to write and the calibrations
+  are finished — the result is "IC already programmed" without changing the counters. Incompatible contents → "IC
+  not blank" with the address of the first mismatch, with nothing written.
+- **FR-046**: If the firmware contains a serial-number stub (a free-pdk macro), the programmer MUST
+  write into it a **random 64-bit number** generated from the programmer's hardware entropy
+  source separately for each IC, in all modes (from a PC and locally). There are no serial-number
+  parameters in the package, and there is no counter. On a retry, a number already written into the IC
+  is kept (FR-044).
+- **FR-052**: Copying MUST NOT recognize or change the reference's serial number: when copying
+  locally the bytes of the number are carried over as is (the copies get the reference's number); when working with a PC, searching for and
+  replacing the serial number is the user's responsibility (for example, read the reference into a file, replace the
+  number with a free-pdk stub, and upload it as an ordinary package). The copy summary and the client MUST
+  warn that the serial number, if there is one, will be duplicated.
+- **FR-053**: If the reference dump has a write of a constant to a trim register (IHRC, ILRC, BandGap) that is
+  not recognized as a free-pdk calibration trace (for example, another tool's calibration), copying
+  MUST proceed as usual (the code is carried over as is), and the summary and the client MUST warn, with an address,
+  that the copies will have the reference's trim value without individual calibration.
+- **FR-045**: Recalibrating an OTP IC with an already finished calibration stub MUST NOT
+  be supported (except the FR-044 case where the stub is not finished yet).
+- **FR-047**: Comparing an IC with the package (verification) MUST take calibration stubs and
+  serial-number stubs into account: in place of a calibration stub, a finished form with any
+  register value is accepted, in place of a serial-number stub — any written number; the remaining words — an exact
+  match. The summary MUST contain the actual calibration values and the IC's serial number, and
+  a mark if some stub is not finished.
+- **FR-048**: Full programming MUST end with a final check: after calibration and writing the fuse,
+  the programmer MUST read all user memory and compare it exactly with the effective image, into
+  which the actual calibration values and the serial number have been substituted; a mismatch → a verification error.
+  The content checksums in the summary MUST be computed from this read.
+- **FR-049**: The programmer MUST re-check the package checksum during programming (on the fly, from
+  the data actually being written) and before writing the fuse; a mismatch → the operation stops before the fuse is written
+  with a storage integrity error.
+- **FR-050**: If the package has no calibration stubs at all, the programmer MUST report this in the
+  storage confirmation, and the client MUST show the user a warning (the calibration macro may have been forgotten).
+- **FR-038**: The programmer MUST provide a separate **append** ("patch") operation: the client specifies a list of
+  words (an address and a new value, up to 64 words), the programmer checks the ID, reads the current values of those words, and
+  writes only if for **every** word the new value is obtained from the current one only by
+  clearing bits; otherwise nothing is written, and the summary contains the address, the current, and the desired value
+  of the first conflicting word. After writing, the changed words MUST be verified. Appending to reserved
+  areas is forbidden; appending a fuse that enables protection — only with explicit permission. The operation
+  is available only from a PC and MUST have a "check only" mode without writing.
+- **FR-039**: Before appending, the programmer MUST read all the IC's user memory
+  (everything except reserved areas) and compare its checksum with the expected one passed by the client;
+  on a mismatch no word MUST be written. Two kinds of checksum are supported:
+  **exact** (the contents as is) and **normalized** (calibration values in calibration traces and the bytes of
+  the serial number replaced with zeros), so that one expected sum fits a whole batch of ICs with the
+  same firmware. The client MAY set the expected sum explicitly or ask the programmer to compute it from the
+  active package ("append only to ICs programmed with this package"). The "check only" mode and
+  reading the IC MUST return both sums of the current contents. After writing, the programmer MUST
+  verify that all user memory equals the initial contents with the append applied.
+- **FR-021**: At most one IC operation MUST run at a time; other such
+  commands during an operation MUST get a "busy" response. Status, version, and cancel requests
+  MUST be handled during an operation.
+- **FR-022**: The client MUST be able to cancel an operation; the programmer MUST safely finish it
+  (removing the voltages) and report at which stage it was stopped.
+- **FR-023**: A dropped connection with the client MUST NOT interrupt an IC operation: all the data needed
+  is sent before its start, and only an explicit cancel can stop the operation. The result of the last
+  operation MUST be available to the client after reconnecting. The exception is running an IC with
+  data exchange, which stops on a dropped connection with a safe removal of the voltages.
 
-**Відповіді, прогрес, помилки**
+**Responses, progress, errors**
 
-- **FR-024**: Програматор MUST відповідати на кожну команду (успіх або код помилки) протягом 100 мс;
-  для довгих операцій ця відповідь MUST означати «прийнято до виконання», а підсумок MUST
-  надходити окремим повідомленням.
-- **FR-025**: Під час довгої операції програматор MUST надсилати повідомлення про прогрес із
-  назвою етапу та відсотком виконання не рідше ніж раз на секунду.
-- **FR-026**: Підсумок операції MUST містити: результат, етап, на якому вона завершилася, фактичний
-  ID мікросхеми, а залежно від операції — адресу й значення першої розбіжності, результати
-  калібрування (значення регістра й досягнута частота), записаний серійний номер.
-- **FR-027**: Коди помилок MUST бути стабільними й задокументованими; кожен MUST однозначно
-  вказувати причину (пошкоджений кадр, несумісна версія, зайнято, невідома команда, непідтримувана
-  мікросхема, невалідний пакет, порушення цілісності сховища, немає пакета, невідповідність ID,
-  мікросхема не чиста, помилка верифікації, помилка калібрування, мікросхема захищена, помилка
-  напруги живлення/програмування, скасовано, еталон неперезаписуваний,
-  еталон не відновлено, пропуск перевірки чистоти для OTP заборонено, конфлікт дописування,
-  невідповідність прошивки при дописуванні, мікросхема в панельці під час самоперевірки, невдала
-  самоперевірка).
-- **FR-028**: Програматор MUST повідомляти клієнта про асинхронні події: старт і завершення
-  автономної операції, дані від запущеної мікросхеми.
-- **FR-029**: Протокол MUST бути повністю описаний у документації проєкту (`docs/`) разом із
-  кодами помилок і правилами зміни версій.
+- **FR-024**: The programmer MUST answer every command (success or an error code) within 100 ms;
+  for long operations this answer MUST mean "accepted for execution", and the summary MUST
+  arrive as a separate message.
+- **FR-025**: During a long operation the programmer MUST send progress messages with the
+  stage name and percent complete at least once per second.
+- **FR-026**: The operation summary MUST contain: the result, the stage at which it ended, the actual
+  IC ID, and, depending on the operation, the address and value of the first mismatch, the calibration
+  results (the register value and the frequency reached), and the serial number written.
+- **FR-027**: Error codes MUST be stable and documented; each MUST unambiguously indicate the cause (corrupted frame,
+  incompatible version, busy, unknown command, unsupported
+  IC, invalid package, storage integrity violation, no package, ID mismatch,
+  IC not blank, verification error, calibration error, IC protected, supply/programming
+  voltage error, cancelled, reference not rewritable,
+  reference not restored, skipping the blank check for OTP is forbidden, append conflict,
+  firmware mismatch on append, an IC in the socket during the self-test, a failed
+  self-test).
+- **FR-028**: The programmer MUST notify the client of asynchronous events: the start and end of a
+  standalone operation, and data from a running IC.
+- **FR-029**: The protocol MUST be fully described in the project documentation (`docs/`) together with the
+  error codes and the rules for changing versions.
 
-**Сумісність з Easy PDK**
+**Easy PDK compatibility**
 
-- **FR-030**: Програматор MUST NOT підтримувати оригінальний протокол Easy PDK 1.3; єдиний протокол
-  обміну — описаний у цій специфікації. Сумісність з інструментами Easy PDK, якщо знадобиться,
-  забезпечується на боці PC окремим клієнтом (наприклад, CLI з інтерфейсом командного рядка як у
-  `easypdkprog`), що працює через цей протокол. Протокол MUST надавати достатньо операцій, щоб такий
-  клієнт міг відтворити команди `list`, `probe`, `read`, `write`, `erase`, `start` та їхні опції.
+- **FR-030**: The programmer MUST NOT support the original Easy PDK 1.3 protocol; the only exchange
+  protocol is the one described in this specification. Compatibility with Easy PDK tools, if needed, is
+  provided on the PC side by a separate client (for example, a CLI with a command-line interface like
+  `easypdkprog`) that works through this protocol. The protocol MUST provide enough operations for such a
+  client to reproduce the commands `list`, `probe`, `read`, `write`, `erase`, `start` and their options.
 
-**Калібрування при копіюванні**
+**Calibration when copying**
 
-- **FR-031**: При копіюванні програматор MUST розпізнавати в дампі еталона «сліди» виконаного
-  калібрування (IHRC, ILRC, BandGap) за розташуванням інструкцій і адресою регістра підстроювання
-  мікросхеми та, якщо не вибрано режим «перенести значення», замінювати їх у пакеті
-  калібрувальними вставками, щоб кожна копія калібрувалася при записі.
-- **FR-032**: Ціль калібрування IHRC/ILRC при копіюванні MUST визначатися (окремо для IHRC і ILRC) в
-  одному з режимів:
-  (а) **виміряти еталон** — фактична частота еталона при його власному значенні регістра;
-  (б) **ціль від користувача** — частота й напруга, задані клієнтом; (в) **стандартна частота** —
-  частота копії при значенні еталона, округлена до найближчої стандартної SYSCLK, якщо відхилення не
-  більше 10 % (лише IHRC); (г) **перенести значення** еталона без калібрування копій. Для BandGap —
-  окремий вибір: відновити з фіксованою ціллю або перенести значення еталона. У режимі (а) кожна вставка
-  вимірюється окремим перезаписом еталона (кількість стирань еталона = кількість вимірюваних вставок + 1);
-  вставка, до якої програма не доходить за 1 с, отримує значення еталона з попередженням.
-- **FR-033**: Режим «виміряти еталон» MUST бути доступний лише для перезаписуваних (FLASH) еталонів і
-  лише з явного дозволу тимчасово змінювати еталон. Перед першою зміною еталона його дамп MUST бути
-  збережений із тими самими гарантіями цілісності, що й пакет; після вимірювання еталон MUST бути
-  відновлений побітово ідентичним дампу й верифікований.
-- **FR-034**: Стан «еталон змінено й не відновлено» MUST переживати вимкнення живлення, бути видимим
-  клієнту й в автономному режимі та мати явну дію відновлення еталона з дампу.
-- **FR-035**: Режими калібрування для автономного копіювання (без PC) MUST бути налаштуванням, що
-  зберігається в програматорі (окремо IHRC, ILRC, BandGap); за замовчуванням — «перенести значення» для
-  IHRC/ILRC і відновлення BandGap.
-- **FR-036**: Підсумок копіювання MUST містити для кожного знайденого калібрування тип, значення
-  еталона, визначену ціль і режим, а також попередження, якщо ціль не визначено й значення перенесено.
-- **FR-051**: Якщо в дампі еталона на місці калібрування знайдено **вимірювальний цикл** (еталон не
-  відкалібровано — калібрування колись не вдалося або було перерване; така мікросхема не працює),
-  копіювання MUST зупинитися **до** збереження пакета: у сховище програматора нічого не записується, а
-  підсумок містить адресу й тип кожного такого циклу. Локальне копіювання на цьому завершується з
-  сигналом неуспіху. При копіюванні з PC клієнт MUST запитати користувача, що робити: скасувати або
-  задати ціль калібрування для цих вставок; у другому випадку клієнт повторює копіювання з заданою
-  ціллю й явним дозволом, і програматор відновлює на місці циклу калібрувальну вставку з цією ціллю.
+- **FR-031**: When copying, the programmer MUST recognize in the reference dump the "traces" of an executed
+  calibration (IHRC, ILRC, BandGap) by the placement of instructions and the address of the IC's trim register
+  and, unless the "carry over the value" mode is chosen, replace them in the package with
+  calibration stubs so that each copy is calibrated when programmed.
+- **FR-032**: The IHRC/ILRC calibration target when copying MUST be determined (separately for IHRC and ILRC) in
+  one of these modes:
+  (a) **measure the reference** — the reference's actual frequency at its own register value;
+  (b) **a target from the user** — a frequency and voltage set by the client; (c) **a standard frequency** —
+  the copy's frequency at the reference's value, rounded to the nearest standard SYSCLK if the deviation is
+  no more than 10 % (IHRC only); (d) **carry over the reference's value** without calibrating the copies. For BandGap —
+  a separate choice: restore with a fixed target or carry over the reference's value. In mode (a) each stub
+  is measured with a separate rewrite of the reference (the number of reference erases = the number of stubs measured + 1);
+  a stub the program does not reach within 1 s gets the reference's value with a warning.
+- **FR-033**: The "measure the reference" mode MUST be available only for rewritable (FLASH) references and
+  only with explicit permission to temporarily modify the reference. Before the first change of the reference, its dump MUST be
+  stored with the same integrity guarantees as a package; after measuring, the reference MUST be
+  restored bit-for-bit identical to the dump and verified.
+- **FR-034**: The state "reference modified and not restored" MUST survive power-off, be visible to the
+  client and in standalone mode, and have an explicit action to restore the reference from the dump.
+- **FR-035**: The calibration modes for standalone copying (without a PC) MUST be a setting
+  stored in the programmer (separately IHRC, ILRC, BandGap); by default — "carry over the value" for
+  IHRC/ILRC and restoring BandGap.
+- **FR-036**: The copy summary MUST contain for each calibration found the type, the reference's value, the determined
+  target, and the mode, as well as a warning if the target was not determined and the value was carried over.
+- **FR-051**: If the reference dump has a **measurement loop** in place of a calibration (the reference is not
+  calibrated — the calibration once failed or was interrupted; such an IC does not work),
+  copying MUST stop **before** the package is stored: nothing is written to the programmer's storage, and
+  the summary contains the address and type of each such loop. A local copy ends there with a
+  failure signal. When copying from a PC, the client MUST ask the user what to do: cancel or
+  set a calibration target for these stubs; in the second case the client repeats the copy with the given
+  target and explicit permission, and the programmer restores a calibration stub with that target in place of the loop.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Пакет прошивки**: усе, що потрібно для запису мікросхем певного типу; складається з
-  метаданих, образу пам'яті програм і наскрізної контрольної суми. Може бути завантажений з PC або
-  створений копіюванням мікросхеми.
-- **Метадані пакета**: ідентифікатор мікросхеми, fuse і дозвіл захисту, опції операцій, напруга запуску, ім'я та опис, контрольна сума вихідного файлу, версія формату пакета.
-- **Образ пам'яті**: послідовність слів пам'яті програм із маскою заданих слів.
-- **Опис мікросхеми**: запис у таблиці програматора (назва, ID, обсяг, розрядність, тип, службові
-  області, доступні операції); клієнту передається лише для показу й попередньої перевірки.
-- **Кадр**: одиниця обміну з довжиною, порядковим номером, типом, даними й контролем цілісності.
-- **Команда / Відповідь**: запит клієнта і відповідь програматора з тим самим порядковим номером.
-- **Операція**: довготривала дія з мікросхемою зі станом (виконується / завершена / скасована),
-  етапами та підсумком.
-- **Подія**: повідомлення програматора без запиту (прогрес, підсумок, автономна операція, дані від
-  мікросхеми).
-- **Статистика**: енергонезалежні лічильники успішних і невдалих записів.
-- **Слід калібрування**: фрагмент коду відкаліброваної мікросхеми (NOP-и, завантаження значення,
-  запис у регістр підстроювання на фіксованих позиціях); дає позицію, тип і значення еталона, але не
-  ціль калібрування.
-- **Дамп еталона**: незмінена копія вмісту еталона, збережена до будь-якої його зміни; джерело для
-  відновлення еталона.
+- **Firmware package**: everything needed to program ICs of a given type; consists of
+  metadata, a program memory image, and an end-to-end checksum. It can be uploaded from the PC or
+  created by copying an IC.
+- **Package metadata**: the IC identifier, the fuse and protection permission, operation options, the run voltage, the name and description, the checksum of the source file, the package format version.
+- **Memory image**: a sequence of program memory words with a mask of defined words.
+- **IC description**: an entry in the programmer's table (name, ID, size, word width, type, reserved
+  areas, available operations); passed to the client only for display and preliminary checking.
+- **Frame**: the unit of exchange with a length, a sequence number, a type, data, and an integrity check.
+- **Command / Response**: a client request and the programmer's response with the same sequence number.
+- **Operation**: a long-running IC action with a state (running / finished / cancelled),
+  stages, and a summary.
+- **Event**: a message from the programmer without a request (progress, a summary, a standalone operation, data from
+  the IC).
+- **Statistics**: non-volatile counters of successful and failed programmings.
+- **Calibration trace**: a fragment of the code of a calibrated IC (NOPs, loading a value,
+  a write to a trim register at fixed positions); it gives the position, type, and value of the reference, but not the
+  calibration target.
+- **Reference dump**: an unmodified copy of the reference's contents, stored before any change to it; the source for
+  restoring the reference.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: При штучному внесенні помилок у ≥1 % кадрів під час 1000 завантажень пакета
-  максимального розміру 100 % завантажень завершуються збереженням образу, ідентичного вихідному,
-  і жодного разу не зберігається пошкоджений пакет.
-- **SC-002**: У 100 % випадків пошкодженого збереженого пакета (тест із примусовим пошкодженням
-  кожного байта пакета по черзі) програматор відмовляється записувати мікросхему.
-- **SC-003**: Завантаження пакета максимального розміру, який програматор приймає для запису
-  (повідомляє клієнту; на еталонній платформі — 8 КБ), з підтвердженням займає не більше 3 с.
-- **SC-004**: Повний запис PFS154 повним образом (стирання, перевірка, запис, верифікація, одне
-  калібрування, fuse) від натискання «Записати» до підсумку займає не більше 10 с. *Перевіряється на
-  реальній мікросхемі разом із фічею `002-chip-engine`; у цій фічі — на моделі мікросхеми.*
-- **SC-005**: Під час будь-якої операції довше 1 с користувач бачить оновлення прогресу щонайменше
-  раз на секунду.
-- **SC-006**: Додавання підтримки нової мікросхеми потребує лише оновлення прошивки програматора:
-  незмінений клієнт показує її у списку й виконує з нею всі операції.
-- **SC-007**: Вимкнення живлення або обрив USB у довільний момент завантаження пакета (≥100
-  випробувань) щоразу залишає в програматорі або попередній, або новий пакет, і завжди цілісний.
-- **SC-008**: Обрив USB-з'єднання (без втрати живлення програматора) у довільний момент запису
-  (≥ 100 випробувань) не змінює результату: вміст мікросхеми й підсумок такі самі, як без обриву, а
-  підсумок доступний після повторного підключення.
-- **SC-012**: Після обриву живлення в довільний момент запису OTP-мікросхеми (≥ 100 випробувань на
-  моделі) повторний запис тієї самої мікросхеми — тим самим або іншим програматором із тим самим пакетом —
-  щоразу або завершується успіхом із позначкою повторної
-  спроби, або відмовляє без жодного запису, якщо вміст несумісний; у мікросхемі ніколи не з'являється
-  нуль, якого немає в ефективному образі.
-- **SC-013**: При невдалому калібруванні (несправна модель осцилятора) після операції в мікросхемі
-  немає жодного записаного слова поза основним образом і вимірювальним циклом; повторний запис після
-  «ремонту» осцилятора завершує калібрування успішно.
-- **SC-009**: Для каліброваного FLASH-еталона в режимі «виміряти еталон» частота IHRC копій
-  відрізняється від частоти еталона (виміряної тим самим програматором) не більше ніж на 1 %, а
-  еталон після копіювання побітово ідентичний своєму вмісту до копіювання. *У цій фічі — на моделі
-  мікросхеми; на реальних PFS154 — разом із `002-chip-engine`.*
-- **SC-010**: Обрив живлення в довільний момент копіювання в режимі «виміряти еталон» (≥ 100
-  випробувань) ніколи не призводить до втрати вмісту еталона: його завжди можна відновити з дампу.
-- **SC-011**: Жоден обмін даними з мікросхемою не починається, поки VDD і VPP не перебувають у межах
-  ±2 % / ±30 мВ від заданих; при штучно несправному джерелі (симуляція й залізо) операція
-  завершується помилкою напруги не пізніше ніж за 20 мс після зміни, без жодного запису в мікросхему.
+- **SC-001**: With artificially injected errors in ≥1 % of frames during 1000 uploads of a maximum-size
+  package, 100 % of uploads end with a stored image identical to the source,
+  and a corrupted package is never stored.
+- **SC-002**: In 100 % of cases of a corrupted stored package (a test that corrupts
+  each byte of the package in turn), the programmer refuses to program an IC.
+- **SC-003**: Uploading a maximum-size package that the programmer accepts for programming
+  (reported to the client; on the reference platform — 8 KB), with confirmation, takes at most 3 s.
+- **SC-004**: A full programming of a PFS154 with a full image (erase, check, write, verify, one
+  calibration, fuse) from pressing "Program" to the summary takes at most 10 s. *Verified on a
+  real IC together with feature `002-chip-engine`; in this feature — on the IC model.*
+- **SC-005**: During any operation longer than 1 s the user sees progress updates at least
+  once per second.
+- **SC-006**: Adding support for a new IC requires only a programmer firmware update:
+  the unchanged client shows it in the list and performs all operations with it.
+- **SC-007**: A power cut or USB drop at any moment of a package upload (≥100
+  trials) each time leaves the programmer with either the previous or the new package, and always an intact one.
+- **SC-008**: A USB connection drop (without losing the programmer's power) at any moment of programming
+  (≥ 100 trials) does not change the result: the IC contents and the summary are the same as without the drop, and the
+  summary is available after reconnecting.
+- **SC-012**: After a power cut at any moment of programming an OTP IC (≥ 100 trials on the
+  model), repeated programming of the same IC — by the same or another programmer with the same package —
+  each time either succeeds with a retry mark,
+  or refuses without writing anything if the contents are incompatible; a zero that is not in the effective image never appears in the IC.
+- **SC-013**: On a failed calibration (a faulty oscillator model), after the operation the IC
+  has no written word outside the main image and the measurement loop; repeated programming after
+  a "repair" of the oscillator finishes the calibration successfully.
+- **SC-009**: For a calibrated FLASH reference in the "measure the reference" mode, the IHRC frequency of the copies
+  differs from the reference's frequency (measured by the same programmer) by no more than 1 %, and the
+  reference after copying is bit-for-bit identical to its contents before copying. *In this feature — on the IC
+  model; on real PFS154s — together with `002-chip-engine`.*
+- **SC-010**: A power cut at any moment of copying in the "measure the reference" mode (≥ 100
+  trials) never leads to a loss of the reference's contents: it can always be restored from the dump.
+- **SC-011**: No exchange of data with the IC begins until VDD and VPP are within
+  ±2 % / ±30 mV of the set values; with an artificially faulty supply (simulation and hardware) the operation
+  ends with a voltage error no later than 20 ms after the change, with nothing written to the IC.
 
 ## Assumptions
 
-- Клієнт розбирає файли прошивки (Intel HEX / bin) і формує образ; програматор файлових форматів
-  не знає (принцип I конституції).
-- Одночасно з програматором працює не більше одного клієнта.
-- Програматор зберігає один активний пакет (FR-016); кількість слотів і розмітку сховища основної МК буде
-  визначено після її вибору (наступна специфікація) — протокол розширюваний мінорною версією.
-- Максимальний обсяг читання — 4096 слів по 16 біт (найбільша з підтримуваних мікросхем); найбільший
-  пакет для запису визначає ємність сховища програматора (на еталонній платформі — 8 КБ, що покриває
-  всі мікросхеми з підтримкою запису; мікросхема на 4096 слів — лише для читання).
-- Калібрувальні вставки й вставки серійного номера мають формат, сумісний з макросами free-pdk
-  (`easypdk/pdkcommon.h`), щоб існуючі програми працювали без змін. Програматор знаходить їх пошуком
-  шаблону в образі, адреси ніхто не передає; вставка може стояти будь-де, але має **гарантовано
-  виконуватися при старті** програми (free-pdk: у `_sdcc_external_startup()`) і після вибору
-  тактування — інакше калібрування не вдасться (FR-043). На розробнику — ставити по одному макросу на
-  кожен параметр, який програма використовує (IHRC, ILRC, BandGap).
-- Основний сценарій виробничого використання — програмування в схемі (на цільовій платі) через
-  pogo-контакти; терміни «мікросхема в панельці» і «підключена мікросхема» в цій специфікації
-  рівнозначні. Інші компоненти плати можуть навантажувати VDD, що враховує перевірка напруг (FR-040).
-- Для калібрування лінії PA3 і PA4 мікросхеми мають бути вільними або розв'язаними від інших кіл
-  цільової плати на час програмування; інакше калібрування може не вдатися (FR-043).
-- Якщо програматор живиться від USB, висмикування кабелю — це обрив живлення (FR-044), а не лише обрив
-  зв'язку (FR-023).
-- Напруга, на якій калібрувався еталон, із дампу невідома; при копіюванні використовується
-  напруга, задана клієнтом, або типова 5.0 В.
-- Ресурс стирання FLASH-мікросхем PADAUK обмежений, тому режим «виміряти еталон» (кілька додаткових
-  циклів стирання еталона) ніколи не вмикається без явного дозволу.
-- Ім'я пакета закладено на майбутнє: версія програматора з екраном і більшою пам'яттю зберігатиме кілька
-  пакетів і показуватиме їх за іменем; у цій фічі ім'я лише зберігається й повертається клієнту.
-- У програматора немає годинника реального часу; часові мітки, якщо потрібні, задає клієнт.
-- Серійний номер — випадкове 64-бітне число (FR-046); послідовна нумерація в цій фічі не підтримується
-  (за потреби — окремою фічею). Ймовірність збігу навіть для мільйона мікросхем ~3·10⁻⁸, координація
-  між програматорами не потрібна.
-- Серійний номер прошивки, зібраної не за допомогою free-pdk, може бути будь-де й будь-якої довжини,
-  тому копіювання його не розпізнає (FR-052).
-- Захист від читання (security fuse) встановлюється лише за явного дозволу в пакеті
-  (принцип III конституції); обхід захисту при читанні не підтримується.
-- Оскільки пакет один (FR-016), запис мікросхеми з PC завжди йде через завантаження пакета в
-  сховище: CLI-клієнт у стилі `easypdkprog write` замінює активний пакет у програматорі.
-- Конкретні алгоритми контролю цілісності, формат кадрів і розміри фрагментів визначаються на етапі
-  планування; ця специфікація задає лише вимоги до виявлення помилок.
+- The client parses firmware files (Intel HEX / bin) and builds the image; the programmer does not know file
+  formats (constitution principle I).
+- At most one client works with the programmer at a time.
+- The programmer stores one active package (FR-016); the number of slots and the storage layout of the primary MCU will be
+  determined after it is chosen (the next specification) — the protocol is extensible by the minor version.
+- The maximum read size is 4096 16-bit words (the largest of the supported ICs); the largest
+  package for writing is determined by the programmer's storage capacity (on the reference platform — 8 KB, which covers
+  all ICs that support writing; the 4096-word IC is read-only).
+- Calibration stubs and serial-number stubs have a format compatible with the free-pdk macros
+  (`easypdk/pdkcommon.h`) so that existing programs work unchanged. The programmer finds them by searching
+  for a pattern in the image, and no one passes the addresses; a stub may be anywhere, but must be **guaranteed to
+  execute at program start** (free-pdk: in `_sdcc_external_startup()`) and after the clock is chosen —
+  otherwise calibration will fail (FR-043). The developer places one macro for each
+  parameter the program uses (IHRC, ILRC, BandGap).
+- The main production use scenario is in-circuit programming (on the target board) through
+  pogo contacts; the terms "IC in the socket" and "connected IC" in this specification are
+  equivalent. Other board components may load VDD, which the voltage check accounts for (FR-040).
+- For calibration, the IC's PA3 and PA4 lines must be free or isolated from the other circuits of the
+  target board for the duration of programming; otherwise calibration may fail (FR-043).
+- If the programmer is powered from USB, pulling the cable is a power cut (FR-044), not only a dropped
+  connection (FR-023).
+- The voltage at which the reference was calibrated is unknown from the dump; when copying, the
+  voltage set by the client is used, or the typical 5.0 V.
+- The erase endurance of PADAUK FLASH ICs is limited, so the "measure the reference" mode (several extra
+  reference erase cycles) is never enabled without explicit permission.
+- The package name is provisioned for the future: a version of the programmer with a screen and more memory will store several
+  packages and show them by name; in this feature the name is only stored and returned to the client.
+- The programmer has no real-time clock; timestamps, if needed, are set by the client.
+- The serial number is a random 64-bit number (FR-046); sequential numbering is not supported in this feature
+  (if needed — by a separate feature). The probability of a collision even for a million ICs is ~3·10⁻⁸, and no coordination
+  between programmers is needed.
+- The serial number of firmware not built with free-pdk may be anywhere and of any length,
+  so copying does not recognize it (FR-052).
+- Read protection (the security fuse) is set only with explicit permission in the package
+  (constitution principle III); bypassing protection when reading is not supported.
+- Since there is one package (FR-016), programming an IC from the PC always goes through uploading a package to
+  storage: a CLI client in the style of `easypdkprog write` replaces the active package in the programmer.
+- The concrete integrity-check algorithms, the frame format, and fragment sizes are determined at the
+  planning stage; this specification sets only the requirements for error detection.
