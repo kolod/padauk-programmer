@@ -7,7 +7,7 @@ Results of the hardware steps of [quickstart.md](quickstart.md) (constitution VI
 
 | Family | Status |
 |---|---|
-| FLASH_1 (PFS154) | probe and read confirmed on hardware (2026-11-26); write, erase, calibration pending (US2, US3) |
+| FLASH_1 (PFS154) | probe, read, erase, write confirmed on hardware (2026-11-26); calibration pending (US3) |
 | FLASH_1 (PFS173), FLASH_2 (PFS172), OTP1_2, OTP2_1, OTP2_2, OTP3_1 | trace- and model-tested only — not confirmed on hardware (no IC on hand) |
 
 ## User story 1 — identify and read (T019)
@@ -19,6 +19,14 @@ Results of the hardware steps of [quickstart.md](quickstart.md) (constitution VI
 | SC-004: 100 consecutive reads | **OK** — 100 identical SHA-256 hashes (`176ab3dd…569e66`) | 2026-11-26 |
 | SC-005: no IC / reversed IC, scope on VDD/VPP | pending | |
 | Logic-analyzer capture of the read preamble / ACK / clock widths | pending | |
+
+## User story 2 — program a FLASH IC (T025)
+
+| Step | Result | Date |
+|---|---|---|
+| `pdkprog --trace -n PFS154 write firmware.bin` (beeper, 488 words, one IHRC stub) — firmware built with `PDK_VDD_TOL_MV=300` | **OK up to CALIBRATE** — probe; ERASE (VDD 3000 → 3102 mV, VPP 9000 → 8996 mV, 2 clocks, 110 ms pause); BLANK_CHECK ≈ 214 ms; WRITE (VDD 5800 → 5809 mV, VPP 8500 → 8490 mV, 122 blocks in one session ≈ 83 ms); VERIFY ≈ 280 ms passed; stopped at CALIBRATE with `OP_UNSUPPORTED` (user story 3). Total 0.9 s | 2026-11-26 |
+| SC-001 (full write with one IHRC calibration ≤ 10 s) | pending (needs user story 3) | |
+| SC-008 (interoperability with Easy PDK) | pending | |
 
 ## Findings during bring-up
 

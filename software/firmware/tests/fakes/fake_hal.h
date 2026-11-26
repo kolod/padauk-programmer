@@ -12,6 +12,7 @@
 
 /* Resets every fake to its initial state (erased flash, time 0, port open, supplies ideal). */
 void fake_reset(void);
+void fake_engine_reset(void);   /* provided by the linked engine fake (fake_chip / fake_icp) */
 
 /* --- transport --- */
 void fake_set_open(bool open);
@@ -22,7 +23,7 @@ size_t fake_tx_take(uint8_t *buf, size_t cap);   /* drains captured output */
 uint32_t fake_now_us(void);
 void fake_advance_us(uint32_t us);
 
-/* --- flash (F072 geometry: 64 KB, 2 KB pages, slots 0x0800B000/0x0800D000, journal 0x0800F000) --- */
+/* --- flash (a small geometry: 64 KB, 2 KB pages, slots 0x0800B000/0x0800D000, journal 0x0800F000) --- */
 uint8_t *fake_flash_mem(uint32_t addr);   /* direct access for corruption tests */
 uint32_t fake_flash_ops(void);            /* erase + program operations so far */
 uint32_t fake_flash_erases(void);
@@ -47,6 +48,7 @@ uint16_t fake_power_true_mV(pdk_rail_t rail);   /* what an external meter would 
 void fake_power_settle_us(uint32_t us);   /* time constant of an ideal supply */
 uint16_t fake_power_set_value(pdk_rail_t rail);
 uint32_t fake_power_off_calls(void);
+void fake_power_hook(void (*fn)(pdk_rail_t rail, uint16_t mV));   /* every set point change (engine traces) */
 
 /* --- entropy (default: xorshift noise; seed 0 = the reset seed) --- */
 typedef enum {

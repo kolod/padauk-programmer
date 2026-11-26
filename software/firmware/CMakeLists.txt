@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 cmake_minimum_required(VERSION 3.20)
 
-set(PLATFORM "host" CACHE STRING "Target platform: host | stm32f072 | stm32g474")
-set_property(CACHE PLATFORM PROPERTY STRINGS host stm32f072 stm32g474)
+set(PLATFORM "host" CACHE STRING "Target platform: host | stm32g474")
+set_property(CACHE PLATFORM PROPERTY STRINGS host stm32g474)
 
 if(PLATFORM STREQUAL "host")
     project(padauk_programmer C)
@@ -21,13 +21,14 @@ set(PDK_WARNINGS -Wall -Wextra -Werror -Wno-unused-parameter)
 # Platform-independent core
 # ---------------------------------------------------------------------------
 file(GLOB_RECURSE PDK_CORE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/core/*.c)
+list(FILTER PDK_CORE_SOURCES EXCLUDE REGEX "/core/engine/")
 add_library(pdk_core STATIC ${PDK_CORE_SOURCES})
 target_include_directories(pdk_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${CMAKE_CURRENT_SOURCE_DIR}/hal)
 target_compile_options(pdk_core PRIVATE ${PDK_WARNINGS})
 
-# Optional features (may be disabled for the F072 bring-up target, see INFO.capabilities)
+# Optional features (a build may leave them out; INFO.capabilities reports it)
 option(PDK_FEATURE_MEASURE_MASTER "COPY with MEASURE_MASTER" ON)
 option(PDK_FEATURE_PATCH "PATCH operation" ON)
 if(PDK_FEATURE_MEASURE_MASTER)
@@ -36,6 +37,22 @@ endif()
 if(PDK_FEATURE_PATCH)
     target_compile_definitions(pdk_core PUBLIC PDK_FEATURE_PATCH=1)
 endif()
+
+# Workaround for the first G474 board, whose VDD reading (PA0) wanders by up to ±250 mV while the rail itself is accurate
+# (specs/002-chip-engine/hw-validation.md): the VDD settle check accepts at least this deviation. 0 = the protocol's
+# rule (±2 % or ±30 mV, contracts/protocol.md §6.1). It masks a measurement fault: use only on that board, never as a default.
+set(PDK_VDD_TOL_MV "0" CACHE STRING "Minimum VDD settle tolerance in mV (0 = the standard ±2 % / ±30 mV rule)")
+if(PDK_VDD_TOL_MV GREATER 0)
+    target_compile_definitions(pdk_core PUBLIC PDK_VDD_TOL_MV=${PDK_VDD_TOL_MV})
+    message(WARNING "PDK_VDD_TOL_MV=${PDK_VDD_TOL_MV}: the VDD settle check is widened (board workaround)")
+endif()
+
+# The PADAUK chip engine (specs/002-chip-engine): implements hal/chip_engine.h over hal/hal_icp.h. The G474 firmware
+# and the engine unit tests link it; pdk-sim keeps its IC model (platform/host/chip_model.c) as the engine.
+file(GLOB PDK_ENGINE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/core/engine/*.c)
+add_library(pdk_engine STATIC ${PDK_ENGINE_SOURCES})
+target_link_libraries(pdk_engine PUBLIC pdk_core)
+target_compile_options(pdk_engine PRIVATE ${PDK_WARNINGS})
 
 # ---------------------------------------------------------------------------
 # Host: simulator + unit tests
@@ -76,12 +93,6 @@ if(PLATFORM STREQUAL "host")
 
     enable_testing()
     add_subdirectory(tests)
-
-# ---------------------------------------------------------------------------
-# STM32F072 bring-up target (Easy PDK boards)
-# ---------------------------------------------------------------------------
-elseif(PLATFORM STREQUAL "stm32f072")
-    include(${CMAKE_CURRENT_SOURCE_DIR}/platform/stm32f072/stm32f072.cmake)
 
 # ---------------------------------------------------------------------------
 # STM32G474CEU6: WeAct STM32G474 core board (DAC/ADC/OPAMP on chip; supply front end optional)

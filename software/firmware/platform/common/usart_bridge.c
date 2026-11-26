@@ -1,26 +1,14 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* UART bridge for RUN on the STM32 boards (hal_uart.h): USART1, PB6 = TX → chip PA0, PB7 = RX ← chip PA7
+/* UART bridge for RUN on the STM32G474 board (hal_uart.h): USART1, PB6 = TX → chip PA0, PB7 = RX ← chip PA7
  * (as in the original easy-pdk firmware). The speed comes from the hardware auto baud rate detection on
  * the start bit of the chip's first byte 'U', which is then dropped. Receive and transmit run from the
  * USART interrupt through ring buffers; the RUN loop drains RX. */
-#if defined(STM32F072xB) || defined(STM32G474xx)
+#if defined(STM32G474xx)
 
 #include <string.h>
 
 #include "hal_uart.h"
 
-#if defined(STM32F072xB)
-#include "f072.h"
-#define BRIDGE_PCLK_HZ F072_HCLK_HZ
-#define BRIDGE_AF 0u
-#define ISR_RXNE USART_ISR_RXNE
-#define ISR_TXE USART_ISR_TXE
-#define ICR_NOISE USART_ICR_NCF
-#define CR1_RXNEIE USART_CR1_RXNEIE
-#define CR1_TXEIE USART_CR1_TXEIE
-#define GPIOB_CLOCK_ON() (RCC->AHBENR |= RCC_AHBENR_GPIOBEN)
-#define LINES_VDD_MAX_MV 0u   /* PB6/PB7 are 5 V tolerant (FT) */
-#else
 #include "g474.h"
 #define BRIDGE_PCLK_HZ G474_HCLK_HZ   /* APB2 = HCLK, USART1 clocked from PCLK2 */
 #define BRIDGE_AF 7u
@@ -31,7 +19,6 @@
 #define CR1_TXEIE USART_CR1_TXEIE_TXFNFIE
 #define GPIOB_CLOCK_ON() (RCC->AHB2ENR |= RCC_AHB2ENR_GPIOBEN)
 #define LINES_VDD_MAX_MV 5000u   /* PB6 is FT_c (UCPD CC line): 5.0 V at most (stm32g474/README.md) */
-#endif
 
 #define RING 128u   /* power of two; the client sends at most 64 bytes per UART_TX */
 #define ERRORS (USART_ISR_ORE | USART_ISR_FE | USART_ISR_NE)

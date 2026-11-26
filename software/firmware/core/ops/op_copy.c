@@ -14,7 +14,6 @@
  * copied as code with a warning (FR-053); a measurement loop in the master needs ALLOW_MASTER_LOOP and a
  * target from the PC (FR-051). */
 #include <stddef.h>
-#include <stdio.h>
 #include <string.h>
 
 #include "chips/calib_footprint.h"
@@ -303,6 +302,21 @@ static void feed(uint16_t word)
         step();
 }
 
+/* `a` + `b` + " " + 8 hex digits of `crc` (with_crc), cut to cap − 1 characters. No printf: newlib's pulls malloc. */
+static void copy_name(char *out, size_t cap, const char *a, const char *b, uint32_t crc, bool with_crc)
+{
+    size_t n = 0;
+    for (const char *s = a; s && *s && n + 1 < cap; s++)
+        out[n++] = *s;
+    for (const char *s = b; s && *s && n + 1 < cap; s++)
+        out[n++] = *s;
+    if (with_crc && n + 1 < cap)
+        out[n++] = ' ';
+    for (int i = 7; with_crc && i >= 0 && n + 1 < cap; i--)
+        out[n++] = "0123456789ABCDEF"[(crc >> (4 * i)) & 0xFu];
+    out[n] = 0;
+}
+
 /* Mask, header (last: it names the master's checksum), trailer CRC. Returns the package size. */
 static uint32_t finish_package(uint32_t norm, bool dump)
 {
@@ -332,13 +346,13 @@ static uint32_t finish_package(uint32_t norm, bool dump)
     h.chip_id12 = c.chip->id12;
     h.image_words = words;
     h.flags = PKG_F_CREATED_BY_COPY;
-    snprintf(h.chip_name, sizeof h.chip_name, "%s", c.chip->name);
+    copy_name(h.chip_name, sizeof h.chip_name, c.chip->name, NULL, 0, false);
     if (dump)
-        snprintf(h.name, sizeof h.name, "master %s %08lX", c.chip->name, (unsigned long)norm);
+        copy_name(h.name, sizeof h.name, "master ", c.chip->name, norm, true);
     else if (c.q.name[0])
-        snprintf(h.name, sizeof h.name, "%s", c.q.name);
+        copy_name(h.name, sizeof h.name, c.q.name, NULL, 0, false);
     else
-        snprintf(h.name, sizeof h.name, "copy %s %08lX", c.chip->name, (unsigned long)norm);
+        copy_name(h.name, sizeof h.name, "copy ", c.chip->name, norm, true);
     uint8_t raw[PKG_HEADER_SIZE];
     pkg_header_build(&h, raw);
     if (!slots_write(c.slot, 0, raw, sizeof raw) || !slots_flush(c.slot))

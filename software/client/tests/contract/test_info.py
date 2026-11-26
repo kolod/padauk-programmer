@@ -19,7 +19,7 @@ def test_info_and_chip_list(pdk_sim):
     sim = pdk_sim()
     p = sim.connect()
     i = p.info
-    assert (i.proto_major, i.proto_minor) == (1, 0)
+    assert (i.proto_major, i.proto_minor) == (1, 1)
     assert i.max_payload == 512 and i.max_package_size == 8192 and i.max_read_words == 4096
     for cap in (CAP_MEASURE_POWER, CAP_SUPPLY_CAL, CAP_SUPPLY_SET, CAP_PATCH, CAP_MEASURE_MASTER, 1 << 0, 1 << 1,
                 1 << 2, 1 << 3, 1 << 5):

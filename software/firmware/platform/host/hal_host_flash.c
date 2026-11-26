@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* Flash emulation with F072 geometry, optional file backing and power-fail injection. */
+/* Flash emulation with a small geometry (64 KB, 2 KB pages, 2 slots of 8 KB), optional file backing and power-fail
+ * injection. */
 #include "hal_flash.h"
 #include "host.h"
 

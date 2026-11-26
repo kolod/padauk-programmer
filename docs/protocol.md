@@ -14,13 +14,13 @@ decisions in `research.md`).
 
 ## Versioning
 
-- **Protocol 1.0.** The version is carried by `HELLO` / `GET_INFO` (`proto_major`, `proto_minor`). A different major version →
+- **Protocol 1.1** (1.1 added the diagnostic trace `TRACE_SET` / `EVT_TRACE`). The version is carried by `HELLO` / `GET_INFO` (`proto_major`, `proto_minor`). A different major version →
   `PROTO_VERSION`, and the session is not opened. The minor version grows when commands, events, codes, or fields are added at the
   end of the payload: the client MUST ignore extra bytes at the end of a response, and an unknown command code gives
   `UNKNOWN_COMMAND` without dropping the session (§3).
 - **Package format 1** (`format_version` in the header). An unknown format → `PKG_HEADER_INVALID`.
 - **Build capabilities** — `GET_INFO.capabilities`: the firmware may lack some features (for example,
-  `MEASURE_MASTER` or `PATCH` on F072), and the client checks the bit before offering a feature.
+  `MEASURE_MASTER` or `PATCH`), and the client checks the bit before offering a feature.
 - **The IC table** lives only in the firmware (`LIST_CHIPS`): a new IC does not need a new client.
 
 ## Status codes
@@ -36,7 +36,7 @@ of the protocol](#7-mapping-to-easypdkprog-commands-fr-030).
 
 <a id="protocol"></a>
 
-## Contract: PC ⇄ programmer protocol (protocol version 1.0)
+## Contract: PC ⇄ programmer protocol (protocol version 1.1)
 
 The transport is USB CDC ACM. The port speed is ignored. All multi-byte fields are little-endian.
 CRC is CRC-32/ISO-HDLC (`zlib.crc32`). The firmware package format is in [package-format.md](package-format.md).
@@ -57,7 +57,7 @@ On the wire every frame is a COBS-encoded block followed by a `0x00` byte. After
 | 10+len | `u32` | `crc32` | CRC of bytes `0 … 9+len` |
 
 Size of a decoded frame: 14 + `len`. The protocol's `max_payload` is 1024; the programmer reports its own
-(512 on F072), and the client MUST use the smaller of the two.
+(512 in the current firmware), and the client MUST use the smaller of the two.
 
 **These frame fields and the `GET_INFO`/`HELLO` commands are frozen for all major versions.**
 
@@ -102,10 +102,10 @@ is empty unless stated otherwise.
 |---|---|
 | `u8, u8` | `proto_major`, `proto_minor` |
 | `u16` | `max_payload` |
-| `u32` | `max_package_size` — the largest package that can be written (slot capacity; F072 — 8192) |
-| `u16` | `max_read_words` — the largest number of words for `READ` (F072 — 4096) |
+| `u32` | `max_package_size` — the largest package that can be written (slot capacity; STM32G474 — 16384, `pdk-sim` — 8192) |
+| `u16` | `max_read_words` — the largest number of words for `READ` (4096) |
 | `u32` | `capabilities` (bit0 standalone mode, bit1 calibration, bit2 RUN/UART, bit3 COPY, bit4 VDD/VPP measurement, bit5 `SELF_TEST`, bit6 `PATCH`, bit7 supply calibration `CAL_*`, bit8 manual supply control `SUPPLY_*`, bit9 `COPY` with `MEASURE_MASTER` — a build may disable it, then mode 3 → `OP_UNSUPPORTED`) |
-| `char[16]` | `platform` (e.g. `"stm32f072c8"`) |
+| `char[16]` | `platform` (e.g. `"stm32g474ce"`) |
 | `char[24]` | `firmware_version` |
 | `u8` | `chip_table_size` |
 
@@ -227,6 +227,30 @@ voltmeter a rail that does not fit the tolerance; `*_FAULT` then never occurs. O
 - A dropped session, `CAL_START`, or 5 minutes without `SUPPLY_*` commands → the voltages are removed (`SUPPLY_GET` extends the
   time, so a client that shows measurements keeps them). During calibration `SUPPLY_SET` → `NOT_ALLOWED_NOW`;
   without a supply circuit both commands → `OP_UNSUPPORTED`.
+
+#### Diagnostic trace (protocol 1.1)
+
+For diagnosing a board, a wiring problem, or an IC: while the trace is on, the programmer reports what it does with the
+supplies and the IC as `EVT_TRACE` events. It is off after `HELLO` and on every session reset; a 1.0 programmer answers
+`TRACE_SET` with `UNKNOWN_COMMAND` (the client then says so).
+
+| Code | Name | → | ← | During an operation |
+|---|---|---|---|---|
+| `0x0047` | `TRACE_SET` | `u8 on` (0 / 1; other → `BAD_PAYLOAD`) | — | ✓ |
+
+`EVT_TRACE` (14 bytes): `u32 t_us` (the programmer's microsecond clock), `u8 kind`, `u8 b8`, `u16 w1`, `u16 w2`, `u32 d`:
+
+| `kind` | Meaning | `b8` | `w1` | `w2` | `d` |
+|---|---|---|---|---|---|
+| 1 `POWER_OK` | a supply reached its set point (§6.1) | rail (0 VDD, 1 VPP) | set mV | measured mV | elapsed µs |
+| 2 `POWER_FAULT` | a supply did not settle; all supplies off | rail | set mV | last measured mV | elapsed µs |
+| 3 `ENTER` | the IC engine entered programming mode | family | VPP mV | VDD mV | mode (1 probe, 2 GetID, 3 read, 4 write, 5 erase, 6 calibrate, 7 run) |
+| 4 `LEAVE` | the engine left programming mode | mode | the pause before the next enter, ms | — | — |
+| 5 `ACK` | the FLASH command answer | family | expected ID | bits | raw answer |
+| 6 `GETID` | the OTP ID answer | family | expected ID | bits | raw answer (last 32 bits) |
+| 7 `PROBE` | one probe attempt | family | — | bits | raw answer |
+
+Unknown `kind` values may appear in later minor versions: a client shows them raw.
 
 #### IC operations
 
@@ -450,6 +474,7 @@ code `HOST_DISCONNECTED`.
 | `0x8004` | `EVT_UART_RX` | `u8 data[]` |
 | `0x8005` | `EVT_UART_LINK` | `u32 baud` |
 | `0x8006` | `EVT_PKG_STATE` | `u8 pkg_state, u32 package_crc32` (after a commit, a delete, or detection of corruption) |
+| `0x8007` | `EVT_TRACE` | a trace record (protocol 1.1, only while `TRACE_SET(1)`; see "Diagnostic trace") |
 
 Events are sent only in an established session (after a successful `HELLO`). `EVT_PROGRESS` is sent when the
 stage changes and at least once every 500 ms. Events are not acknowledged;
@@ -675,7 +700,7 @@ The package test vectors are stored in `software/tests/vectors/` and are used by
 ## Contract: internal interfaces core ⇄ IC engine ⇄ power
 
 An internal (non-network) contract between the platform-independent firmware core, the IC engine
-(the PADAUK implementation is feature `002-chip-engine`; in this feature — a model for the simulator and a stub for F072),
+(the PADAUK implementation is feature `002-chip-engine`; in this feature — a model for the simulator),
 and the power hardware. It fixes the guarantees of constitution principle III and FR-040.
 
 ### 1. `hal_power.h` — power hardware (implemented by the platform)
@@ -746,5 +771,5 @@ a separate feature (research R16). The set is fixed (FR-054):
 
 `ui_state.state`: `READY`, `BUSY` (`detail` = stage and percent), `SUCCESS`, `FAIL` (`detail` = class:
 `STORAGE`, `NO_PACKAGE`, `CHIP`, `CALIB`, `POWER_SELFTEST`, `MASTER_PENDING` + the status code), `BLOCKED`
-(local programming is replaced by the self-test). The F072 reference board in this feature: one button →
-`local_start(PROGRAM)`, three LEDs — a simplified display of the states.
+(local programming is replaced by the self-test). The WeAct STM32G474 board: one button (KEY) →
+`local_start(PROGRAM)`, one LED — a simplified display of the states.

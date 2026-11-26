@@ -4,7 +4,7 @@
 #define PDK_PROTO_DEFS_H
 
 #define PDK_PROTO_MAJOR 1
-#define PDK_PROTO_MINOR 0
+#define PDK_PROTO_MINOR 1   /* 1.1: TRACE_SET / EVT_TRACE */
 
 /* Frame types (§1) */
 enum {
@@ -48,6 +48,7 @@ enum {
     PDK_CMD_CAL_CLEAR = 0x0044,
     PDK_CMD_SUPPLY_SET = 0x0045,
     PDK_CMD_SUPPLY_GET = 0x0046,
+    PDK_CMD_TRACE_SET = 0x0047,
 };
 
 /* Events (§5) */
@@ -58,6 +59,7 @@ enum {
     PDK_EVT_UART_RX = 0x8004,
     PDK_EVT_UART_LINK = 0x8005,
     PDK_EVT_PKG_STATE = 0x8006,
+    PDK_EVT_TRACE = 0x8007,
 };
 
 /* Status codes (§6). Reserved: 0x020A, 0x0304. */

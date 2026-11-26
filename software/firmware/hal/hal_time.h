@@ -6,6 +6,6 @@
 
 uint32_t hal_time_ms(void);           /* monotonic milliseconds (wraps) */
 uint32_t hal_time_us(void);           /* monotonic microseconds (wraps) */
-void hal_delay_us(uint32_t us);       /* busy wait */
+void hal_delay_us(uint32_t us);       /* busy wait of AT LEAST us microseconds */
 
 #endif

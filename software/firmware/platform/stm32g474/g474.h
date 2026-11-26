@@ -27,7 +27,7 @@
 
 void g474_supplies_early_off(void);   /* DAC = 0 V; no RAM state, callable before .data init */
 void g474_clock_init(void);
-void g474_time_init(void);            /* SysTick 1 ms, TIM2 (32 bit) 1 MHz free-running */
+void g474_time_init(void);            /* SysTick 1 ms, TIM5 (32 bit) 1 MHz free-running, DWT cycle counter */
 void g474_flash_init(void);           /* unlock state, error flags, page size from DBANK */
 void g474_power_init(void);
 void g474_ui_init(void);

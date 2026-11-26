@@ -1,0 +1,20 @@
+{
+  "family": "OTP1_2",
+  "chip": "PMS150C",
+  "operation": "read",
+  "input": {"addr": 0, "count": 1, "answer_id": 2583},
+  "events": [
+    {"e": "idle"},
+    {"e": "mode", "line": "CLK", "dir": "out_low"},
+    {"e": "vpp", "mV": 5000, "min_us": 100},
+    {"e": "vdd", "mV": 3000, "min_us": 500},
+    {"e": "mode", "line": "DAT", "dir": "in_pulldown"},
+    {"e": "mode", "line": "PA4", "dir": "out_low"},
+    {"e": "send", "data": "PA4", "clk": "CLK", "value": 2779096487, "bits": 32},
+    {"e": "mode", "line": "PA4", "dir": "out_low"},
+    {"e": "recv", "data": "DAT", "clk": "CLK", "bits": 38, "reply": 2583},
+    {"e": "idle"},
+    {"e": "vdd", "mV": 0},
+    {"e": "vpp", "mV": 0}
+  ]
+}

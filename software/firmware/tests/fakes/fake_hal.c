@@ -73,7 +73,7 @@ void fake_reset(void)
     f.entropy_x = 0x12345678u;
     for (int i = 0; i < 12; i++)
         f.uid[i] = (uint8_t)(0xA0 + i);
-    fake_chip_reset();
+    fake_engine_reset();   /* fake_chip.c or fakes/engine/fake_icp.c, whichever is linked */
     fake_uart_reset();
 }
 
@@ -305,11 +305,16 @@ static uint16_t ideal(pdk_rail_t rail)
     return (uint16_t)(f.from[rail] + ((int32_t)f.set[rail] - f.from[rail]) * (int32_t)dt / (int32_t)settle);
 }
 
+static void (*power_hook)(pdk_rail_t rail, uint16_t mV);
+void fake_power_hook(void (*fn)(pdk_rail_t rail, uint16_t mV)) { power_hook = fn; }
+
 void hal_power_set(pdk_rail_t rail, uint16_t mV)
 {
     f.from[rail] = ideal(rail);
     f.set[rail] = mV;
     f.set_at[rail] = f.now_us;
+    if (power_hook)
+        power_hook(rail, mV);
 }
 
 /* What an external meter shows: the ideal ramp scaled by the output error. */
@@ -333,6 +338,10 @@ uint16_t hal_power_measure(pdk_rail_t rail)
 void hal_power_off_all(void)
 {
     f.off_calls++;
+    if (power_hook && f.set[PDK_RAIL_VDD])
+        power_hook(PDK_RAIL_VDD, 0);
+    if (power_hook && f.set[PDK_RAIL_VPP])
+        power_hook(PDK_RAIL_VPP, 0);
     f.set[0] = f.set[1] = 0;
     f.from[0] = f.from[1] = 0;
     f.set_at[0] = f.set_at[1] = f.now_us;
