@@ -22,7 +22,7 @@ ctest --test-dir build/host --output-on-failure -R "engine"
 ```
 
 Expected: `test_engine_trace` matches every family/operation of [contracts/traces.md](contracts/traces.md);
-`test_engine_ops` writes and reads back through the bit model, refuses a wrong ID and a missing IC without programming
+`test_engine_write` / `test_engine_otp` write and read back through the bit model, refuses a wrong ID and a missing IC without programming
 voltages, keeps one session across consecutive blocks, ends every path in the safe state; `test_engine_calib` finds the trim
 values on synthetic `f(k)` curves and refuses the FR-055 cases. The whole suite (`ctest`, `pytest … --sim`) stays green — the
 simulator still uses its IC model.
@@ -34,10 +34,9 @@ cmake -S software/firmware -B build/g474 -G Ninja -DPLATFORM=stm32g474 -DCMAKE_B
       -DCMAKE_TOOLCHAIN_FILE=$PWD/software/firmware/cmake/arm-cortex-m4f.cmake
 cmake --build build/g474
 dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D build/g474/pdkprog-g474.bin
-cmake -S software/firmware -B build/f072 -G Ninja -DPLATFORM=stm32f072 -DCMAKE_BUILD_TYPE=MinSizeRel \
-      -DCMAKE_TOOLCHAIN_FILE=$PWD/software/firmware/cmake/arm-none-eabi.cmake
-cmake --build build/f072          # the size check must still pass (≤ 44 KB)
 ```
+
+The build ends with the size check (`cmake/check_size.cmake`, ≤ 256 KB). The F072 target was removed (constitution 1.5.0).
 
 ## 3. Safety first (no IC, then an IC) — SC-005, SC-006
 

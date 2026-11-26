@@ -399,6 +399,10 @@ A summary after implementing all the stories (as of 2026-11-26):
 - **`MEASURE_MASTER`** (R9): the final package is built by a second streaming pass over the saved dump (RAM
   does not hold an image copy); the dump is committed as a `KEEP_VALUE` package before the first reference erase.
 - **Host compiler**: gcc/clang (MinGW-w64 on Windows); MSVC is not supported (GNU extensions in the core).
-- **Outside this feature**: on STM32 the IC engine is a stub, so SC-004 (programming a PFS154 ≤ 10 s) and SC-009
-  (copies within 1 % of the reference) are verified on real ICs in feature `002-chip-engine`; here they are
-  proven on the `pdk-sim` model. Hardware validation of the debug target is `hw-validation.md` (T129).
+- **Outside this feature**: SC-004 (programming a PFS154 ≤ 10 s) and SC-009 (copies within 1 % of the reference)
+  are proven here on the `pdk-sim` model and verified on real ICs in feature `002-chip-engine`
+  ([its hardware record](../002-chip-engine/hw-validation.md)): SC-004 — confirmed on a PFS154 on 2026-11-26 (4.6 s:
+  erase, blank check, write, verify, one IHRC calibration; a 488-word image without a fuse word); SC-009 — not yet
+  confirmed (needs several PFS154). Hardware validation of the debug target is `hw-validation.md` (T129).
+- **Later change**: the F072 debug target was removed (constitution 1.5.0); the STM32G474 is the only platform. The
+  F072 size figures above are historical.

@@ -37,7 +37,7 @@ Build options:
 | `PDK_G474_SUPPLIES` | `ON` | the VDD/VPP supplies of the `hardware/stm32g474-board` board; `OFF` — a bare WeAct module without supplies |
 
 After linking, the build checks the size (`cmake/check_size.cmake`): `.text + .data` above 256 KB (bank 1) is an error
-with a hint to disable features. The firmware currently takes about 37 KB.
+with a hint to disable features. The firmware currently takes about 45 KB.
 
 ## Flashing via DFU
 
@@ -66,6 +66,39 @@ record, so a power loss leaves either the old or the new package.
 The storage is in bank 2: erasing does not stall the CPU (read-while-write). The simulator `pdk-sim` emulates a smaller
 flash (2 slots of 8 KB), so `INFO.max_package_size` there is 8192. The slot size is given by
 `INFO.max_package_size`.
+
+## The chip engine (`core/engine`)
+
+The PADAUK programming protocol (feature `002-chip-engine`, sequences from
+[`docs/easy-pdk-programmer-protocol.md`](../../docs/easy-pdk-programmer-protocol.md) §4) over the line interface
+`hal/hal_icp.h`; the operations of feature 001 call it through `hal/chip_engine.h`.
+
+| File | What it does |
+|---|---|
+| `engine.c` | the session (VPP before VDD with the free-pdk pauses through `power_apply`, lines released before the supplies drop, the post-leave pause charged to the next enter, one session for consecutive blocks), the ID check in every session (FLASH ACK, OTP GetID), read, erase, write, RUN |
+| `family.c` | per-family line roles, command preambles, word read, write block, erase clock |
+| `probe.c` | auto-detection at VPP 4.5 V / VDD 2.0 V |
+| `calibrate.c` | IHRC / ILRC / BandGap calibration and frequency measurement on the IC's measurement loop (VDD only) |
+
+| Family | ICs | Status |
+|---|---|---|
+| FLASH_1 | PFS154, PFS173 | PFS154: probe, read, erase, write, IHRC calibration confirmed on hardware |
+| FLASH_2 | PFS172 | trace- and model-tested only |
+| OTP1_2, OTP2_2 | PMS150C/PMS15A, PMS154B/C, PMS152, PMS171B (write and read); MCU390, PMS131, PMS132 (read: no write voltages in the IC table) | implemented, trace- and model-tested, **not confirmed on hardware** |
+| OTP2_1, OTP3_1 | PMS133/134; PMC251, PMS271 | read only (no write voltages; OTP3_1 has no documented write sequence) — trace- and model-tested |
+
+Details and dates: [`specs/002-chip-engine/hw-validation.md`](../../specs/002-chip-engine/hw-validation.md).
+
+Tests: `tests/test_engine_*.c` run the real engine over a fake `hal_icp` with a bit-level IC model
+(`tests/fakes/engine/`). The expected bit sequences come from an independent generator:
+
+```sh
+python software/tests/vectors/gen_traces.py           # regenerate software/tests/vectors/traces/*.json
+python software/tests/vectors/gen_traces.py --check   # CI: the committed traces are up to date
+```
+
+`pdkprog --trace` (protocol 1.1, `TRACE_SET`) shows the engine's steps on real hardware: every supply step with its
+measured value, enter/leave, the raw IC answers.
 
 ## The `pdk-sim` simulator
 

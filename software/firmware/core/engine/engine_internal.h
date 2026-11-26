@@ -18,11 +18,13 @@
 #define ENG_PROBE_VDD_MV 2000u
 #define ENG_PAUSE_LEAVE_US 10000u        /* after leaving the mode */
 #define ENG_PAUSE_LEAVE_HV_US 100000u    /* extra after erase / write */
+#define ENG_PAUSE_LEAVE_CALIB_US 40000u  /* extra after calibration (free-pdk waits 50 ms with VDD off) */
 #define ENG_READ_FLASH_CLK_US 5u         /* FLASH: CLK high before the first data bit */
 #define ENG_POLL_WORDS 64u               /* poll() at least every 64 read words */
 #define ENG_ERASE_HIGH_NS 5000000u       /* FLASH_1 erase clock high: 5 ms */
 #define ENG_ERASE_HIGH_FLASH2_NS 40000000u   /* FLASH_2: 40 ms */
 #define ENG_BLOCK_PAUSE_NS 100000u       /* after every write block: 100 µs */
+#define ENG_OTP_PULSE_NS 30000u          /* OTP programming pulse on PA4: 30 µs high, 30 µs low */
 
 /* ---- the programming session ---- */
 typedef enum { SES_IDLE = 0, SES_OPEN, SES_HV } ses_state_t;
@@ -46,6 +48,9 @@ uint16_t eng_enter(const struct chip_info *chip, uint8_t family, ses_mode_t mode
 
 /* Operation voltages: VDD then VPP with min_pause_us each (state → HV). */
 uint16_t eng_raise(uint16_t vdd_mV, uint16_t vpp_mV, uint32_t min_pause_us);
+
+/* VDD only (VPP 0), lines idle, for calibration and RUN; state OPEN in `mode`. */
+uint16_t eng_supply(const struct chip_info *chip, ses_mode_t mode, uint16_t vdd_mV, chip_poll_fn poll);
 
 /* Leave: lines idle, both supplies off at once, the next enter waits the pause. Never waits itself. */
 void eng_leave(void);
