@@ -7,7 +7,8 @@
  *         nop            1 cycle
  *         goto loop      2 cycles     → half-period 4 cycles, period 8
  *
- * Build: see README.md. Options: -DF_CPU=8000000 (SYSCLK, 1 MHz … 16 MHz IHRC), -DOUT_PIN=4 (PA bit), -DTARGET_VDD_MV. */
+ * Build: see README.md. Options: -DF_CPU=8000000 (SYSCLK, 1 MHz … 16 MHz IHRC), -DUSE_ILRC (SYSCLK = the ILRC,
+ * calibrated to F_CPU, e.g. 55000), -DOUT_PIN=4 (PA bit), -DTARGET_VDD_MV. */
 #include <stdint.h>
 
 #include <pdk/device.h>
@@ -34,6 +35,10 @@
 
 unsigned char STARTUP_FUNCTION(void)
 {
+#if defined(USE_ILRC)
+    PDK_SET_SYSCLOCK(SYSCLOCK_ILRC);
+    EASY_PDK_CALIBRATE_ILRC(F_CPU, TARGET_VDD_MV);
+#else
 #if F_CPU == 16000000
     PDK_SET_SYSCLOCK(SYSCLOCK_IHRC_16MHZ);
 #elif F_CPU == 8000000
@@ -48,6 +53,7 @@ unsigned char STARTUP_FUNCTION(void)
 #error "F_CPU must be 16, 8, 4, 2 or 1 MHz"
 #endif
     EASY_PDK_CALIBRATE_IHRC(F_CPU, TARGET_VDD_MV);   /* the stub the programmer replaces with the measurement loop */
+#endif
     return 0;
 }
 

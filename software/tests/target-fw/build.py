@@ -5,7 +5,7 @@
 The free-pdk headers (pdk/device.h, easy-pdk/calibrate.h) are not in this repository: they are taken from
 $PDK_INCLUDES, else from the PlatformIO easypdk framework (~/.platformio/packages/framework-easypdk/includes).
 
-Usage: python build.py [--out DIR]       # → DIR/clockout_8mhz_pfs154.ihx, clockout_1mhz_pfs154.ihx (default DIR: build/target-fw)
+Usage: python build.py [--out DIR]       # → DIR/<name>.ihx for every target below (default DIR: build/target-fw)
 """
 import argparse
 import os
@@ -21,6 +21,9 @@ ROOT = HERE.parents[2]
 TARGETS = {
     "clockout_8mhz_pfs154": ("clockout/clockout.c", "PFS154", "pdk14", ["F_CPU=8000000"]),
     "clockout_1mhz_pfs154": ("clockout/clockout.c", "PFS154", "pdk14", ["F_CPU=1000000"]),
+    "clockout_ilrc_pfs154": ("clockout/clockout.c", "PFS154", "pdk14", ["USE_ILRC", "F_CPU=55000"]),
+    "bandgap_pfs154": ("bandgap/bandgap.c", "PFS154", "pdk14", []),
+    "uart_pfs154": ("uart/uart.c", "PFS154", "pdk14", []),
 }
 
 
