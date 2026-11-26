@@ -9,7 +9,7 @@ description: "Task list template for feature implementation"
 
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: The examples below include test tasks. Per constitution principle VI, host-side unit tests are MANDATORY for core logic (protocol framing, IC table, calibration/serial patching, HEX parsing, storage format, CRC, bit-level IC sequences on a mock HAL), and new IC/family support MUST include a real-hardware validation task. Other tests are OPTIONAL unless requested in the feature specification.
+**Tests**: The examples below include test tasks. Per constitution principle VI, host-side unit tests are MANDATORY for core logic (protocol framing, IC table, calibration/serial patching, HEX parsing, storage format, CRC, bit-level IC sequences on a mock HAL), and new IC/family support MUST include a real-hardware validation task. Other tests are OPTIONAL unless requested in the feature specification. Per principle VII, all artifacts are written in English, and any task that adds or changes a user-visible string MUST update the resource tables for all six UI languages (en, uk, de, fr, es, ja).
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
