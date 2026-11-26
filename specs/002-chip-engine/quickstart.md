@@ -67,8 +67,8 @@ Read the IC with an Easy PDK programmer and compare with `pdkprog read` (SC-008)
 
 ## 6. Calibrate and copy — Story 3, SC-002, SC-003
 
-1. After step 5, run the IC on the target board and measure its clock (the hello firmware's output, or a test firmware that
-   toggles a pin at SYSCLK/N) with the frequency counter: 8 MHz ± 1 %.
+1. Program `clockout_8mhz_pfs154.ihx` (built by `software/tests/target-fw/build.py`, see its README), run the IC at
+   4.0 V and measure PA4 with the frequency counter: SYSCLK / 8 = 1.000 MHz ± 1 % (SYSCLK 8 MHz ± 1 %).
 2. Copy with measurement: `pdkprog copy --ihrc measure --allow-modify-master --yes`; program three other PFS154 with
    `pdkprog program`; each copy's measured frequency within 1 % of the master's; `pdkprog read` of the master before and after
    is identical.
