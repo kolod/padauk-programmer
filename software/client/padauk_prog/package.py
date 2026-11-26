@@ -51,7 +51,8 @@ def _text(value: str, size: int, what: str, required: bool) -> bytes:
 
 def default_name(path: str) -> str:
     """Package name from a file name: base name without extension, cut to 32 UTF-8 bytes."""
-    name = os.path.splitext(os.path.basename(path))[0]
+    base = path.replace("\\", "/").rsplit("/", 1)[-1]   # Windows and POSIX separators on any OS
+    name = os.path.splitext(base)[0]
     while len(name.encode("utf-8")) > 32:
         name = name[:-1]
     return name
