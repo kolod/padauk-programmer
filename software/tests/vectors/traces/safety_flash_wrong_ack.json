@@ -1,0 +1,21 @@
+{
+  "family": "FLASH_1",
+  "chip": "PFS154",
+  "operation": "read",
+  "input": {"addr": 0, "count": 1, "answer_id": 2722},
+  "events": [
+    {"e": "idle"},
+    {"e": "mode", "line": "CLK", "dir": "out_low"},
+    {"e": "vpp", "mV": 5500, "min_us": 100},
+    {"e": "vdd", "mV": 2500, "min_us": 500},
+    {"e": "mode", "line": "DAT", "dir": "out_low"},
+    {"e": "send", "data": "DAT", "clk": "CLK", "value": 2779096486, "bits": 32},
+    {"e": "mode", "line": "DAT", "dir": "in"},
+    {"e": "recv", "data": "DAT", "clk": "CLK", "bits": 16, "reply": 2722},
+    {"e": "mode", "line": "DAT", "dir": "out_low"},
+    {"e": "clock", "min_ns": 1000},
+    {"e": "idle"},
+    {"e": "vdd", "mV": 0},
+    {"e": "vpp", "mV": 0}
+  ]
+}

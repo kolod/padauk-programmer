@@ -8,7 +8,8 @@
 #include "hal_ui.h"
 #include "tusb.h"
 
-/* ---------------- time: SysTick 1 ms + TIM2 (32 bit) at 1 MHz ---------------- */
+/* ---------------- time: SysTick 1 ms + TIM5 (32 bit) at 1 MHz ----------------
+ * TIM2 is left to the chip engine: it counts the IC's PA3 edges on PA15 during calibration. */
 static volatile uint32_t ms_ticks;
 
 void SysTick_Handler(void) { ms_ticks++; }
@@ -19,24 +20,29 @@ void g474_time_init(void)
     SysTick->VAL = 0;
     SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_TICKINT_Msk | SysTick_CTRL_ENABLE_Msk;
 
-    RCC->APB1ENR1 |= RCC_APB1ENR1_TIM2EN;
-    TIM2->PSC = G474_HCLK_HZ / 1000000u - 1u;   /* APB1 = HCLK: timer clock 170 MHz */
-    TIM2->ARR = 0xFFFFFFFFu;
-    TIM2->EGR = TIM_EGR_UG;
-    TIM2->CR1 = TIM_CR1_CEN;
+    RCC->APB1ENR1 |= RCC_APB1ENR1_TIM5EN;
+    (void)RCC->APB1ENR1;
+    TIM5->PSC = G474_HCLK_HZ / 1000000u - 1u;   /* APB1 = HCLK: timer clock 170 MHz */
+    TIM5->ARR = 0xFFFFFFFFu;
+    TIM5->EGR = TIM_EGR_UG;
+    TIM5->CR1 = TIM_CR1_CEN;
+
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;   /* DWT cycle counter for the engine's short delays */
+    DWT->CYCCNT = 0;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 }
 
 uint32_t hal_time_ms(void) { return ms_ticks; }
-uint32_t hal_time_us(void) { return TIM2->CNT; }
+uint32_t hal_time_us(void) { return TIM5->CNT; }
 
 void hal_delay_us(uint32_t us)
 {
-    uint32_t t0 = TIM2->CNT;
-    while (TIM2->CNT - t0 < us) {
+    uint32_t t0 = TIM5->CNT;
+    while (TIM5->CNT - t0 <= us) {   /* at least `us`: the first tick may come at once */
     }
 }
 
-/* ---------------- CRC unit (same scheme as on the F072) ----------------
+/* ---------------- CRC unit ----------------
  * The core keeps the reflected running state; the unit works MSB-first: INIT = rbit(state), input
  * reversed per byte, output reversed. */
 uint32_t hal_crc32_update(uint32_t state, const void *data, size_t len)

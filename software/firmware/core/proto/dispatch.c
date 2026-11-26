@@ -21,6 +21,7 @@
 #include "session.h"
 #include "storage/config_cmds.h"
 #include "storage/stats_cmds.h"
+#include "trace.h"
 
 static uint16_t cmd_hello(const uint8_t *req, uint16_t len, uint8_t *rsp, uint16_t *rsp_len);
 static uint16_t cmd_get_info(const uint8_t *req, uint16_t len, uint8_t *rsp, uint16_t *rsp_len);
@@ -54,6 +55,7 @@ static const pdk_command_t commands[] = {
     {PDK_CMD_SUPPLY_SET, 0, supply_set_cmd_set},
     {PDK_CMD_SUPPLY_GET, 0, supply_set_cmd_get},
     {PDK_CMD_UART_TX, PDK_CMDF_DURING_OP, op_run_cmd_uart_tx},
+    {PDK_CMD_TRACE_SET, PDK_CMDF_DURING_OP, trace_cmd_set},
 };
 
 static uint32_t capabilities(void)

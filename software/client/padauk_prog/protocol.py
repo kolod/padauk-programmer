@@ -13,7 +13,7 @@ from .framing import FT_EVT, FT_NAK, FT_REQ, FT_RSP, Decoder, Frame, FrameError,
 from .transport import Transport, TransportError
 
 PROTO_MAJOR = 1
-PROTO_MINOR = 0
+PROTO_MINOR = 1   # 1.1: TRACE_SET / EVT_TRACE
 
 
 class Cmd(IntEnum):
@@ -45,6 +45,7 @@ class Cmd(IntEnum):
     CAL_CLEAR = 0x0044
     SUPPLY_SET = 0x0045
     SUPPLY_GET = 0x0046
+    TRACE_SET = 0x0047
 
 
 class Evt(IntEnum):
@@ -54,6 +55,7 @@ class Evt(IntEnum):
     UART_RX = 0x8004
     UART_LINK = 0x8005
     PKG_STATE = 0x8006
+    TRACE = 0x8007
 
 
 class Status(IntEnum):
@@ -387,6 +389,46 @@ class ChipDesc:
         return any(n.upper() == name.upper() for n in self.names)
 
 
+TRACE_KINDS = {1: "POWER_OK", 2: "POWER_FAULT", 3: "ENTER", 4: "LEAVE", 5: "ACK", 6: "GETID", 7: "PROBE"}
+FAMILY_CODES = {0x12: "OTP1_2", 0x21: "OTP2_1", 0x22: "OTP2_2", 0x31: "OTP3_1", 0xF1: "FLASH_1", 0xF2: "FLASH_2"}
+ENGINE_MODES = {0: "-", 1: "probe", 2: "GetID", 3: "read", 4: "write", 5: "erase", 6: "calibrate", 7: "run"}
+
+
+@dataclass
+class TraceRecord:
+    """EVT_TRACE (protocol 1.1): what the programmer did with the supplies and the IC."""
+    t_us: int
+    kind: int
+    b8: int
+    w1: int
+    w2: int
+    d: int
+
+    @classmethod
+    def parse(cls, p: bytes) -> "TraceRecord":
+        return cls(*struct.unpack_from("<IBBHHI", p))
+
+    def text(self) -> str:
+        k, fam = self.kind, FAMILY_CODES.get(self.b8, f"0x{self.b8:02X}")
+        rail = "VDD" if self.b8 == 0 else "VPP"
+        if k == 1:
+            return f"{rail} {self.w1} mV: reached {self.w2} mV in {self.d / 1000:.1f} ms"
+        if k == 2:
+            return f"{rail} {self.w1} mV: FAULT - only {self.w2} mV after {self.d / 1000:.1f} ms, supplies off"
+        if k == 3:
+            return f"enter {fam} ({ENGINE_MODES.get(self.d, self.d)}): VPP {self.w1} mV, VDD {self.w2} mV"
+        if k == 4:
+            return f"leave {ENGINE_MODES.get(self.b8, self.b8)} (next enter after >= {self.w1} ms)"
+        if k in (5, 6):
+            what = "ACK" if k == 5 else "GetID"
+            got = self.d & 0xFFF
+            verdict = "no answer" if self.d == 0 else "ID matches" if got == self.w1 else f"ID 0x{got:03X} != 0x{self.w1:03X}"
+            return f"{what} {fam}: 0x{self.d:0{(self.w2 + 3) // 4}X} ({self.w2} bits) - {verdict}"
+        if k == 7:
+            return f"probe {fam}: 0x{self.d:08X} ({self.w2} bits)" + ("" if self.d else " - no answer")
+        return f"{TRACE_KINDS.get(k, k)} {self.b8} {self.w1} {self.w2} {self.d}"
+
+
 class Programmer:
     """Talks to the programmer over a Transport. One outstanding request at a time."""
 
@@ -400,6 +442,17 @@ class Programmer:
         self.info: Info | None = None
         self.stats = {"retries": 0, "naks": 0, "bad_frames": 0}
         self.latencies: list[tuple[int, float]] = []   # (command, seconds from the last send to its RSP)
+        self.on_trace = None   # callable(TraceRecord): EVT_TRACE is delivered here at once instead of queued
+
+    def _event(self, f: Frame) -> None:
+        if f.code == Evt.TRACE and self.on_trace:
+            self.on_trace(TraceRecord.parse(f.payload))
+        else:
+            self.events.append(f)
+
+    def trace_set(self, on: bool) -> None:
+        """TRACE_SET (protocol 1.1): EVT_TRACE records while on; off again at every session reset."""
+        self.call(Cmd.TRACE_SET, bytes([1 if on else 0]))
 
     # ---------------------------------------------------------------- low level
     def _frames(self, timeout: float):
@@ -431,7 +484,7 @@ class Programmer:
                         self.stats["naks"] += 1
                         resend = rsp is None
                     elif f.type == FT_EVT:
-                        self.events.append(f)
+                        self._event(f)
                     elif f.type == FT_RSP and f.seq == self.seq and rsp is None:
                         rsp = f
                     # stale RSP of an earlier seq: ignore
@@ -452,7 +505,7 @@ class Programmer:
         while True:
             for f in self._frames(max(0.0, min(deadline - time.monotonic(), 0.05))):
                 if not isinstance(f, FrameError) and f.type == FT_EVT:
-                    self.events.append(f)
+                    self._event(f)
             if time.monotonic() >= deadline:
                 break
         out = list(self.events)

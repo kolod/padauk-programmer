@@ -22,6 +22,7 @@ set(PDK_COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/platform/common)
 # pdk_stm32_firmware(NAME <elf name> DIR <platform dir> LDSCRIPT <file> FLASH_LIMIT <bytes>
 #                    INCLUDES <dirs...> DEFINES <defs...> USB_DRIVER <tinyusb sources...>)
 # FLASH_LIMIT: the build fails when .text + .data exceeds it (cmake/check_size.cmake, T125).
+# The chip engine pdk_engine is linked; the platform provides hal_icp.h.
 function(pdk_stm32_firmware)
     cmake_parse_arguments(A "" "NAME;DIR;LDSCRIPT;FLASH_LIMIT" "INCLUDES;DEFINES;USB_DRIVER" ${ARGN})
 
@@ -42,7 +43,7 @@ function(pdk_stm32_firmware)
 
     file(GLOB sources CONFIGURE_DEPENDS ${A_DIR}/*.c ${PDK_COMMON_DIR}/*.c)
     add_executable(${A_NAME}.elf ${sources})
-    target_link_libraries(${A_NAME}.elf PRIVATE pdk_core tinyusb stm32_deps)
+    target_link_libraries(${A_NAME}.elf PRIVATE pdk_core pdk_engine pdk_core tinyusb stm32_deps)
     target_compile_options(${A_NAME}.elf PRIVATE ${PDK_WARNINGS})
     target_link_options(${A_NAME}.elf PRIVATE
         -T${A_LDSCRIPT}

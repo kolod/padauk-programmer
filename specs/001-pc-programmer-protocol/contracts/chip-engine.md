@@ -1,7 +1,7 @@
 # Contract: internal interfaces core ⇄ IC engine ⇄ power
 
 An internal (non-network) contract between the platform-independent firmware core, the IC engine
-(the PADAUK implementation is feature `002-chip-engine`; in this feature — a model for the simulator and a stub for F072),
+(the PADAUK implementation is feature `002-chip-engine`; in this feature — a model for the simulator),
 and the power hardware. It fixes the guarantees of constitution principle III and FR-040.
 
 ## 1. `hal_power.h` — power hardware (implemented by the platform)
@@ -72,5 +72,5 @@ a separate feature (research R16). The set is fixed (FR-054):
 
 `ui_state.state`: `READY`, `BUSY` (`detail` = stage and percent), `SUCCESS`, `FAIL` (`detail` = class:
 `STORAGE`, `NO_PACKAGE`, `CHIP`, `CALIB`, `POWER_SELFTEST`, `MASTER_PENDING` + the status code), `BLOCKED`
-(local programming is replaced by the self-test). The F072 reference board in this feature: one button →
-`local_start(PROGRAM)`, three LEDs — a simplified display of the states.
+(local programming is replaced by the self-test). The WeAct STM32G474 board: one button (KEY) →
+`local_start(PROGRAM)`, one LED — a simplified display of the states.

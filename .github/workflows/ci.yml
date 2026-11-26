@@ -39,6 +39,10 @@ jobs:
         if: runner.os == 'Linux'
         run: python docs/gen_protocol.py --check
 
+      - name: Engine reference traces match their generator
+        if: runner.os == 'Linux'
+        run: python software/tests/vectors/gen_traces.py --check
+
       - name: Configure (Linux)
         if: runner.os == 'Linux'
         run: cmake -S software/firmware -B build/host -DPLATFORM=host -DCMAKE_BUILD_TYPE=Release
@@ -71,9 +75,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: stm32f072
-            toolchain: arm-none-eabi.cmake
-            bin: pdkprog.bin
           - target: stm32g474
             toolchain: arm-cortex-m4f.cmake
             bin: pdkprog-g474.bin

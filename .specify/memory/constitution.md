@@ -1,6 +1,18 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.4.0 → 1.5.0
+Bump rationale: MINOR — the reference platform is fixed: the STM32G474CEU6 (WeAct core board with
+hardware/stm32g474-board) is the only firmware hardware target; the STM32F072 (Easy PDK) debug target
+is retired and removed from the build. Principle IV wording and Technical Constraints updated; no
+principle added or removed.
+
+Modified principles: IV. Hardware Abstraction and Portability — reference platform named, debug target removed.
+Modified sections: Technical Constraints — "Primary platform" names the G474; "Debug target" removed.
+Templates: ✅ plan/spec/tasks/checklist templates — no platform references, no change needed.
+Docs: ✅ software/firmware/README.md, docs/protocol.md (examples) updated in the same change.
+
+--- Previous revision (1.4.0) ---
 Version change: 1.3.0 → 1.4.0
 Bump rationale: MINOR — new principle VII "English-First Engineering, Localized UI" added
 (English for all code/docs/artifacts; UI localized into six languages, no hard-coded strings).
@@ -93,8 +105,8 @@ priority over speed and convenience.
 
 ### IV. Hardware Abstraction and Portability
 
-The MCU platform is replaceable: the primary one is an STM32 with sufficient resources (the model
-is chosen by a separate spec); the STM32F072C8T6 on Easy PDK boards is the debug target.
+The MCU platform is replaceable: the reference platform is the STM32G474CEU6 (WeAct core board with
+`hardware/stm32g474-board`).
 
 - The core (IC protocol, algorithms, MCU table, storage format, command handling) MUST be
   platform-independent C with no access to registers/HAL of a specific MCU.
@@ -104,9 +116,8 @@ is chosen by a separate spec); the STM32F072C8T6 on Easy PDK boards is the debug
 - Porting to another MCU MUST require only a new HAL implementation and a build configuration.
 - The core MUST build and run on a PC (for tests and simulation) with a fake HAL.
 
-**Rationale:** the F072 (64 KB flash / 16 KB RAM) lacks the resources for standalone storage and
-new features, so a more capable STM32 will be primary; changing the MCU must not mean rewriting
-the logic.
+**Rationale:** the firmware already outgrew a small MCU (the former STM32F072 debug target had no room
+for the chip engine); keeping the logic platform-independent means a future board needs only a new HAL.
 
 ### V. Versioned PC ⇄ Programmer Protocol
 
@@ -154,13 +165,11 @@ hardware.
 
 ## Technical Constraints
 
-- **Primary platform:** an STM32 with USB FS device, ≥ 128 KB flash, ≥ 32 KB RAM, VDD/VPP control
-  and measurement means (DAC/ADC or equivalent), preferably hardware RNG and CRC; the exact model,
-  flash layout, and number of package slots are defined by a separate spec and MUST be documented
-  in its plan.
-- **Debug target:** STM32F072C8T6 (Easy PDK boards, 64 KB flash, 16 KB RAM) — for verifying the
-  protocol, storage, and USB before the primary hardware exists; features that do not fit MAY be
-  disabled by build configuration for this target.
+- **Platform:** the STM32G474CEU6 on the WeAct core board with `hardware/stm32g474-board` (USB FS
+  device, 512 KB flash, 96 KB RAM, on-chip DAC/ADC for VDD/VPP, hardware RNG and CRC); its flash
+  layout and number of package slots are documented in `software/firmware/README.md`. Another board
+  MUST meet at least: USB FS device, ≥ 128 KB flash, ≥ 32 KB RAM, VDD/VPP control and measurement.
+  Optional features MAY be disabled by build configuration (`INFO.capabilities` reports them).
 - **Firmware language:** C11, built with `arm-none-eabi-gcc` + Makefile/CMake, with no IDE
   lock-in. Dependencies on CubeMX-generated code MUST be confined to the HAL implementation.
 - **PC client:** cross-platform (Windows, Linux, macOS), working with the OS's standard CDC driver
@@ -207,4 +216,4 @@ hardware.
 - Compliance is checked on every plan (Constitution Check) and during change review. Principle III
   cannot be waived through Complexity Tracking.
 
-**Version**: 1.4.0 | **Ratified**: 2026-10-09 | **Last Amended**: 2026-11-26
+**Version**: 1.5.0 | **Ratified**: 2026-10-09 | **Last Amended**: 2026-11-26

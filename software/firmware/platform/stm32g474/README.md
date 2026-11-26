@@ -28,10 +28,10 @@ voltage limits of 0 V, does not set `MEASURE_POWER` in `INFO`, and any nonzero v
 | PA11 / PA12 | USB DM / DP | USB CDC, VID/PID `1209:0001` | |
 | PA13 / PA14 | SWDIO / SWCLK | debug | |
 | PF0 / PF1 | OSC_IN / OSC_OUT | 8 MHz crystal | HSI16 without a crystal |
-| PB3 | GPIO / SPI3_SCK (AF6) | IC line PA3 (ICPCK): clock during programming, SPI-slave clock during calibration | FT; see "ICP connector"; not yet used by the firmware |
-| PA15 | TIM2_CH1 (AF1), input only | the same PA3 line: edge capture for frequency measurement | FT_f; never an output; not yet used by the firmware |
-| PC11 | GPIO / SPI3_MISO (AF6) | IC line PA4: data into the OTP IC, synchronous "+1" pulses during calibration | FT_f; not yet used by the firmware |
-| PB5 | GPIO | IC line PA6 (ICPDA) | FT_f; not yet used by the firmware |
+| PB3 | GPIO / SPI3_SCK (AF6) | IC line PA3 (ICPCK): clock during programming, SPI-slave clock during calibration | FT; see "ICP connector"; the chip engine (`hal_g474_icp.c`) |
+| PA15 | TIM2_CH1 (AF1), input only | the same PA3 line: edge capture for frequency measurement | FT_f; never an output; TIM2 counts the edges during calibration (the 1 MHz time base is TIM5) |
+| PC11 | GPIO / SPI3_MISO (AF6) | IC line PA4: data into the OTP IC, synchronous "+1" pulses during calibration | FT_f; the chip engine |
+| PB5 | GPIO | IC line PA6 (ICPDA) | FT_f; the chip engine |
 | PB6 | GPIO / USART1_TX (AF7) | IC line PA0: UART in RUN mode, comparator output during BG calibration | **FT_c — up to 5.0 V only**, see "Permissible voltages"; the firmware removes the UCPD dead-battery pull-downs from PB4/PB6 |
 | PB7 | GPIO / USART1_RX (AF7) | IC line PA7: UART in RUN mode | FT_f; USART1 only in `RUN` (`platform/common/usart_bridge.c`), `RUN` limits VDD to 5.0 V because of PB6 |
 
@@ -51,25 +51,25 @@ Arbitrary voltages for checking with a voltmeter (after calibration, nothing con
 asks for VDD [VPP] interactively, and `pdkprog supply 3.3 12.5 --hold 30` holds them for 30 s and shows the
 measurements every second (mean, deviation from the set value, and min..max spread). `--no-check` leaves the voltage applied even
 if it does not fit the ±2 % tolerance, so that it can be compared with a voltmeter.
-The lines to the PADAUK IC are described below ("ICP connector"); the firmware does not use them yet — the IC
-engine is a stub.
+The lines to the PADAUK IC are described below ("ICP connector"); the chip engine of feature `002-chip-engine` drives
+them (`hal_g474_icp.c`).
 
 ## ICP connector
 
-Two connectors to the target board (schematic `hardware/stm32g474-board.dchxml`): J1 "PDK ICP" — the five
-PADAUK in-circuit programming lines (ICPCK, ICPDA, VDD, GND, ICVPP) plus PA4; J2 "PDK UART" —
-PA0 and PA7 for RUN mode and BandGap calibration.
+One 8-pin connector J1 "PDK ICP" to the target board (schematic `hardware/stm32g474-board.dchxml`): the five PADAUK
+in-circuit programming lines (VDD, ICVPP, ICPDA, ICPCK, GND) plus PA4, PA0, and PA7 for OTP data, calibration, BandGap,
+and the RUN-mode UART. A target board with the same 8-pin "PDK ICP" header connects 1:1.
 
-| Contact | IC pin | Programmer | Resistor |
+| J1 | IC pin | Net | Programmer |
 |---|---|---|---|
-| J1.1, J2.1 | VDD | `Vdd` — op-amp output after R18 | — |
-| J1.2 | PA3 / ICPCK | PB3 and PA15 | R19 (PB3), R24 (PA15) |
-| J1.3 | PA4 | PC11 | R21 |
-| J1.4 | PA6 / ICPDA | PB5 | R20 |
-| J1.5 | PA5 / PRSTB (VPP) | `Vpp` — op-amp output after R17 | — |
-| J1.6, J2.4 | GND | GND | — |
-| J2.2 | PA0 | PB6 | R22 |
-| J2.3 | PA7 | PB7 | R23 |
+| 1 | VDD | `Vdd` | VDD op-amp output through 20 Ω (R18) |
+| 2 | PA5 / PRSTB (VPP) | `Vpp` | VPP op-amp output through 20 Ω (R17) |
+| 3 | PA6 / ICPDA | `ICPDA` | PB5 |
+| 4 | PA7 | `RX` | PB7 (USART1_RX) |
+| 5 | PA3 / ICPCK | `ICPCK` | PB3 and PA15 |
+| 6 | PA4 | `NEXT` | PC11 |
+| 7 | PA0 | `TX` | PB6 (USART1_TX) |
+| 8 | GND | GND | GND |
 
 What is on each line (by family, `docs/easy-pdk-programmer-protocol.md`):
 
@@ -83,7 +83,7 @@ What is on each line (by family, `docs/easy-pdk-programmer-protocol.md`):
 The PA3 line goes to two pins: PB3 is the clock during programming and the SPI3 clock during calibration, PA15 is the
 TIM2 capture input. One pin cannot be both the SPI3 clock and a TIM2 input at once, and frequency measurement
 and "+1" pulses run in parallel. PA15 MUST stay an input: if it drove the line together with PB3, the current
-would be limited only by R19 + R24 (≈ 16 mA).
+would be limited only by their two 100 Ω series resistors (≈ 16 mA).
 
 All signal lines have a 100 Ω series resistor near the connector (as in Easy PDK): it limits the
 current when the IC and the programmer drive the line at the same time. It does not protect against overvoltage — the
@@ -91,6 +91,24 @@ current when the IC and the programmer drive the line at the same time. It does 
 
 At VDD 5.8 V the IC has a high-level threshold of 0.7·VDD ≈ 4 V, while the programmer outputs 3.3 V. Easy PDK
 works the same way (PADAUK programming mode accepts this), but it is worth verifying on hardware.
+
+### Target board requirements
+
+The VDD and VPP outputs are op-amp outputs with a limited current (tens of mA) behind 20 Ω, designed for ≤ 100 nF at the
+connector (`hardware/README.md`). For in-circuit programming the target board MUST NOT:
+
+- power VDD from its own source while the programmer is connected (e.g. a CR2032 in its holder): the programmer drives
+  VDD to 0 V when it enters programming mode and to 5.8 V when it writes; remove the battery or put it behind a
+  diode/jumper;
+- connect anything that clamps PA5 (VPP) or loads it — it receives up to 11 V while VDD is still 0 V;
+- load the ICP lines heavily: PADAUK recommends isolating the peripheral circuit with 10 kΩ (or 220 pF) on PA3, PA5,
+  PA6 (PFS154 datasheet, "On-board Writing"). PA3 is also the frequency output during calibration, so a buzzer or LED
+  on it can break calibration;
+- hold a capacitor above 500 µF or a zener ≤ 5.0 V on VDD (datasheet).
+
+A load on VPP shows as `VPP_FAULT` at the ID stage with a low measured value; `pdkprog --trace probe` shows every supply
+step with its measured value. A heavy overload can trip the +15 V overvoltage protection, which stays latched until
+the programmer is reset (`pdkprog info` then lists no supply capabilities).
 
 ## Permissible voltages on the pins
 
@@ -127,13 +145,13 @@ This gives the following constraints for the firmware and the board:
   calibration (VDD from the stub: usually 3–5 V, 3.95 V for BG), and in RUN mode. These voltages MUST NOT
   exceed 5.5 V — the firmware must limit VDD in `RUN` and during calibration to 5.5 V (and to 5.0 V with PB6 on
   the PA0 line, until it is moved). The write voltages (up to 5.8 V) and VPP (up to 11 V, only on
-  J1.5 → ADC divider) do not reach the signal pins.
-- **Schematic recommendation:** move the PA0 line (R22) from PB6 (FT_c) to **PA9** (FT_fda, USART1_TX,
+  J1.2 → ADC divider) do not reach the signal pins.
+- **Schematic recommendation:** move the PA0 line from PB6 (FT_c) to **PA9** (FT_fda, USART1_TX,
   AF7, free, on the "digital" side of the package). USART1 stays the same (RX is PB7), and the limit becomes 5.5 V.
   A high level on PA9 turns on the 5.1 kΩ UCPD pull-down on PB6 (dead battery), but the firmware disables it
   (`PWR_CR3.UCPD1_DBDIS`) right after start.
 - After reset, PA15 has an internal pull-up (JTDI) and PB4 a pull-up (NJTRST): before initialization,
-  ~3.3 V reaches the PA3 line through R24 via ~40 kΩ. The firmware must switch PA15 to an input
+  ~3.3 V reaches the PA3 line through the PA15 series resistor via ~40 kΩ. The firmware must switch PA15 to an input
   without a pull-up as early as possible.
 
 ## Frequency measurement during calibration
@@ -158,8 +176,8 @@ exactly one pass (875 ns at 8 MHz), so it is generated by hardware synchronized 
 - BandGap: the IC outputs the comparator result on PA0 → PB6 as a GPIO input.
 - Checks that the IC runs exactly that stub (FR-055) are in `docs/padauk-calibration.md` §8.
 
-The firmware does not have this yet: the IC engine primitives `calibrate`/`measure_freq` are tasks T085, T112,
-T133.
+The chip engine implements this in feature `002-chip-engine` (user story 3: `calibrate` / `measure_freq`, the SPI3 slave
+and TIM2 counter in `hal_g474_icp.c`).
 
 ## +15 V and −2.5 V rails
 

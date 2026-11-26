@@ -42,6 +42,11 @@ needs [`software/drivers/windows/padauk-programmer.inf`](../drivers/windows/).
 `write`, `program`, and other operations show stages and progress, and at the end the calibration result, the serial
 number, and the checksums of the IC contents. Exit code: 0 — success, 1 — operation error, 3 — no connection.
 
+`--trace` (before the command, e.g. `pdkprog --trace probe`) shows what the programmer does with the supplies and the IC
+while the command runs: every VDD/VPP step with its measured value, entering and leaving programming mode, the raw ACK /
+ID answers of the IC, the probe attempts (protocol 1.1, `TRACE_SET` / `EVT_TRACE`). Use it when an operation fails at
+the `ID` stage or with `VDD_FAULT` / `VPP_FAULT`.
+
 ### `copy`
 
 Modes for each oscillator: `--ihrc keep|target|snap|measure`, `--ilrc keep|target|measure`,

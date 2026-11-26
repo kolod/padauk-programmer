@@ -30,13 +30,13 @@ decisions in `research.md`).
 
 ## Versioning
 
-- **Protocol 1.0.** The version is carried by `HELLO` / `GET_INFO` (`proto_major`, `proto_minor`). A different major version →
+- **Protocol 1.1** (1.1 added the diagnostic trace `TRACE_SET` / `EVT_TRACE`). The version is carried by `HELLO` / `GET_INFO` (`proto_major`, `proto_minor`). A different major version →
   `PROTO_VERSION`, and the session is not opened. The minor version grows when commands, events, codes, or fields are added at the
   end of the payload: the client MUST ignore extra bytes at the end of a response, and an unknown command code gives
   `UNKNOWN_COMMAND` without dropping the session (§3).
 - **Package format 1** (`format_version` in the header). An unknown format → `PKG_HEADER_INVALID`.
 - **Build capabilities** — `GET_INFO.capabilities`: the firmware may lack some features (for example,
-  `MEASURE_MASTER` or `PATCH` on F072), and the client checks the bit before offering a feature.
+  `MEASURE_MASTER` or `PATCH`), and the client checks the bit before offering a feature.
 - **The IC table** lives only in the firmware (`LIST_CHIPS`): a new IC does not need a new client.
 
 ## Status codes

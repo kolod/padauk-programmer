@@ -10,6 +10,7 @@
 #include "power/supply_set.h"
 #include "proto/proto_defs.h"
 #include "proto/session.h"
+#include "proto/trace.h"
 #include "storage/housekeeping.h"
 #include "storage/package_store.h"
 
@@ -45,4 +46,5 @@ void pdk_core_on_session_reset(void)
     supply_cal_abort();   /* supplies raised for calibration or by SUPPLY_SET are not left on without a host */
     supply_set_abort();
     op_run_session_reset();   /* RUN is the exception: it stops (HOST_DISCONNECTED) */
+    trace_set(false);         /* the trace belongs to the session that asked for it */
 }

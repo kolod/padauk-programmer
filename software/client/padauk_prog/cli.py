@@ -14,8 +14,8 @@ from .protocol import (CALIB_KINDS, COPY_ALLOW_MASTER_LOOP, COPY_ALLOW_MODIFY_MA
                        COPY_TARGET, CAP_SUPPLY_CAL, CAP_SUPPLY_SET, FAMILY_NAMES, OPF_CALIB_FINALIZE_ON_FAIL,
                        OPF_SKIP_BLANK_CHECK, OPF_SKIP_ERASE, OPF_SKIP_VERIFY, PATCH_EXPECT_ACTIVE_PACKAGE,
                        PATCH_EXPECT_NORMALIZED, PATCH_EXPECT_RAW, SITE_STATUS, Op, PkgState, Programmer,
-                       EVT_OP_DONE, EVT_OP_STARTED, EVT_PROGRESS, Evt, Progress, ProgrammerError, ProtocolError, Result,
-                       Status, connect, stage_name, status_name)
+                       EVT_OP_DONE, EVT_OP_STARTED, EVT_PROGRESS, CAP_MEASURE_POWER, Evt, Progress, TraceRecord, ProgrammerError, ProtocolError, Result,
+                       Stage, Status, connect, stage_name, status_name)
 from .transport import TransportError
 
 PKG_MESSAGES = {
@@ -380,7 +380,14 @@ def describe_result(r: Result) -> str:
 
 
 def print_result(r: Result) -> None:
+    # PROGRAM reports every site as FAILED until it is calibrated: a failure before the CALIBRATE stage never got there
+    unreached = r.op_type == Op.PROGRAM and r.stage != Stage.CALIBRATE
+    skipped = [c for c in r.calib if unreached and c.site_status == 1]
+    if skipped:
+        print(f"Calibration: not reached ({len(skipped)} site{'s' if len(skipped) > 1 else ''})")
     for c in r.calib:
+        if c in skipped:
+            continue
         kind = CALIB_KINDS.get(c.kind, str(c.kind))
         target = f"{c.target_hz} Hz" if c.kind != 3 else "BandGap"
         measured = f", measured {c.measured_hz} Hz" if c.measured_hz else ""
@@ -911,6 +918,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=f"pdkprog {__version__}")
     p.add_argument("-p", "--port", help="serial port or tcp://host:port (default: auto-detect USB 1209:0001)")
     p.add_argument("-v", "--verbose", action="store_true")
+    p.add_argument("--trace", action="store_true",
+                   help="show what the programmer does with the supplies and the IC (voltages set and measured, "
+                        "programming mode, raw IC answers) - for diagnosing a board or an IC")
     sub = p.add_subparsers(dest="command", required=True)
 
     u = sub.add_parser("upload", help="store a firmware package in the programmer")
@@ -1055,6 +1065,30 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def start_trace(prog: Programmer) -> None:
+    """--trace: EVT_TRACE records go to stderr as they arrive, with the time since the first one."""
+    i = prog.info
+    if i and not i.capabilities & CAP_MEASURE_POWER:
+        print("trace: the programmer reports no supply front end - on the G474 board the +15 V rail is down "
+              "(not started or tripped by the overvoltage protection); reset the programmer", file=sys.stderr)
+    t0 = []
+
+    def show(r: TraceRecord) -> None:
+        if not t0:
+            t0.append(r.t_us)
+        dt = ((r.t_us - t0[0]) & 0xFFFFFFFF) / 1000
+        print(f"\rtrace {dt:9.2f} ms  {r.text()}", file=sys.stderr)   # \r: over a progress line
+
+    prog.on_trace = show
+    try:
+        prog.trace_set(True)
+    except ProgrammerError as e:
+        if e.status == Status.UNKNOWN_COMMAND:
+            print("trace: the programmer firmware does not support tracing (protocol 1.0); update it", file=sys.stderr)
+        else:
+            raise
+
+
 def easypdkprog_order(argv: list[str], commands) -> list[str]:
     """`easypdkprog -n PFS154 write f.ihx` puts the chip before the command: move -n/--icname after it."""
     for i, arg in enumerate(argv):
@@ -1091,6 +1125,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"error: {describe_error(e)}", file=sys.stderr)
         return 3
+    if a.trace:
+        start_trace(prog)
     try:
         return a.func(prog, a)
     except ProgrammerError as e:

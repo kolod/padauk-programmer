@@ -29,6 +29,7 @@ static struct {
 } c;
 
 void fake_chip_reset(void) { memset(&c, 0, sizeof c); }
+void fake_engine_reset(void) { fake_chip_reset(); }
 
 void fake_chip_insert(const chip_info_t *chip)
 {

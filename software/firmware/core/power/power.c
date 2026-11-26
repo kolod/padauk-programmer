@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "power.h"
+#include "proto/trace.h"
 
 #include <string.h>
 
@@ -46,6 +47,10 @@ void power_off_all(void)
 uint16_t power_apply(pdk_rail_t rail, uint16_t mV, uint32_t min_pause_us, power_fault_t *fault)
 {
     uint16_t tol = power_tolerance_mV(mV);
+#if defined(PDK_VDD_TOL_MV) && PDK_VDD_TOL_MV > 0
+    if (rail == PDK_RAIL_VDD && tol < PDK_VDD_TOL_MV)
+        tol = PDK_VDD_TOL_MV;   /* board workaround: a wandering VDD reading (CMake PDK_VDD_TOL_MV) */
+#endif
     power_set_raw(rail, mV);
     uint32_t start = hal_time_us();
     uint32_t last_sample = 0;
@@ -64,14 +69,17 @@ uint16_t power_apply(pdk_rail_t rail, uint16_t mV, uint32_t min_pause_us, power_
             if (diff < 0)
                 diff = -diff;
             good = (diff <= (int)tol) ? good + 1 : 0;
-            if (good >= POWER_SAMPLES && elapsed >= min_pause_us)
+            if (good >= POWER_SAMPLES && elapsed >= min_pause_us) {
+                trace_emit(TRACE_POWER_OK, (uint8_t)rail, mV, meas, elapsed);
                 return PDK_OK;
+            }
         }
         if (elapsed > POWER_TIMEOUT_US)
             break;
     }
 
     hal_power_off_all();
+    trace_emit(TRACE_POWER_FAULT, (uint8_t)rail, mV, meas, hal_time_us() - start);
     last_fault = (power_fault_t){(uint8_t)rail, mV, meas};
     if (fault)
         *fault = last_fault;

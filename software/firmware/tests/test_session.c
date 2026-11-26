@@ -21,7 +21,7 @@ TEST(get_info_without_session)
     ASSERT_EQ(r.status, PDK_OK);
     ASSERT_EQ(r.len, 55);
     ASSERT_EQ(r.payload[0], 1);
-    ASSERT_EQ(r.payload[1], 0);
+    ASSERT_EQ(r.payload[1], PDK_PROTO_MINOR);
 }
 
 TEST(commands_before_hello_are_rejected)
