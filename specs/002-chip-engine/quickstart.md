@@ -1,7 +1,7 @@
 # Quickstart: validating the PADAUK chip engine
 
 Paths follow [plan.md](plan.md); the interfaces are in [contracts/](contracts/). Results of the hardware steps go into
-`hw-validation.md` of this feature (constitution VI).
+`hw-validation.md` of this feature (constitution VI); the steps still open are listed in [hw-checklist.md](hw-checklist.md).
 
 ## Prerequisites
 
@@ -72,8 +72,10 @@ Read the IC with an Easy PDK programmer and compare with `pdkprog read` (SC-008)
 2. Copy with measurement: `pdkprog copy --ihrc measure --allow-modify-master --yes`; program three other PFS154 with
    `pdkprog program`; each copy's measured frequency within 1 % of the master's; `pdkprog read` of the master before and after
    is identical.
-3. A firmware with ILRC and BandGap stubs: both calibrated and finished.
+3. ILRC and BandGap: `clockout_ilrc_pfs154.ihx` and `bandgap_pfs154.ihx` (`software/tests/target-fw`), both calibrated
+   and finished; the BandGap flip voltage near 3.95 V.
 
 ## 7. Run — Story 5
 
-`pdkprog start -r 3.3` with a firmware that sends `U` + text: `Connected @… baud`, the text, echo; Esc → VDD off.
+`pdkprog start -r 4.0` with `uart_pfs154.ihx` (`software/tests/target-fw`: `U` + a greeting, then echo, 19200 baud):
+`Connected @… baud`, the text, echo; Esc → VDD off.

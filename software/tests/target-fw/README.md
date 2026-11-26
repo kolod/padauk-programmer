@@ -28,6 +28,7 @@ loop: xor.io pa, a    ; 1 cycle
 |---|---|---|---|
 | `clockout_8mhz_pfs154.ihx` | 8 MHz | **1.000 MHz** square wave | 990 … 1010 kHz |
 | `clockout_1mhz_pfs154.ihx` | 1 MHz | **125.0 kHz** | 123.75 … 126.25 kHz |
+| `clockout_ilrc_pfs154.ihx` | the ILRC, calibrated to 55 kHz | **6.875 kHz** | see below |
 
 ```sh
 pdkprog -n PFS154 write build/target-fw/clockout_8mhz_pfs154.ihx
@@ -43,3 +44,31 @@ that as well. Notes:
 - If the counter shows exactly ¾ or 1½ of the expected value, the loop timing assumption is wrong, not the
   calibration.
 - A buzzer or other load on PA4 of the target board can distort the edges; the frequency stays the same.
+- ILRC: the trim steps are 0x10 apart (free-pdk), so the result is only as close as the nearest step: compare the
+  instrument with the frequency `pdkprog` reports (within 1 %), not with 55 kHz.
+
+## `bandgap` — the BandGap reference
+
+The programmer calibrates the IHRC (8 MHz) and the BandGap (`EASY_PDK_CALIBRATE_BG`, at VDD 3.95 V: BGTR is the first
+value at which BG ≥ VDD · 12 / 40 ≈ 1.185 V). The program keeps the comparator as the calibration loop set it
+((−) = BandGap, (+) = VDD · 12 / 40) and copies the result to **PA4**:
+
+| VDD | PA4 |
+|---|---|
+| below ≈ 3.95 V | 0 |
+| above ≈ 3.95 V | 1 (≈ VDD) |
+
+Find the flip voltage `V_flip` with `pdkprog start -r V` in 50 mV steps (or a lab supply on the target board) and a
+voltmeter on VDD **and** PA4: `BG = V_flip · 12 / 40`. Expected: `V_flip` = 3.95 V within a few tens of mV (one BGTR step).
+Use the voltmeter's VDD, not the programmer's: the first G474 board reads VDD several percent off.
+
+## `uart` — the RUN bridge
+
+IHRC 8 MHz; after ~0.3 s the IC sends `U` (the programmer's auto-baud character) and
+`PFS154 UART test: type, it echoes`, then echoes every byte. IC TX = **PA7**, RX = **PA0**, 8N1, **19200 baud**
+(cycle-counted software UART).
+
+```sh
+pdkprog -n PFS154 write build/target-fw/uart_pfs154.ihx
+pdkprog start -r 4.0     # expect "Connected @≈19200 baud", the greeting, then the echo of what you type; Esc stops
+```
