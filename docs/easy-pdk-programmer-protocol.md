@@ -1,765 +1,765 @@
-# Easy PDK Programmer — опис протоколів PC ⇄ програматор ⇄ мікросхема PADAUK
+# Easy PDK Programmer — the PC ⇄ programmer ⇄ PADAUK IC protocols
 
-Документ складено на основі аналізу вихідних кодів `easy-pdk-programmer-software`
-(хост-утиліта `easypdkprog` v1.3, прошивка STM32F072 SW 1.3 / HW 1.2, протокол **1.3**)
-та схеми `easy-pdk-programmer-hardware` (rev 1.2).
+This document is based on an analysis of the `easy-pdk-programmer-software` sources
+(the `easypdkprog` host utility v1.3, STM32F072 firmware SW 1.3 / HW 1.2, protocol **1.3**)
+and the `easy-pdk-programmer-hardware` schematic (rev 1.2).
 
-Мета — дати достатньо інформації, щоб реалізувати сумісний програматор на іншій апаратній базі
-(інший МК, інші ЦАП/джерела напруги) так, щоб з ним працювала **оригінальна** утиліта `easypdkprog`,
-або написати власну хост-програму.
+The goal is to give enough information to implement a compatible programmer on other hardware
+(a different MCU, different DACs/voltage sources) so that the **original** `easypdkprog` utility works with it,
+or to write your own host program.
 
-Посилання на код (для перевірки деталей):
+Code references (for checking details):
 
-| Що | Файл |
+| What | File |
 |---|---|
-| Коди команд / відповідей / помилок | [Firmware/source/Src/fpdkproto.h](../easy-pdk-programmer-software/Firmware/source/Src/fpdkproto.h) |
-| Обробка USB-пакетів у прошивці | [Firmware/source/Src/fpdkusb.c](../easy-pdk-programmer-software/Firmware/source/Src/fpdkusb.c) |
-| Низькорівневий протокол з МК PADAUK | [Firmware/source/Src/fpdk.c](../easy-pdk-programmer-software/Firmware/source/Src/fpdk.c) |
-| UART-міст для режиму виконання | [Firmware/source/Src/fpdkuart.c](../easy-pdk-programmer-software/Firmware/source/Src/fpdkuart.c) |
-| Хост: формування пакетів | [fpdkcom.c](../easy-pdk-programmer-software/fpdkcom.c) |
-| Хост: алгоритм запису/читання | [easypdkprog.c](../easy-pdk-programmer-software/easypdkprog.c) |
-| Хост: таблиця мікросхем | [fpdkicdata.c](../easy-pdk-programmer-software/fpdkicdata.c) |
-| Хост: калібрування | [fpdkiccalib.c](../easy-pdk-programmer-software/fpdkiccalib.c) |
-| Хост: вставка серійного номера | [fpdkicserial.c](../easy-pdk-programmer-software/fpdkicserial.c) |
+| Command / response / error codes | [Firmware/source/Src/fpdkproto.h](../easy-pdk-programmer-software/Firmware/source/Src/fpdkproto.h) |
+| USB packet handling in the firmware | [Firmware/source/Src/fpdkusb.c](../easy-pdk-programmer-software/Firmware/source/Src/fpdkusb.c) |
+| Low-level protocol to the PADAUK IC | [Firmware/source/Src/fpdk.c](../easy-pdk-programmer-software/Firmware/source/Src/fpdk.c) |
+| UART bridge for run mode | [Firmware/source/Src/fpdkuart.c](../easy-pdk-programmer-software/Firmware/source/Src/fpdkuart.c) |
+| Host: packet construction | [fpdkcom.c](../easy-pdk-programmer-software/fpdkcom.c) |
+| Host: write/read algorithm | [easypdkprog.c](../easy-pdk-programmer-software/easypdkprog.c) |
+| Host: IC table | [fpdkicdata.c](../easy-pdk-programmer-software/fpdkicdata.c) |
+| Host: calibration | [fpdkiccalib.c](../easy-pdk-programmer-software/fpdkiccalib.c) |
+| Host: serial-number stub | [fpdkicserial.c](../easy-pdk-programmer-software/fpdkicserial.c) |
 
 ---
 
-## 1. Архітектура
+## 1. Architecture
 
 ```
- ┌──────────┐  USB CDC (віртуальний COM)   ┌──────────────────┐   PA3/PA4/PA5/PA6/PA0/PA7, VDD, GND  ┌────────────┐
- │    PC    │ ───────────────────────────► │   Програматор    │ ───────────────────────────────────► │  PADAUK IC │
- │easypdkprog│ ◄─────────────────────────── │ (STM32F072 + ЦАП │ ◄─────────────────────────────────── │ PFS/PMS/.. │
- └──────────┘   пакети "cmd,len,payload"   │  + підсилювачі)  │   bit-bang послідовний протокол      └────────────┘
+ ┌──────────┐  USB CDC (virtual COM)       ┌──────────────────┐   PA3/PA4/PA5/PA6/PA0/PA7, VDD, GND  ┌────────────┐
+ │    PC    │ ───────────────────────────► │    Programmer    │ ───────────────────────────────────► │  PADAUK IC │
+ │easypdkprog│ ◄─────────────────────────── │ (STM32F072 + DAC │ ◄─────────────────────────────────── │ PFS/PMS/.. │
+ └──────────┘   "cmd,len,payload" packets  │  + amplifiers)   │   bit-bang serial protocol           └────────────┘
                                            └──────────────────┘
 ```
 
-Розподіл відповідальності:
+Division of responsibility:
 
-* **PC** знає все про конкретну мікросхему (таблиця параметрів: розрядність, напруги, тайминги блоків),
-  розбирає HEX, вставляє калібрувальні вставки та серійний номер, керує послідовністю
-  «стерти → перевірити чистоту → записати → верифікувати → калібрувати → записати fuse».
-* **Програматор** — «тупий» виконавець: зберігає буфер 4096 слів, вміє генерувати VDD/VPP із заданими
-  значеннями в мілівольтах і виконувати примітивні операції (probe / blank check / erase / read / write /
-  verify / calibrate / run). Усі параметри операції приходять від PC у кожній команді.
-* **Мікросхема** програмується через 4 лінії: VDD, GND, PA5 (VPP — висока напруга), PA3 (тактування),
-  PA6 та/або PA4 (дані). Окремі сімейства і режими додатково використовують PA0 і PA7.
+* The **PC** knows everything about the specific IC (the parameter table: word width, voltages, block timings),
+  parses the HEX, inserts calibration stubs and the serial number, and drives the sequence
+  "erase → blank check → write → verify → calibrate → write fuse".
+* The **programmer** is a "dumb" executor: it stores a 4096-word buffer, can generate VDD/VPP at the given
+  values in millivolts, and perform primitive operations (probe / blank check / erase / read / write /
+  verify / calibrate / run). All operation parameters come from the PC in every command.
+* The **IC** is programmed over 4 lines: VDD, GND, PA5 (VPP — the high voltage), PA3 (clock),
+  PA6 and/or PA4 (data). Some families and modes additionally use PA0 and PA7.
 
 ---
 
-## 2. Транспорт PC ⇄ програматор
+## 2. PC ⇄ programmer transport
 
 ### 2.1 USB
 
-* Клас USB CDC ACM (віртуальний COM-порт). Швидкість (baud) ігнорується, хост виставляє 115200 8N1 без
-  керування потоком.
-* VID/PID: `0x0483` / `0x5740` (стандартний STM32 Virtual COM Port), Manufacturer `free-pdk.github.io`,
-  Product `Easy PDK Programmer`, Serial `1234567855AA` (на macOS хост шукає саме
-  `/dev/tty.usbmodem1234567855AA*`; на Linux — `/dev/ttyACM*`, на Windows — `COM1..COM999`).
-* **Обов'язково:** прошивка обробляє команди лише коли хост виставив **DTR**
-  (`SET_CONTROL_LINE_STATE`, біт 0). Кожна зміна стану лінії (відкриття/закриття порту):
-  * скидає приймальний буфер пакетів;
-  * заповнює буфер даних IC значенням `0xFF`;
-  * якщо IC була запущена командою `X` — вимикає UART та VDD.
+* USB CDC ACM class (a virtual COM port). The baud rate is ignored; the host sets 115200 8N1 with no
+  flow control.
+* VID/PID: `0x0483` / `0x5740` (the standard STM32 Virtual COM Port), Manufacturer `free-pdk.github.io`,
+  Product `Easy PDK Programmer`, Serial `1234567855AA` (on macOS the host looks for exactly
+  `/dev/tty.usbmodem1234567855AA*`; on Linux — `/dev/ttyACM*`, on Windows — `COM1..COM999`).
+* **Mandatory:** the firmware processes commands only when the host has set **DTR**
+  (`SET_CONTROL_LINE_STATE`, bit 0). Every change of the line state (opening/closing the port):
+  * resets the packet receive buffer;
+  * fills the IC data buffer with `0xFF`;
+  * if the IC was started with the `X` command — turns off the UART and VDD.
 
-### 2.2 Формат пакетів
+### 2.2 Packet format
 
-Усі багатобайтові поля — **little-endian**. Напруги — `uint32` у **мілівольтах**.
+All multi-byte fields are **little-endian**. Voltages are `uint32` in **millivolts**.
 
-**PC → програматор (команда):**
+**PC → programmer (command):**
 
-| Байт | Поле | Опис |
+| Byte | Field | Description |
 |---|---|---|
-| 0 | `cmd` | ASCII-код команди (див. 2.4) |
-| 1 | `len` | довжина payload, 0…255 |
-| 2… | `payload` | `len` байтів |
+| 0 | `cmd` | the ASCII code of the command (see 2.4) |
+| 1 | `len` | payload length, 0…255 |
+| 2… | `payload` | `len` bytes |
 
-**Програматор → PC (відповідь):**
+**Programmer → PC (response):**
 
-| Байт | Поле | Опис |
+| Byte | Field | Description |
 |---|---|---|
-| 0 | `rsp` | `'A'` (0x41) — ACK, `'E'` (0x45) — помилка, `'D'` (0x44) — дані з UART IC |
-| 1–2 | `len` | `uint16` довжина payload |
-| 3… | `payload` | `len` байтів |
+| 0 | `rsp` | `'A'` (0x41) — ACK, `'E'` (0x45) — error, `'D'` (0x44) — data from the IC's UART |
+| 1–2 | `len` | `uint16` payload length |
+| 3… | `payload` | `len` bytes |
 
-Правила:
+Rules:
 
-* Програматор накопичує байти, поки не набереться `2 + len`, тоді виконує команду (синхронно, блокуюче)
-  і зсуває буфер. Розмір приймального буфера — 258 байт.
-* Відповідь `'E'` завжди має `len = 0`. Вона надсилається, якщо: невідома команда, payload коротший за
-  потрібний, вихід за межі буфера, невдале калібрування, помилка встановлення напруги в `X`.
-* **Помилки роботи з мікросхемою** повертаються не через `'E'`, а як `'A'` з 16-бітним кодом результату
-  (див. 2.3).
-* `'D'` пакети надсилаються асинхронно (лише в режимі виконання IC) і можуть з'явитися між відповідями.
-* Хост перед першою командою вичитує й відкидає все, що є в порту.
+* The programmer accumulates bytes until `2 + len` have arrived, then executes the command (synchronously, blocking)
+  and shifts the buffer. The receive buffer size is 258 bytes.
+* An `'E'` response always has `len = 0`. It is sent if: the command is unknown, the payload is shorter than
+  required, a buffer limit is exceeded, calibration failed, or voltage setting failed in `X`.
+* **IC operation errors** are returned not through `'E'` but as `'A'` with a 16-bit result code
+  (see 2.3).
+* `'D'` packets are sent asynchronously (only in the IC run mode) and can appear between responses.
+* Before the first command the host reads and discards everything in the port.
 
-### 2.3 Результат операцій з IC (16 біт)
+### 2.3 IC operation result (16 bit)
 
-Команди `Z`, `E`, `R`, `W`, `V` повертають `uint16`:
+The commands `Z`, `E`, `R`, `W`, `V` return a `uint16`:
 
-| Значення | Ім'я | Значення |
+| Value | Name | Meaning |
 |---|---|---|
-| `== icid` | — | успіх (повертається той самий 12-бітний ID, що й був переданий) |
-| `0xFFFF` | `FPDK_ERR_UKNOWN` | невідома помилка / некоректні параметри (напр. `write_block_size` 0 або >8, erase для OTP) |
-| `0xFFFE` | `FPDK_ERR_VPPVDD` | не вдалося подати VPP/VDD для входу в режим програмування |
-| `0xFFFD` | `FPDK_ERR_HVPPHVDD` | не вдалося подати «робочі» (високі) VPP/VDD |
-| `0xFFFC` | `FPDK_ERR_CMDRSP` | ID у відповіді мікросхеми не збігся з очікуваним |
-| `0xFFFB` | `FPDK_ERR_VERIFY` | розбіжність при верифікації |
-| `0xFFFA` | `FPDK_ERR_NOTBLANK` | мікросхема не чиста |
+| `== icid` | — | success (the same 12-bit ID that was passed is returned) |
+| `0xFFFF` | `FPDK_ERR_UKNOWN` | unknown error / invalid parameters (e.g. `write_block_size` 0 or >8, erase for OTP) |
+| `0xFFFE` | `FPDK_ERR_VPPVDD` | could not apply VPP/VDD to enter programming mode |
+| `0xFFFD` | `FPDK_ERR_HVPPHVDD` | could not apply the "working" (high) VPP/VDD |
+| `0xFFFC` | `FPDK_ERR_CMDRSP` | the ID in the IC's response did not match the expected one |
+| `0xFFFB` | `FPDK_ERR_VERIFY` | verification mismatch |
+| `0xFFFA` | `FPDK_ERR_NOTBLANK` | the IC is not blank |
 
-Хост вважає помилкою будь-яке значення `>= 0xFFF0` і бере текст за індексом `value & 0x0F`.
+The host treats any value `>= 0xFFF0` as an error and takes the text by index `value & 0x0F`.
 
-### 2.4 Команди
+### 2.4 Commands
 
-Тайм-аути — це скільки хост чекає на відповідь; **сумісна реалізація повинна вкладатися в них**.
+The timeouts are how long the host waits for a response; **a compatible implementation must fit within them**.
 
-| Cmd | Ім'я | Payload запиту | Відповідь `'A'` | Тайм-аут хоста |
+| Cmd | Name | Request payload | `'A'` response | Host timeout |
 |---|---|---|---|---|
-| `I` | GETVERINFO | — | ASCII-рядок версії | 50 мс |
-| `L` | SETLED | `u8 mask` | — | 50 мс |
-| `B` | GETBUTTON | — | `u8 pressed` | 50 мс |
-| `O` | SETVOLTOUT | `u32 vdd_mV, u32 vpp_mV` | — | 50 мс |
-| `U` | GETVOLTAGES | — | `u32 vref_mV, u32 vdd_mV, u32 vpp_mV` | 50 мс |
-| `S` | SETBUF | `u16 byte_offs, u8 data[]` | — | 50 мс |
-| `G` | GETBUF | `u16 byte_offs, u16 len` | `data[len]` | 50 мс |
-| `P` | PROBEIC | — | `u32 rsp, u32 vpp_mV, u32 vdd_mV, u32 type` | 3500 мс |
-| `Z` | BLANKCKIC | 28 байт, див. нижче | `u16 result` | 1000 мс |
-| `E` | ERASEIC | 20 байт | `u16 result` | 2000 мс |
-| `R` | READIC | 27 байт | `u16 result` | 1000 мс |
-| `W` | WRITEIC | 30 байт | `u16 result` | **1000 мс** |
-| `V` | VERIFYIC | 32 байти | `u16 result` | 1000 мс |
-| `C` | CALIBRATEIC | 16 байт | `u32 value, u32 freq_Hz` | 10000 мс |
-| `X` | EXECUTEIC | `u32 vdd_mV` | — | 50 мс |
-| `Q` | STOPIC | — | — | 50 мс |
-| `D` | DBGDAT | `u8 data[]` | **відповіді немає** | — |
+| `I` | GETVERINFO | — | an ASCII version string | 50 ms |
+| `L` | SETLED | `u8 mask` | — | 50 ms |
+| `B` | GETBUTTON | — | `u8 pressed` | 50 ms |
+| `O` | SETVOLTOUT | `u32 vdd_mV, u32 vpp_mV` | — | 50 ms |
+| `U` | GETVOLTAGES | — | `u32 vref_mV, u32 vdd_mV, u32 vpp_mV` | 50 ms |
+| `S` | SETBUF | `u16 byte_offs, u8 data[]` | — | 50 ms |
+| `G` | GETBUF | `u16 byte_offs, u16 len` | `data[len]` | 50 ms |
+| `P` | PROBEIC | — | `u32 rsp, u32 vpp_mV, u32 vdd_mV, u32 type` | 3500 ms |
+| `Z` | BLANKCKIC | 28 bytes, see below | `u16 result` | 1000 ms |
+| `E` | ERASEIC | 20 bytes | `u16 result` | 2000 ms |
+| `R` | READIC | 27 bytes | `u16 result` | 1000 ms |
+| `W` | WRITEIC | 30 bytes | `u16 result` | **1000 ms** |
+| `V` | VERIFYIC | 32 bytes | `u16 result` | 1000 ms |
+| `C` | CALIBRATEIC | 16 bytes | `u32 value, u32 freq_Hz` | 10000 ms |
+| `X` | EXECUTEIC | `u32 vdd_mV` | — | 50 ms |
+| `Q` | STOPIC | — | — | 50 ms |
+| `D` | DBGDAT | `u8 data[]` | **no response** | — |
 
-#### `I` — версія
+#### `I` — version
 
-Відповідь — рядок без нуля в кінці:
+The response is a string with no trailing zero:
 
 ```
 FREE-PDK EASY PROG - HW:1.2 SW:1.3 PROTO:1.3\n
 ```
 
-Хост парсить його `sscanf("FREE-PDK EASY PROG - HW:%u.%u SW:%u.%u PROTO:%u.%u\n")` і **вимагає точного
-збігу PROTO 1.3**, інакше «Programmer protocol mismatch». HW/SW можуть бути будь-якими.
+The host parses it with `sscanf("FREE-PDK EASY PROG - HW:%u.%u SW:%u.%u PROTO:%u.%u\n")` and **requires an exact
+match of PROTO 1.3**, otherwise "Programmer protocol mismatch". HW/SW can be anything.
 
-#### `L` — світлодіоди
+#### `L` — LEDs
 
-`mask`: біт0 — LED1, біт1 — LED2, біт2 — LED3. (Прошивка використовує LED1 як індикатор прийому UART,
-LED2 — передачі UART, LED3 — «йде операція з IC».)
+`mask`: bit0 — LED1, bit1 — LED2, bit2 — LED3. (The firmware uses LED1 as the UART receive indicator,
+LED2 — UART transmit, LED3 — "an IC operation is in progress".)
 
-#### `B` — кнопка
+#### `B` — button
 
-`1`, якщо кнопка натиснута стабільно > 10 мс, інакше `0`.
+`1` if the button has been pressed stably for > 10 ms, otherwise `0`.
 
-#### `O` / `U` — ручне керування напругами
+#### `O` / `U` — manual voltage control
 
-`O` встановлює VDD і VPP (вмикає всі LED). `U` повертає виміряні АЦП значення:
-опорну напругу живлення МК, VDD і VPP (мВ). Ці команди `easypdkprog` не використовує, вони для
-тестування (`easypdkprogtest`).
+`O` sets VDD and VPP (turns on all LEDs). `U` returns the ADC-measured values:
+the MCU's supply reference voltage, VDD, and VPP (mV). `easypdkprog` does not use these commands; they are for
+testing (`easypdkprogtest`).
 
-#### `S` / `G` — буфер даних
+#### `S` / `G` — the data buffer
 
-Буфер програматора — `uint16 buf[0x1000]` (8192 байти), слова у little-endian, без ініціалізації після
-відкриття порту заповнений `0xFFFF`.
+The programmer buffer is `uint16 buf[0x1000]` (8192 bytes), words little-endian, not initialized — after
+the port is opened it is filled with `0xFFFF`.
 
-* `S`: `byte_offs` — зміщення **в байтах**, далі дані (хост шле шматками по 252 байти).
-* `G`: читання `len` байт починаючи з `byte_offs`. Відповідь може бути довшою за 255 байт (поле довжини
-  16-бітне), але хост на Windows просить по 63 байти.
-* Вихід за межі → `'E'`.
+* `S`: `byte_offs` is an offset **in bytes**, followed by the data (the host sends chunks of 252 bytes).
+* `G`: reads `len` bytes starting at `byte_offs`. The response may be longer than 255 bytes (the length field
+  is 16-bit), but the host on Windows asks for 63 bytes at a time.
+* Out of bounds → `'E'`.
 
-#### `P` — пошук мікросхеми
+#### `P` — IC search
 
-Програматор послідовно пробує сімейства (див. 4.6) при VPP = 4.5 В, VDD = 2.0 В.
+The programmer tries the families in turn (see 4.6) at VPP = 4.5 V, VDD = 2.0 V.
 
-| Поле | Опис |
+| Field | Description |
 |---|---|
-| `rsp` | сира відповідь ID мікросхеми (`& 0x7FFFFFFF`); `0` — нічого не знайдено |
-| `vpp_mV`, `vdd_mV` | напруги, на яких знайдено (4500 / 2000) |
-| `type` | тип протоколу: `0xF0` (будь-яка FLASH), `0x12`, `0x22`, `0x21`, `0x31` |
+| `rsp` | the raw IC ID response (`& 0x7FFFFFFF`); `0` — nothing found |
+| `vpp_mV`, `vdd_mV` | the voltages at which it was found (4500 / 2000) |
+| `type` | the protocol type: `0xF0` (any FLASH), `0x12`, `0x22`, `0x21`, `0x31` |
 
-Як хост перетворює `rsp` у 12-бітний ID — див. 4.6.
+How the host turns `rsp` into a 12-bit ID is in 4.6.
 
-#### Спільний заголовок команд `Z`, `E`, `R`, `W`, `V`
+#### The common header of the commands `Z`, `E`, `R`, `W`, `V`
 
-| Зміщення | Тип | Поле |
+| Offset | Type | Field |
 |---|---|---|
-| 0 | `u16` | `icid` — очікуваний 12-бітний ID |
-| 2 | `u8` | `type` — тип протоколу (`0x12`, `0x21`, `0x22`, `0x31`, `0xF1`, `0xF2`) |
-| 3 | `u32` | `vdd_cmd` — VDD під час входу в режим і передачі команди |
-| 7 | `u32` | `vpp_cmd` — VPP під час входу в режим і передачі команди |
-| 11 | `u32` | `vdd_hv` — VDD під час операції (read/erase/write) |
-| 15 | `u32` | `vpp_hv` — VPP під час операції |
+| 0 | `u16` | `icid` — the expected 12-bit ID |
+| 2 | `u8` | `type` — the protocol type (`0x12`, `0x21`, `0x22`, `0x31`, `0xF1`, `0xF2`) |
+| 3 | `u32` | `vdd_cmd` — VDD while entering the mode and sending the command |
+| 7 | `u32` | `vpp_cmd` — VPP while entering the mode and sending the command |
+| 11 | `u32` | `vdd_hv` — VDD during the operation (read/erase/write) |
+| 15 | `u32` | `vpp_hv` — VPP during the operation |
 
-> ⚠️ Особливість хоста: у `Z`, `R`, `V` байт 12 (другий байт `vdd_read`) хост заповнює значенням
-> `vdd_cmd >> 8`. На всіх відомих мікросхемах `vdd_cmd == vdd_read`, тому це не проявляється, але
-> сумісна прошивка має просто брати байти як є.
+> ⚠️ A host quirk: in `Z`, `R`, `V` the host fills byte 12 (the second byte of `vdd_read`) with
+> `vdd_cmd >> 8`. On all known ICs `vdd_cmd == vdd_read`, so this does not show up, but
+> a compatible firmware should simply take the bytes as they are.
 
-#### `Z` — перевірка на чистоту (28 байт)
+#### `Z` — blank check (28 bytes)
 
-| Зміщення | Тип | Поле |
+| Offset | Type | Field |
 |---|---|---|
-| 0–18 | | спільний заголовок (`vdd_hv/vpp_hv` = напруги читання) |
+| 0–18 | | the common header (`vdd_hv/vpp_hv` = the read voltages) |
 | 19 | `u8` | `addr_bits` |
 | 20 | `u8` | `data_bits` |
-| 21 | `u16` | `count` — скільки слів перевіряти, починаючи з адреси 0 |
-| 23 | `u8` | `excl_first` — пропустити адресу 0 |
+| 21 | `u16` | `count` — how many words to check, starting at address 0 |
+| 23 | `u8` | `excl_first` — skip address 0 |
 | 24 | `u16` | `excl_start` |
 | 26 | `u16` | `excl_end` |
 
-Перевіряються адреси `p` = 0…count-1, крім `p == 0` (якщо `excl_first`) і крім
-`excl_start <= p <= excl_end` (**обидві межі включно**). Чисте слово = всі `data_bits` одиниць.
+Addresses `p` = 0…count-1 are checked, except `p == 0` (if `excl_first`) and except
+`excl_start <= p <= excl_end` (**both bounds inclusive**). A blank word = all `data_bits` ones.
 
-#### `E` — стирання (20 байт, лише FLASH)
+#### `E` — erase (20 bytes, FLASH only)
 
-| Зміщення | Тип | Поле |
+| Offset | Type | Field |
 |---|---|---|
-| 0–18 | | спільний заголовок (`vdd_hv/vpp_hv` = напруги стирання) |
+| 0–18 | | the common header (`vdd_hv/vpp_hv` = the erase voltages) |
 | 19 | `u8` | `erase_clocks` |
 
-#### `R` — читання (27 байт)
+#### `R` — read (27 bytes)
 
-| Зміщення | Тип | Поле |
+| Offset | Type | Field |
 |---|---|---|
-| 0–18 | | спільний заголовок (`vdd_hv/vpp_hv` = напруги читання) |
-| 19 | `u16` | `addr` — початкова адреса в IC (у словах) |
+| 0–18 | | the common header (`vdd_hv/vpp_hv` = the read voltages) |
+| 19 | `u16` | `addr` — the start address in the IC (in words) |
 | 21 | `u8` | `addr_bits` |
-| 22 | `u16` | `data_offs` — початковий індекс у буфері програматора (**у словах**) |
+| 22 | `u16` | `data_offs` — the start index in the programmer buffer (**in words**) |
 | 24 | `u8` | `data_bits` |
-| 25 | `u16` | `count` — кількість слів |
+| 25 | `u16` | `count` — the number of words |
 
-Прочитані слова кладуться в `buf[data_offs + i]`, далі хост забирає їх через `G`.
+The words read are put into `buf[data_offs + i]`, and the host then fetches them through `G`.
 
-#### `W` — запис (30 байт)
+#### `W` — write (30 bytes)
 
-Як `R` (напруги 11/15 — запису), плюс:
+Like `R` (voltages 11/15 are the write ones), plus:
 
-| Зміщення | Тип | Поле |
+| Offset | Type | Field |
 |---|---|---|
-| 27 | `u8` | `block_size` — слів на один цикл запису (1…8) |
-| 28 | `u8` | `clock_groups` — кількість груп програмуючих імпульсів |
-| 29 | `u8` | `clocks_per_group` — імпульсів у групі |
+| 27 | `u8` | `block_size` — words per write cycle (1…8) |
+| 28 | `u8` | `clock_groups` — the number of groups of programming pulses |
+| 29 | `u8` | `clocks_per_group` — pulses in a group |
 
-Дані беруться з `buf[data_offs…]`.
+The data is taken from `buf[data_offs…]`.
 
-#### `V` — верифікація (32 байти)
+#### `V` — verify (32 bytes)
 
-Як `R`, плюс:
+Like `R`, plus:
 
-| Зміщення | Тип | Поле |
+| Offset | Type | Field |
 |---|---|---|
-| 27 | `u8` | `excl_first` — пропустити IC-адресу 0 (`addr + p == 0`) |
-| 28 | `u16` | `excl_start` (відносно `p`, включно) |
-| 30 | `u16` | `excl_end` (включно) |
+| 27 | `u8` | `excl_first` — skip IC address 0 (`addr + p == 0`) |
+| 28 | `u16` | `excl_start` (relative to `p`, inclusive) |
+| 30 | `u16` | `excl_end` (inclusive) |
 
-Порівнюються `data_bits` молодших бітів. Якщо очікуване слово з буфера = всі одиниці (`0xFFFF & mask`),
-воно вважається «джокером» і **не перевіряється** (бо незаписані/пропущені слова).
+The low `data_bits` bits are compared. If the expected word from the buffer = all ones (`0xFFFF & mask`),
+it is considered a "wildcard" and is **not checked** (these are unwritten/skipped words).
 
-#### `C` — калібрування (16 байт)
+#### `C` — calibration (16 bytes)
 
-| Зміщення | Тип | Поле |
+| Offset | Type | Field |
 |---|---|---|
 | 0 | `u32` | `type`: 1 — IHRC, 2 — ILRC, 3 — BandGap |
-| 4 | `u32` | `vdd_mV` — напруга живлення IC під час калібрування |
-| 8 | `u32` | `freq_Hz` — цільова частота SYSCLK |
-| 12 | `u32` | `mult` — тактів CPU на один період сигналу (= 7) |
+| 4 | `u32` | `vdd_mV` — the IC supply voltage during calibration |
+| 8 | `u32` | `freq_Hz` — the target SYSCLK frequency |
+| 12 | `u32` | `mult` — CPU clocks per signal period (= 7) |
 
-Відповідь: `u32 value` (значення регістра підстроювання, використовується лише молодший байт) і
-`u32 freq_Hz` — досягнута частота (для BG = 0). Детально — розділ 6.
+The response: `u32 value` (the trim register value, only the low byte is used) and
+`u32 freq_Hz` — the frequency reached (0 for BG). Details are in section 6.
 
-#### `X` / `Q` / `D` — виконання програми в IC
+#### `X` / `Q` / `D` — running the program in the IC
 
-* `X`: подати на IC VDD = `vdd_mV` (VPP = 0), увімкнути UART-міст з автовизначенням швидкості. ACK.
-* `Q`: вимкнути UART, VDD = 0, погасити LED. ACK.
-* `D` (PC → програматор): байти передаються в IC по UART. Відповіді немає (щоб не змішувати з вхідним потоком).
-* `D` (програматор → PC): байти, прийняті від IC.
+* `X`: apply VDD = `vdd_mV` to the IC (VPP = 0), turn on the UART bridge with baud-rate auto-detection. ACK.
+* `Q`: turn off the UART, VDD = 0, turn off the LEDs. ACK.
+* `D` (PC → programmer): the bytes are sent to the IC over UART. No response (so as not to mix with the incoming stream).
+* `D` (programmer → PC): the bytes received from the IC.
 
-Деталі — розділ 7.
+Details are in section 7.
 
 ---
 
-## 3. Апаратна частина програматора
+## 3. The programmer hardware
 
-### 3.1 Підключення до мікросхеми
+### 3.1 Connection to the IC
 
-| Сигнал IC | Напрям | Пін STM32 (оригінал) | Призначення |
+| IC signal | Direction | STM32 pin (original) | Purpose |
 |---|---|---|---|
-| **VDD** | вихід | ЦАП1 (PA4) → ОП ×2 | живлення IC, 0…6.26 В, програмовано |
-| **GND** | — | — | загальний |
-| **PA5** | вихід | ЦАП2 (PA5) → ОП ×4.23 | **VPP**, 0…13.27 В, програмовано |
-| **PA3** | вихід / вхід | PB3 (GPIO / SPI1_SCK) | CLK протоколу; у калібруванні — вихід IC |
-| **PA6** | двонапр. | PB5 (GPIO / SPI1_MOSI) | DAT (FLASH: двонапрямлений; OTP: дані з IC) |
-| **PA4** | вихід / вхід | PB4 (GPIO / SPI1_MISO) | дані в IC для OTP; у калібруванні — вхід IC |
-| **PA0** | двонапр. | PB6 (GPIO / USART1_TX) | CLK2 для OTP3_1; UART → IC; вихід компаратора при BG-калібруванні |
-| **PA7** | двонапр. | PB7 (GPIO / USART1_RX) | «commit» для OTP3_1; UART ← IC |
+| **VDD** | output | DAC1 (PA4) → op-amp ×2 | IC supply, 0…6.26 V, programmable |
+| **GND** | — | — | common |
+| **PA5** | output | DAC2 (PA5) → op-amp ×4.23 | **VPP**, 0…13.27 V, programmable |
+| **PA3** | output / input | PB3 (GPIO / SPI1_SCK) | protocol CLK; during calibration — the IC's output |
+| **PA6** | bidirectional | PB5 (GPIO / SPI1_MOSI) | DAT (FLASH: bidirectional; OTP: data from the IC) |
+| **PA4** | output / input | PB4 (GPIO / SPI1_MISO) | data into the IC for OTP; during calibration — the IC's input |
+| **PA0** | bidirectional | PB6 (GPIO / USART1_TX) | CLK2 for OTP3_1; UART → IC; the comparator output during BG calibration |
+| **PA7** | bidirectional | PB7 (GPIO / USART1_RX) | "commit" for OTP3_1; UART ← IC |
 
-Всі сигнальні лінії мають послідовні резистори 100 Ом, на VDD і VPP — 100 нФ на землю біля панельки.
-Коли лінії не використовуються, вони переводяться у вхід (DAT/PA6 і CLK/PA3 — з підтяжкою до землі).
+All signal lines have 100 Ω series resistors, and VDD and VPP have 100 nF to ground near the socket.
+When the lines are not in use, they are switched to input (DAT/PA6 and CLK/PA3 — with a pull-down to ground).
 
-Вимоги до нової апаратури:
+Requirements for new hardware:
 
-* **VDD**: 0…≥6.0 В (максимум, що використовується, — 5.8 В), установка з кроком ~10 мВ (оригінал — 12-біт
-  ЦАП: `code = mV * 4095 / 6260`). Має швидко встановлюватися: прошивка чекає лише 100 мкс…10 мс.
-* **VPP**: 0…≥11.5 В (максимум у таблиці — 11.0 В для PMS154), `code = mV * 4095 / 13270`. Обов'язково
-  має опускатися до 0 В (оригінал має ОП з живленням +15 В / −2.4 В; 15 В — від MT3608, −2.4 В —
-  діодна накачка від ШІМ 50 кГц на PA3 STM32).
-* Обидва виходи — керовані джерела напруги без зворотного зв'язку від АЦП (АЦП лише для `U`).
-  Оригінал вимірює VDD і VPP через дільники 100k/20k (×6) на PB1 та PB0.
-* Логічні рівні: STM32 працює від 3.3 В, лінії PB3…PB7 — 5V-tolerant. Під час запису VDD мікросхеми
-  піднімається до 5.3…5.8 В, тож ваші входи мають витримувати ~6 В (або ставте захист/рівневі
-  перетворювачі, які не спотворюють тайминги ~1 мкс).
-* Для калібрування потрібен **апаратний лічильник/таймер, тактований зовнішнім сигналом** (в оригіналі —
-  SPI1 у slave-режимі з DMA + 32-біт таймер на 48 МГц). Див. розділ 6.
-* Для режиму виконання — UART з автовизначенням швидкості (або програмна реалізація).
+* **VDD**: 0…≥6.0 V (the maximum used is 5.8 V), set with a step of ~10 mV (the original is a 12-bit
+  DAC: `code = mV * 4095 / 6260`). It must settle quickly: the firmware waits only 100 µs…10 ms.
+* **VPP**: 0…≥11.5 V (the maximum in the table is 11.0 V for PMS154), `code = mV * 4095 / 13270`. It must
+  be able to drop to 0 V (the original has an op-amp powered from +15 V / −2.4 V; 15 V comes from an MT3608, −2.4 V from a
+  diode charge pump driven by a 50 kHz PWM on the STM32's PA3).
+* Both outputs are voltage sources controlled without feedback from the ADC (the ADC is only for `U`).
+  The original measures VDD and VPP through 100k/20k dividers (×6) on PB1 and PB0.
+* Logic levels: the STM32 runs from 3.3 V, and lines PB3…PB7 are 5V-tolerant. During programming the IC's VDD
+  rises to 5.3…5.8 V, so your inputs must withstand ~6 V (or add protection/level
+  shifters that do not distort the ~1 µs timings).
+* Calibration needs a **hardware counter/timer clocked by an external signal** (the original uses
+  SPI1 in slave mode with DMA + a 32-bit timer at 48 MHz). See section 6.
+* Run mode needs a UART with baud-rate auto-detection (or a software implementation).
 
-### 3.2 Програмні затримки
+### 3.2 Software delays
 
-Базова затримка `DelayUS(n)` в оригіналі — цикл `10*n` ітерацій на 48 МГц, тобто ≈ n мкс.
-Імпульс CLK: `CLK=1; delay 1 мкс; CLK=0`. Низький рівень триває лише стільки, скільки виконується
-код між імпульсами (сотні нс). Тобто фактична швидкість біта ≈ 0.5…1 Мбіт/с. Довші тайминги (15/30/40 мкс,
-мілісекунди при стиранні) — це **обов'язкові** тривалості програмуючих імпульсів.
+The base delay `DelayUS(n)` in the original is a loop of `10*n` iterations at 48 MHz, that is, ≈ n µs.
+A CLK pulse: `CLK=1; delay 1 µs; CLK=0`. The low level lasts only as long as the code
+between pulses takes (hundreds of ns). So the actual bit rate is ≈ 0.5…1 Mbit/s. The longer timings (15/30/40 µs,
+milliseconds when erasing) are **mandatory** programming pulse durations.
 
 ---
 
-## 4. Протокол програматор ⇄ мікросхема
+## 4. The programmer ⇄ IC protocol
 
-### 4.1 Типи протоколу (сімейства)
+### 4.1 Protocol types (families)
 
-| Код | Ім'я | Мікросхеми | CLK | Дані → IC | Дані ← IC |
+| Code | Name | ICs | CLK | Data → IC | Data ← IC |
 |---|---|---|---|---|---|
 | `0xF1` | FLASH_1 | PFS154, PFS173 | PA3 | PA6 | PA6 |
 | `0xF2` | FLASH_2 | PFS172 | PA3 | PA6 | PA6 |
 | `0x12` | OTP1_2 | PMS150C/PMS15A, PMS154B/C, MCU390 | PA3 | PA4 | PA6 |
 | `0x21` | OTP2_1 | PMS133/PMS134 | PA3 | PA4 | PA6 |
 | `0x22` | OTP2_2 | PMS131, PMS132, PMS152, PMS171B | PA3 | PA4 | PA6 |
-| `0x31` | OTP3_1 | PMC251, PMS271/PMC271 (лише читання) | PA3 (команда), PA0 (адреса/дані) | PA4 | PA6 |
-| `0xF0` | FLASH (generic) | лише для `P` (probe) | PA3 | PA6 | PA6 |
+| `0x31` | OTP3_1 | PMC251, PMS271/PMC271 (read only) | PA3 (command), PA0 (address/data) | PA4 | PA6 |
+| `0xF0` | FLASH (generic) | only for `P` (probe) | PA3 | PA6 | PA6 |
 
-VPP завжди подається на **PA5**.
+VPP is always applied to **PA5**.
 
-### 4.2 Елементарні операції (bit-bang)
+### 4.2 Elementary operations (bit-bang)
 
-Всі послідовності передаються **старшим бітом вперед (MSB first)**.
+All sequences are transmitted **most significant bit first (MSB first)**.
 
-**Передача біта** (програматор → IC):
+**Sending a bit** (programmer → IC):
 
 ```
 DATA ──X═══════ bit ═══════X═══ next bit ═══
 CLK  ────┐  ┌────┐  ┌───── ...
-         └──┘    └──┘           (точніше: 0 → ↑ → 1 мкс → ↓)
+         └──┘    └──┘           (more precisely: 0 → ↑ → 1 µs → ↓)
      ____/‾‾‾‾\____/‾‾‾‾\___
-         ≥1 мкс
+         ≥1 µs
 ```
 
-1. виставити DATA = bit;
-2. CLK = 1, чекати 1 мкс;
+1. set DATA = bit;
+2. CLK = 1, wait 1 µs;
 3. CLK = 0.
 
-Дані стабільні весь час високого рівня CLK. Для OTP-сімейств після останнього біта лінія даних (PA4)
-примусово скидається в 0; для FLASH лінія PA6 залишається з останнім бітом.
+The data is stable the whole time CLK is high. For the OTP families, after the last bit the data line (PA4)
+is forced to 0; for FLASH the PA6 line keeps the last bit.
 
-**Прийом біта** (IC → програматор):
+**Receiving a bit** (IC → programmer):
 
-1. CLK = 1, чекати 1 мкс;
-2. прочитати лінію даних (PA6, або PA6 при CLK2 для OTP3_1);
+1. CLK = 1, wait 1 µs;
+2. read the data line (PA6, or PA6 on CLK2 for OTP3_1);
 3. CLK = 0.
 
-Результат збирається як `value = (value << 1) | bit` — перший прийнятий біт старший.
+The result is assembled as `value = (value << 1) | bit` — the first received bit is the most significant.
 
-**«Додатковий такт»** — один імпульс CLK (1 мкс) без зміни даних.
+**An "extra clock"** is a single CLK pulse (1 µs) with no change of data.
 
-Для OTP3_1 є варіанти з CLK2 = PA0 замість PA3 і «commit»: `PA7 = 1; 1 мкс; PA7 = 0;` + один імпульс CLK2.
+For OTP3_1 there are variants with CLK2 = PA0 instead of PA3 and a "commit": `PA7 = 1; 1 µs; PA7 = 0;` + one CLK2 pulse.
 
-### 4.3 Вхід у режим програмування та вихід
+### 4.3 Entering and leaving programming mode
 
-**Вхід** (`Enter(type, vpp_cmd, vdd_cmd)`):
+**Enter** (`Enter(type, vpp_cmd, vdd_cmd)`):
 
-1. PA3 (CLK) → вихід, 0.
-2. VPP = `vpp_cmd`, чекати **100 мкс**.
-3. VDD = `vdd_cmd`, чекати **500 мкс**.
-4. FLASH: PA6 → вихід, 0.
-   OTP: PA6 → вхід (pull-down), PA4 → вихід, 0. Для OTP3_1 ще PA0 і PA7 → вихід, 0.
+1. PA3 (CLK) → output, 0.
+2. VPP = `vpp_cmd`, wait **100 µs**.
+3. VDD = `vdd_cmd`, wait **500 µs**.
+4. FLASH: PA6 → output, 0.
+   OTP: PA6 → input (pull-down), PA4 → output, 0. For OTP3_1 also PA0 and PA7 → output, 0.
 
-Тобто VPP подається **раніше** VDD — це і є ознака входу в режим програмування.
+So VPP is applied **before** VDD — this is the sign of entering programming mode.
 
-**Вихід** (`Leave(extra)`):
+**Leave** (`Leave(extra)`):
 
-1. PA6 → вхід (pull-down), PA4, PA0, PA7 → входи.
-2. VDD = 0, VPP = 0 (без затримок між ними).
-3. Чекати **10 мс + extra** (після erase/write `extra` = 100 мс). Прошивка явно коментує: обов'язково
-   чекати після виходу перед наступною командою.
-4. PA3 → вхід (pull-down).
+1. PA6 → input (pull-down), PA4, PA0, PA7 → inputs.
+2. VDD = 0, VPP = 0 (no delay between them).
+3. Wait **10 ms + extra** (after erase/write `extra` = 100 ms). The firmware explicitly comments that
+   waiting after leaving before the next command is mandatory.
+4. PA3 → input (pull-down).
 
-**Зміна напруг усередині режиму:**
+**Changing voltages inside the mode:**
 
-* для читання (якщо `vdd_hv/vpp_hv` відрізняються від `cmd`): VDD → чекати 1 мс, VPP → чекати 1 мс;
-* для запису/стирання: VDD → чекати **10 мс**, VPP → чекати **10 мс**.
+* for reading (if `vdd_hv/vpp_hv` differ from `cmd`): VDD → wait 1 ms, VPP → wait 1 ms;
+* for write/erase: VDD → wait **10 ms**, VPP → wait **10 ms**.
 
-> Для PFS172 `vpp_hv` = 0 В: під час читання/запису/стирання VPP **знімається** до нуля, а VDD піднімається.
+> For PFS172 `vpp_hv` = 0 V: during read/write/erase VPP is **removed** to zero while VDD is raised.
 
-### 4.4 Команда (преамбула)
+### 4.4 The command (preamble)
 
-| Тип | Що передається | Відповідь |
+| Type | What is sent | Response |
 |---|---|---|
-| FLASH_1, FLASH (probe) | 32 біти `0xA5A5A5A0 \| cmd` на PA6 | PA6 → вхід, прийняти **16** біт (ACK), PA6 → вихід, +1 такт |
-| FLASH_2 | 32 біти `0xA5A5A5A0 \| cmd` на PA6 | прийняти **17** біт, PA6 → вихід, +1 такт |
-| OTP1_2 | 32 біти `0xA5A5A5A0 \| cmd` на PA4 | — |
-| OTP2_1, OTP2_2 | 32 біти `0x5A5A5A50 \| cmd` на PA4 | — |
-| OTP3_1 | 32 біти `0x5A5A5A5A`, потім 27 нульових біт на PA4 (такт PA3); `cmd` не передається | — |
+| FLASH_1, FLASH (probe) | 32 bits `0xA5A5A5A0 \| cmd` on PA6 | PA6 → input, receive **16** bits (ACK), PA6 → output, +1 clock |
+| FLASH_2 | 32 bits `0xA5A5A5A0 \| cmd` on PA6 | receive **17** bits, PA6 → output, +1 clock |
+| OTP1_2 | 32 bits `0xA5A5A5A0 \| cmd` on PA4 | — |
+| OTP2_1, OTP2_2 | 32 bits `0x5A5A5A50 \| cmd` on PA4 | — |
+| OTP3_1 | 32 bits `0x5A5A5A5A`, then 27 zero bits on PA4 (PA3 clock); `cmd` is not sent | — |
 
-Коди `cmd` (4 біти):
+The `cmd` codes (4 bits):
 
-| Операція | FLASH_1 / OTP | FLASH_2 |
+| Operation | FLASH_1 / OTP | FLASH_2 |
 |---|---|---|
 | Read | `0x6` | `0xC` |
 | Write | `0x7` | `0x7` |
 | Erase | `0x3` | `0x5` |
 
-**ACK у FLASH:** молодші 12 біт прийнятого слова = ID мікросхеми (`ack & 0xFFF == icid`).
-Якщо не збіглося → вихід з режиму і `FPDK_ERR_CMDRSP`.
+**ACK in FLASH:** the low 12 bits of the received word = the IC ID (`ack & 0xFFF == icid`).
+If they do not match → leave the mode and `FPDK_ERR_CMDRSP`.
 
-### 4.5 Отримання ID для OTP (`GetID`)
+### 4.5 Getting the ID for OTP (`GetID`)
 
-У OTP-сімейств команда не дає ACK. ID отримують окремим проходом **перед кожною** операцією
-Read/Write/Verify/BlankCheck:
+The OTP families give no ACK for the command. The ID is obtained in a separate pass **before each**
+Read/Write/Verify/BlankCheck operation:
 
 1. `Enter(vpp_cmd, vdd_cmd)`.
-2. Команда **Write** (`0x7`).
-3. Прийняти N біт:
+2. The **Write** command (`0x7`).
+3. Receive N bits:
    * OTP1_2, OTP2_2: `N = 2*data_bits + 12`;
    * OTP2_1: `N = data_bits + 12`;
-   * OTP3_1: `N = data_bits + 1 + 12`, такт **PA0** (CLK2), дані на PA6.
-4. `Leave()` — запис так і не починається (VPP/VDD знімаються до подачі високих напруг).
-5. `ID = value & 0xFFF` (останні 12 прийнятих біт) має дорівнювати `icid`, інакше `FPDK_ERR_CMDRSP`.
+   * OTP3_1: `N = data_bits + 1 + 12`, clock **PA0** (CLK2), data on PA6.
+4. `Leave()` — the write never starts (VPP/VDD are removed before the high voltages are applied).
+5. `ID = value & 0xFFF` (the last 12 received bits) must equal `icid`, otherwise `FPDK_ERR_CMDRSP`.
 
-Для накопичення використовується 32-бітна змінна, тож при N > 32 зберігаються лише останні 32 біти.
+A 32-bit variable is used for accumulation, so for N > 32 only the last 32 bits are kept.
 
-### 4.6 Probe (автовизначення)
+### 4.6 Probe (auto-detection)
 
-Програматор пробує по черзі, кожного разу повний Enter/Leave при VPP = 4.5 В, VDD = 2.0 В:
+The programmer tries in turn, each time a full Enter/Leave at VPP = 4.5 V, VDD = 2.0 V:
 
-1. FLASH: команда Read (`0x6`) з 16-бітним ACK; ненульовий ACK → тип `0xF0`.
-2. OTP1_2 з `data_bits = 16` (N = 44); якщо `rsp & 0xFFFF != 0` → `0x12`.
-3. OTP2_2 з `data_bits = 16` → `0x22`.
-4. OTP2_1 з `data_bits = 16` (N = 28) → `0x21`.
-5. OTP3_1 з `data_bits = 16` (N = 29) → `0x31`.
+1. FLASH: the Read command (`0x6`) with a 16-bit ACK; a nonzero ACK → type `0xF0`.
+2. OTP1_2 with `data_bits = 16` (N = 44); if `rsp & 0xFFFF != 0` → `0x12`.
+3. OTP2_2 with `data_bits = 16` → `0x22`.
+4. OTP2_1 with `data_bits = 16` (N = 28) → `0x21`.
+5. OTP3_1 with `data_bits = 16` (N = 29) → `0x31`.
 
-Хост перетворює `rsp` у 12-бітний ID так:
+The host turns `rsp` into a 12-bit ID as follows:
 
-* FLASH: `id = rsp & 0xFFF`; якщо не знайдено в таблиці — `(rsp << 1) & 0xFFF` (PFS172 дає 17-бітний ACK,
-  а probe читає лише 16).
-* OTP: оскільки реальна розрядність слова невідома, а читалося як для 16 біт, пробуються
-  `codebits` = 16, 15, 14, 13 зі зсувом `rsp >> (k * (16 - codebits))`, де `k = 1` для OTP2_1/OTP3_1
-  і `k = 2` для OTP1_2/OTP2_2. Збіг шукається за (`id12`, `type`, `codebits`).
+* FLASH: `id = rsp & 0xFFF`; if not found in the table — `(rsp << 1) & 0xFFF` (PFS172 gives a 17-bit ACK,
+  and probe reads only 16).
+* OTP: since the real word width is unknown and it was read as for 16 bits, it tries
+  `codebits` = 16, 15, 14, 13 with a shift `rsp >> (k * (16 - codebits))`, where `k = 1` for OTP2_1/OTP3_1
+  and `k = 2` for OTP1_2/OTP2_2. A match is looked up by (`id12`, `type`, `codebits`).
 
-### 4.7 Читання слова
+### 4.7 Reading a word
 
-| Тип | Послідовність для однієї адреси |
+| Type | Sequence for one address |
 |---|---|
-| FLASH_1, FLASH_2 | `addr` (`addr_bits`) на PA6 → PA6 вхід → CLK = 1, **5 мкс** → прийняти `data_bits` (перший біт читається, поки CLK ще високий після цих 5 мкс + 1 мкс) → PA6 вихід → +1 такт |
-| OTP1_2, OTP2_x | `addr` на PA4 (такт PA3) → прийняти `data_bits` з PA6 |
-| OTP3_1 | `addr` на PA4 з тактом **PA0** → commit (PA7 імпульс 1 мкс + 1 такт PA0) → прийняти `data_bits` з PA6 з тактом PA0 |
+| FLASH_1, FLASH_2 | `addr` (`addr_bits`) on PA6 → PA6 input → CLK = 1, **5 µs** → receive `data_bits` (the first bit is read while CLK is still high after these 5 µs + 1 µs) → PA6 output → +1 clock |
+| OTP1_2, OTP2_x | `addr` on PA4 (PA3 clock) → receive `data_bits` from PA6 |
+| OTP3_1 | `addr` on PA4 with the **PA0** clock → commit (a PA7 pulse of 1 µs + 1 PA0 clock) → receive `data_bits` from PA6 with the PA0 clock |
 
-**Повна операція READ:**
+**The full READ operation:**
 
 ```
-[OTP: GetID-прохід з перевіркою ID]
+[OTP: GetID pass with an ID check]
 Enter(vpp_cmd, vdd_cmd)
-SendCommand(Read)                → для FLASH: перевірка ACK
-[якщо hv ≠ cmd: VDD=vdd_hv, 1 мс; VPP=vpp_hv, 1 мс]
+SendCommand(Read)                → for FLASH: ACK check
+[if hv ≠ cmd: VDD=vdd_hv, 1 ms; VPP=vpp_hv, 1 ms]
 for p in 0..count-1:  buf[data_offs+p] = ReadAddr(addr+p)
 Leave(0)
 ```
 
-BLANKCHECK і VERIFY — ідентичні, лише замість збереження — порівняння (адреси для BLANKCHECK завжди
-з 0). При першій невідповідності цикл переривається.
+BLANKCHECK and VERIFY are identical, only instead of storing there is a comparison (the BLANKCHECK addresses are always
+from 0). At the first mismatch the loop is interrupted.
 
-### 4.8 Стирання (лише FLASH)
+### 4.8 Erase (FLASH only)
 
 ```
 Enter(vpp_cmd, vdd_cmd)
-SendCommand(Erase: 0x3 / FLASH_2: 0x5) → перевірка ACK
-VDD = vdd_hv, 10 мс;  VPP = vpp_hv, 10 мс
+SendCommand(Erase: 0x3 / FLASH_2: 0x5) → ACK check
+VDD = vdd_hv, 10 ms;  VPP = vpp_hv, 10 ms
 repeat erase_clocks:
-    CLK=1, чекати 5 мс   (FLASH_2: 40 мс)
-    CLK=0, 1 мкс
-    CLK=1, 1 мкс
-    CLK=0, 4 мкс
-+1 такт
-Leave(100 мс)
+    CLK=1, wait 5 ms   (FLASH_2: 40 ms)
+    CLK=0, 1 µs
+    CLK=1, 1 µs
+    CLK=0, 4 µs
++1 clock
+Leave(100 ms)
 ```
 
-PA6 весь цей час — вихід у 0.
+PA6 is an output at 0 the whole time.
 
-### 4.9 Запис
+### 4.9 Write
 
-**Загальний алгоритм WRITE:**
+**The general WRITE algorithm:**
 
 ```
-[OTP: GetID-прохід з перевіркою ID]
+[OTP: GetID pass with an ID check]
 Enter(vpp_cmd, vdd_cmd)
-SendCommand(Write 0x7)             → для FLASH: перевірка ACK
-VDD = vdd_hv, 10 мс;  VPP = vpp_hv, 10 мс
+SendCommand(Write 0x7)             → for FLASH: ACK check
+VDD = vdd_hv, 10 ms;  VPP = vpp_hv, 10 ms
 for p = 0; p < count; p += block_size:
     wbuf[0..block_size-1] = 0xFFFF
-    скопіювати min(block_size, count-p) слів у wbuf, починаючи з індексу (addr % block_size)
-    якщо в wbuf хоч одне слово ≠ всі одиниці (по data_bits):
+    copy min(block_size, count-p) words into wbuf, starting at index (addr % block_size)
+    if wbuf has at least one word ≠ all ones (by data_bits):
         WriteBlock(aligned_addr = ((addr+p) / block_size) * block_size, wbuf)
-    чекати 100 мкс
-Leave(100 мс)
+    wait 100 µs
+Leave(100 ms)
 ```
 
-Порожні (всі одиниці) блоки пропускаються, бо запис лише переводить біти 1 → 0. Це ж дозволяє
-дописувати поверх уже записаних даних, якщо змінюються лише одиниці на нулі (використовується при
-калібруванні та записі fuse).
+Empty (all-ones) blocks are skipped, because writing only turns bits 1 → 0. This also makes it possible to
+append over already written data if only ones are changed to zeros (used during
+calibration and when writing the fuse).
 
 **WriteBlock — FLASH_1** (PFS154/PFS173: block_size = 4, groups = 1, clocks = 8):
 
 ```
-for i in 0..block_size-1: send(wbuf[i], data_bits)   на PA6
-send(aligned_addr, addr_bits)                         на PA6
-PA6 → вхід;  4 мкс
+for i in 0..block_size-1: send(wbuf[i], data_bits)   on PA6
+send(aligned_addr, addr_bits)                         on PA6
+PA6 → input;  4 µs
 repeat clock_groups:
-    repeat clocks_per_group:  CLK=1 15 мкс; CLK=0 15 мкс
-    +1 такт;  4 мкс
-PA6 → вихід
-25 мкс
+    repeat clocks_per_group:  CLK=1 15 µs; CLK=0 15 µs
+    +1 clock;  4 µs
+PA6 → output
+25 µs
 ```
 
-**WriteBlock — FLASH_2** (PFS172: block_size = 4, groups = 1, clocks = 4) — **адреса перед даними**:
+**WriteBlock — FLASH_2** (PFS172: block_size = 4, groups = 1, clocks = 4) — **the address goes before the data**:
 
 ```
-send(aligned_addr, addr_bits)                         на PA6
-for i: send(wbuf[i], data_bits)                       на PA6
-PA6 → вхід
+send(aligned_addr, addr_bits)                         on PA6
+for i: send(wbuf[i], data_bits)                       on PA6
+PA6 → input
 repeat clock_groups:
-    +1 такт; 2 мкс
-    repeat clocks_per_group:  CLK=1 40 мкс; CLK=0 40 мкс
-    repeat 4:                 CLK=1 2 мкс;  CLK=0 2 мкс
-PA6 → вихід
-25 мкс
+    +1 clock; 2 µs
+    repeat clocks_per_group:  CLK=1 40 µs; CLK=0 40 µs
+    repeat 4:                 CLK=1 2 µs;  CLK=0 2 µs
+PA6 → output
+25 µs
 ```
 
 **WriteBlock — OTP1_2 / OTP2_x** (block_size = 2, groups = 1, clocks = 8):
 
 ```
-for i: send(wbuf[i], data_bits)                       на PA4 (такт PA3)
-send(aligned_addr, addr_bits)                         на PA4
-+1 такт;  4 мкс
+for i: send(wbuf[i], data_bits)                       on PA4 (PA3 clock)
+send(aligned_addr, addr_bits)                         on PA4
++1 clock;  4 µs
 repeat clock_groups:
-    CLK = 1   (утримується!)
-    repeat clocks_per_group:  PA4=1 30 мкс; PA4=0 30 мкс     ← програмуючі імпульси по лінії даних
-    CLK = 0;  4 мкс
-    +1 такт;  4 мкс
-25 мкс
+    CLK = 1   (held!)
+    repeat clocks_per_group:  PA4=1 30 µs; PA4=0 30 µs     ← programming pulses on the data line
+    CLK = 0;  4 µs
+    +1 clock;  4 µs
+25 µs
 ```
 
-**OTP3_1** — запис у прошивці не реалізований (TODO).
+**OTP3_1** — writing is not implemented in the firmware (TODO).
 
-**Оцінка часу:** PFS173 (3072 слова) ≈ 768 блоків × (~0.3 мс імпульсів + 0.1 мс + передача) ≈ 0.4 с.
-Хост дає на `W` лише 1000 мс — нова реалізація не повинна бути суттєво повільнішою.
+**Time estimate:** PFS173 (3072 words) ≈ 768 blocks × (~0.3 ms of pulses + 0.1 ms + transfer) ≈ 0.4 s.
+The host allows only 1000 ms for `W` — a new implementation must not be significantly slower.
 
-### 4.10 Fuse і захист
+### 4.10 Fuse and protection
 
-* Fuse-слово — **останнє слово** пам'яті програм (`codewords - 1`).
-* Біт 0 fuse = 0 вмикає захист від читання (хост скидає його лише з `--allowsecfuse`).
-* Fuse пишеться **окремою** командою `W` останньою, після калібрування.
-* Області `exclude_code_start…end` — службові: у FLASH-мікросхемах 0x7E0…0x7EF (PFS154/PFS172) і
-  0xBE0…0xBEF (PFS173) — OTP-область із заводськими значеннями BGTR/IHRCR; в OTP — кінцеві слова.
-  Вони пропускаються при blank check і verify.
+* The fuse word is the **last word** of program memory (`codewords - 1`).
+* Fuse bit 0 = 0 enables read protection (the host clears it only with `--allowsecfuse`).
+* The fuse is written by a **separate** `W` command, last, after calibration.
+* The `exclude_code_start…end` areas are reserved: in the FLASH ICs 0x7E0…0x7EF (PFS154/PFS172) and
+  0xBE0…0xBEF (PFS173) — an OTP area with the factory BGTR/IHRCR values; in OTP — the final words.
+  They are skipped during blank check and verify.
 
 ---
 
-## 5. Повний алгоритм хоста (`easypdkprog`)
+## 5. The full host algorithm (`easypdkprog`)
 
-### 5.1 Відкриття
+### 5.1 Opening
 
-1. Відкрити COM, виставити DTR, вичитати й відкинути вхідні дані.
-2. `I` → перевірити PROTO 1.3.
+1. Open COM, set DTR, read and discard incoming data.
+2. `I` → check PROTO 1.3.
 
 ### 5.2 `probe`
 
-`P` → таблиця за правилами 4.6.
+`P` → a table lookup by the rules of 4.6.
 
 ### 5.3 `read`
 
-1. `R` (addr = 0, data_offs = 0, count = codewords, напруги `*_cmd_read` / `*_read_hv`).
-2. Результат має дорівнювати `id12bit`.
-3. `G` по шматках → файл (Intel HEX 8-біт: байтові адреси, слово = 2 байти LE, або raw binary).
+1. `R` (addr = 0, data_offs = 0, count = codewords, voltages `*_cmd_read` / `*_read_hv`).
+2. The result must equal `id12bit`.
+3. `G` in chunks → a file (Intel HEX 8-bit: byte addresses, a word = 2 bytes LE, or raw binary).
 
 ### 5.4 `write`
 
-1. Прочитати HEX у байтовий масив; невизначені байти = `0xFF` (з `--securefill` = `0x00`, тобто NOP,
-   до `min(codewords - 8, exclude_code_start)`).
-2. Якщо fuse не задано, а файл займає всю пам'ять — останнє слово стає fuse і видаляється з даних.
-3. Пошук та підміна калібрувальних вставок (до 16, розділ 6).
-4. Підстановка серійного номера (розділ 8).
-5. FLASH (якщо не `--noerase`): `E` → результат = ID.
-6. `Z` (якщо не `--noblankchk`) по всьому діапазону з урахуванням exclude.
-7. `S` (дані з байта 0) → `W` (addr 0, data_offs 0, count = ⌈len/2⌉, параметри блоку з таблиці).
-8. `V` (якщо не `--noverify`).
-9. Для кожної калібровки, у порядку зростання адреси:
-   `C` → перевірка, що частота в межах ±10 % від цільової → пропатчити код (розділ 6.4) → `S` всього
-   масиву → `W` всього масиву (дописуються лише нулі).
-10. Fuse (якщо є): `S` 2 байти за байтовим зміщенням `(codewords-1)*2` → `W` з
+1. Read the HEX into a byte array; undefined bytes = `0xFF` (with `--securefill` = `0x00`, i.e. NOP,
+   up to `min(codewords - 8, exclude_code_start)`).
+2. If the fuse is not set and the file occupies all memory — the last word becomes the fuse and is removed from the data.
+3. Find and replace the calibration stubs (up to 16, section 6).
+4. Substitute the serial number (section 8).
+5. FLASH (unless `--noerase`): `E` → result = ID.
+6. `Z` (unless `--noblankchk`) over the whole range, taking exclude into account.
+7. `S` (data from byte 0) → `W` (addr 0, data_offs 0, count = ⌈len/2⌉, block parameters from the table).
+8. `V` (unless `--noverify`).
+9. For each calibration, in order of increasing address:
+   `C` → check that the frequency is within ±10 % of the target → patch the code (section 6.4) → `S` of the whole
+   array → `W` of the whole array (only zeros are added).
+10. The fuse (if present): `S` of 2 bytes at byte offset `(codewords-1)*2` → `W` with
     `addr = data_offs = codewords-1`, `count = 1`.
 
 ### 5.5 `erase`
 
-`E`, потім `Z`.
+`E`, then `Z`.
 
-> ⚠️ У `easypdkprog` 1.3 в гілці `erase` blank check викликається з переплутаними аргументами
-> (`vdd_read = vpp_cmd_read`, `vpp_read = vdd_read_hv`). Не копіюйте це.
+> ⚠️ In `easypdkprog` 1.3, in the `erase` branch the blank check is called with swapped arguments
+> (`vdd_read = vpp_cmd_read`, `vpp_read = vdd_read_hv`). Do not copy this.
 
 ### 5.6 `start`
 
-`X` з `--runvdd` (типово 5.0 В) → цикл: друкувати `D`-пакети, натиснуті клавіші слати `D`-пакетами;
+`X` with `--runvdd` (default 5.0 V) → a loop: print the `D` packets, send pressed keys as `D` packets;
 Esc → `Q`.
 
 ---
 
-## 6. Калібрування осциляторів (IHRC / ILRC / BandGap)
+## 6. Oscillator calibration (IHRC / ILRC / BandGap)
 
-PADAUK не мають заводського калібрування IHRC у програмі — його виконує програматор **після запису,
-на робочій мікросхемі**. Для цього в прошивку користувача вбудовується «маркер», який хост замінює
-спеціальним вимірювальним циклом, записує, вимірює, а потім перетворює цикл на просту установку регістра.
+PADAUK ICs have no factory IHRC calibration in the program — the programmer performs it **after writing,
+on the working IC**. For this a "marker" is embedded in the user firmware, which the host replaces with
+a special measurement loop, writes, measures, and then turns the loop into a simple register setting.
 
-### 6.1 Маркер у програмі користувача (від SDCC-макросів `easypdk/pdkcommon.h`)
+### 6.1 The marker in the user program (from the SDCC macros `easypdk/pdkcommon.h`)
 
-**IHRC/ILRC** — 10 інструкцій `AND A, #imm`:
+**IHRC/ILRC** — 10 `AND A, #imm` instructions:
 
 ```
 and a, #'R'
 and a, #'C'
 and a, #type            ; 1 = IHRC, 2 = ILRC
-and a, #freq[7:0]       ; цільова SYSCLK, Гц
+and a, #freq[7:0]       ; target SYSCLK, Hz
 and a, #freq[15:8]
 and a, #freq[23:16]
 and a, #freq[31:24]
-and a, #mV[7:0]         ; VDD калібрування, мВ
+and a, #mV[7:0]         ; calibration VDD, mV
 and a, #mV[15:8]
-and a, #reg             ; IO-адреса регістра підстроювання (IHRCR=0x0B, ILRCR=0x39 для PFS154 ...)
+and a, #reg             ; IO address of the trim register (IHRCR=0x0B, ILRCR=0x39 for PFS154 ...)
 ```
 
-**BandGap** — 14 інструкцій:
+**BandGap** — 14 instructions:
 
 ```
 and a, #'B' / 'G' / 3 / (3950 & 0xFF) / (3950 >> 8) / bgtr / gpcc / gpcs / 0 / 0 / 0 / 0 / 0 / 0
 ```
 
-Опкод `AND A, #imm` залежить від розрядності ядра: 13 біт — `0x14xx`, 14 біт — `0x2Cxx`,
-15 біт — `0x54xx`, 16 біт — `0x1Cxx` (для 16 біт калібрування не підтримується — хост видає помилку).
+The `AND A, #imm` opcode depends on the core width: 13 bit — `0x14xx`, 14 bit — `0x2Cxx`,
+15 bit — `0x54xx`, 16 bit — `0x1Cxx` (calibration is not supported for 16 bit — the host reports an error).
 
-### 6.2 Вимірювальний цикл (що записується замість маркера)
+### 6.2 The measurement loop (written in place of the marker)
 
-**IHRC/ILRC** (на прикладі 14-бітного ядра; `pos` — адреса маркера):
+**IHRC/ILRC** (for a 14-bit core as an example; `pos` is the marker address):
 
-| pos+ | Опкод | Інструкція | Після калібрування |
+| pos+ | Opcode | Instruction | After calibration |
 |---|---|---|---|
-| 0 | `0x1ED1` | `SET1 PAC.3` — PA3 вихід | NOP |
-| 1 | `0x1F0D` | `SET1 PADIER.4` — PA4 цифровий вхід | NOP |
+| 0 | `0x1ED1` | `SET1 PAC.3` — PA3 output | NOP |
+| 1 | `0x1F0D` | `SET1 PADIER.4` — PA4 digital input | NOP |
 | 2 | `0x2FFF` | `MOV A, #0xFF` | `MOV A, #value` |
 | 3 | `0x2801` | `ADD A, #1` | NOP |
 | 4 | `0x1ED0` | **loop:** `SET1 PA.3` | NOP |
-| 5 | `0x0180\|reg` | `MOV IO(reg), A` — запис у IHRCR/ILRCR | **залишається** |
-| 6 | `0x1910` | `T0SN PA.4` — пропустити наступну, якщо PA4 = 0 | NOP |
+| 5 | `0x0180\|reg` | `MOV IO(reg), A` — write to IHRCR/ILRCR | **stays** |
+| 6 | `0x1910` | `T0SN PA.4` — skip the next one if PA4 = 0 | NOP |
 | 7 | `0x2801` | `ADD A, #1` | NOP |
 | 8 | `0x1CD0` | `SET0 PA.3` | NOP |
 | 9 | `0x3004+pos` | `GOTO loop` | NOP |
 
-Тіло циклу — рівно **7 тактів** (5 однотактних + GOTO на 2), тому на PA3 мікросхема генерує меандр
-`f_PA3 = SYSCLK / 7`. Кожного разу, коли під час `T0SN` на PA4 одиниця, A збільшується і в регістр
-підстроювання пишеться наступне значення.
+The loop body is exactly **7 clocks** (5 single-clock + GOTO at 2), so the IC generates a square wave on PA3
+`f_PA3 = SYSCLK / 7`. Every time PA4 is one during `T0SN`, A is incremented and the next value
+is written to the trim register.
 
-Таблиці опкодів для 13/14/15-бітних ядер — у [fpdkiccalib.c](../easy-pdk-programmer-software/fpdkiccalib.c);
-хост їх сам підставляє, прошивці програматора про вміст коду знати не потрібно.
+The opcode tables for the 13/14/15-bit cores are in [fpdkiccalib.c](../easy-pdk-programmer-software/fpdkiccalib.c);
+the host substitutes them itself, and the programmer firmware does not need to know the code contents.
 
-**BandGap**: PA0 і PA3 — виходи (`MOV A,#0x09; MOV PAC,A`), PA4 — вхід, вмикається компаратор
-(`GPCC = 0x84`, `GPCS = 0xA3`), вихід компаратора йде на PA0; цикл аналогічний, але пише в BGTR.
+**BandGap**: PA0 and PA3 are outputs (`MOV A,#0x09; MOV PAC,A`), PA4 is an input, the comparator is enabled
+(`GPCC = 0x84`, `GPCS = 0xA3`), the comparator output goes to PA0; the loop is similar but writes to BGTR.
 
-### 6.3 Що робить програматор у команді `C`
+### 6.3 What the programmer does in the `C` command
 
-1. Налаштувати лічильник (в оригіналі SPI1 **slave**): SCK ← IC PA3, MISO → IC PA4,
-   кільцевий DMA на `block` байт TX і RX, MSB first, CPOL = 0, CPHA = 0. Кожен біт SPI = один оберт циклу IC.
-2. VPP не подається. VDD = `vdd_mV`, чекати 1 мс — IC стартує і виконує записану програму, доходить до циклу.
-3. **«Крок»** (`Next(n)`, n ≤ 16 за раз): у перші 2 байти TX-буфера записується `(1 << n) - 1`
-   (байт0 = молодший), тобто n одиничних біт на PA4 → значення в регістрі зростає на n. Після передачі
-   буфер знову нулі. Очікування підтвердження — до 1 с.
-4. **Вимірювання частоти** (`Measure()`): робиться крок на 1, пропускається 1 блок, потім таймер
-   48 МГц міряє час `t` проходження `M - 1` повних блоків:
-   `f_PA3 = 48 000 000 × 8 × block × (M - 1) / t`, а `SYSCLK = f_PA3 × mult` (mult = 7).
-   Розмір вікна залежить від цільової частоти:
+1. Set up the counter (in the original SPI1 **slave**): SCK ← IC PA3, MISO → IC PA4,
+   circular DMA over `block` bytes of TX and RX, MSB first, CPOL = 0, CPHA = 0. Each SPI bit = one turn of the IC loop.
+2. VPP is not applied. VDD = `vdd_mV`, wait 1 ms — the IC starts, runs the written program, and reaches the loop.
+3. **A "step"** (`Next(n)`, n ≤ 16 at a time): `(1 << n) - 1` is written into the first 2 bytes of the TX buffer
+   (byte0 = least significant), that is, n one bits on PA4 → the register value grows by n. After the transfer
+   the buffer is zeros again. Waiting for confirmation takes up to 1 s.
+4. **Frequency measurement** (`Measure()`): one step of 1 is made, 1 block is skipped, then a
+   48 MHz timer measures the time `t` of `M - 1` full blocks:
+   `f_PA3 = 48 000 000 × 8 × block × (M - 1) / t`, and `SYSCLK = f_PA3 × mult` (mult = 7).
+   The window size depends on the target frequency:
 
-   | Цільова SYSCLK | block, байт | M (блоків) |
+   | Target SYSCLK | block, bytes | M (blocks) |
    |---|---|---|
-   | > 4 МГц | 16 | 24 |
-   | ≤ 4 МГц | 16 | 8 |
-   | ≤ 1 МГц | 16 | 4 |
-   | ≤ 100 кГц | 4 | 2 |
+   | > 4 MHz | 16 | 24 |
+   | ≤ 4 MHz | 16 | 8 |
+   | ≤ 1 MHz | 16 | 4 |
+   | ≤ 100 kHz | 4 | 2 |
 
-5. Пошук:
-   * **IHRC** — значення 1…0x9F з кроком 1 (значення 0 пропускається, бо перше вимірювання вже після
-     першого кроку), вибирається найближче до цільової частоти;
-   * **ILRC** — 0x00…0xF0 з кроком 0x10 (використовуються лише старші 4 біти);
-   * **BG** — 0x00…0xF0 з кроком 0x10: після кожного кроку чекати 500 мкс і читати IC PA0;
-     перше значення, при якому PA0 = 0, — результат. Не знайдено → `'E'`.
-   * Якщо вимірювання повернуло 0 (немає тактів 1 с) — пошук зупиняється.
-6. VDD = 0, зупинити лічильник, чекати 50 мс. Відповісти `value`, `freq`.
+5. The search:
+   * **IHRC** — values 1…0x9F in steps of 1 (value 0 is skipped, because the first measurement is already after the
+     first step), the one closest to the target frequency is chosen;
+   * **ILRC** — 0x00…0xF0 in steps of 0x10 (only the upper 4 bits are used);
+   * **BG** — 0x00…0xF0 in steps of 0x10: after each step wait 500 µs and read the IC's PA0;
+     the first value at which PA0 = 0 is the result. Not found → `'E'`.
+   * If the measurement returned 0 (no clocks for 1 s) — the search stops.
+6. VDD = 0, stop the counter, wait 50 ms. Reply with `value`, `freq`.
 
-Реалізуючи на іншому МК, достатньо: (а) рахувати фронти на IC PA3 за відомий час (таймер у режимі
-зовнішнього тактування / input capture), (б) уміти синхронно з фронтами PA3 видати рівно n одиниць на
-PA4 (наприклад, по переривання від фронту PA3 — але частота PA3 до ~2.3 МГц при SYSCLK 16 МГц, тому
-краще апаратно: SPI slave, таймер з DMA тощо).
+When implementing on another MCU it is enough to: (a) count edges on the IC's PA3 over a known time (a timer in
+external-clock mode / input capture), (b) be able to output exactly n ones on
+PA4 synchronously with the PA3 edges (for example, from a PA3 edge interrupt — but the PA3 frequency is up to ~2.3 MHz at SYSCLK 16 MHz, so it is
+better in hardware: SPI slave, a timer with DMA, and so on).
 
-### 6.4 Патч після калібрування (на хості)
+### 6.4 The patch after calibration (on the host)
 
-* інструкції з позначкою `CO_AC_NOP` → `0x0000` (NOP);
+* instructions marked `CO_AC_NOP` → `0x0000` (NOP);
 * `MOV A, #0xFF` → `MOV A, #value`;
-* `MOV IO(reg), A` залишається.
+* `MOV IO(reg), A` stays.
 
-Усі ці зміни лише обнуляють біти, тому повторний `W` без стирання коректний. У результаті в програмі
-лишається `MOV A,#value; MOV IHRCR,A` і NOP-и.
-
----
-
-## 7. Режим виконання (UART-міст)
-
-* `X`: VDD = `vdd_mV`, VPP = 0, UART 8N1 з **автовизначенням швидкості по старт-біту** (STM32 ABR mode 0):
-  * IC TX → **PA7** → вхід програматора (з pull-down);
-  * вихід програматора → **PA0** → IC RX.
-* Перший символ від IC має мати молодший біт = 1 (прийнято слати `'U'` = 0x55); він вимірюється і
-  відкидається (якщо це саме `'U'`).
-* Після визначення програматор шле хосту `'D'`-пакет `"Connected @<baud> baud\n"`.
-  При помилці автовизначення UART перезапускається.
-* Далі всі байти від IC збираються в кільцеву чергу 32 байти і пересилаються `'D'`-пакетами.
-* `'D'`-пакети від хоста передаються в IC на тій самій швидкості.
-* `Q` або закриття порту — вимкнути UART і VDD.
+All these changes only clear bits, so a repeated `W` without erasing is correct. As a result the program
+is left with `MOV A,#value; MOV IHRCR,A` and NOPs.
 
 ---
 
-## 8. Серійний номер
+## 7. Run mode (the UART bridge)
 
-Хост шукає в коді 8 послідовних інструкцій `RET #'F'`, `RET #'P'`, `RET #'S'`, `RET #'E'`, `RET #'R'`,
-`RET #'I'`, `RET #'A'`, `RET #'L'` (опкод `RET k`: 13 біт — `0x01xx`, 14/15 біт — `0x02xx`,
-16 біт — `0x0Fxx`) і замінює молодші байти на байти 64-бітного серійного номера (`--serial`),
-молодший байт — першим. Виконується повністю на хості, програматор не задіяний.
+* `X`: VDD = `vdd_mV`, VPP = 0, UART 8N1 with **baud-rate auto-detection from the start bit** (STM32 ABR mode 0):
+  * IC TX → **PA7** → the programmer input (with a pull-down);
+  * the programmer output → **PA0** → IC RX.
+* The first character from the IC must have its least significant bit = 1 (by convention `'U'` = 0x55 is sent); it is measured and
+  discarded (if it is indeed `'U'`).
+* After detection the programmer sends the host a `'D'` packet `"Connected @<baud> baud\n"`.
+  On an auto-detection error the UART is restarted.
+* After that all bytes from the IC are collected into a 32-byte ring queue and forwarded in `'D'` packets.
+* `'D'` packets from the host are sent to the IC at the same baud rate.
+* `Q` or closing the port — turn off the UART and VDD.
 
 ---
 
-## 9. Таблиця мікросхем (з `fpdkicdata.c`)
+## 8. The serial number
 
-Напруги у вольтах: `cmd` = (VDD / VPP) під час входу і команди, `hv` = (VDD / VPP) під час операції.
-Блок запису = `block_size / clock_groups / clocks_per_group`. RO — запис у v1.3 не підтримується.
+The host looks in the code for 8 consecutive instructions `RET #'F'`, `RET #'P'`, `RET #'S'`, `RET #'E'`, `RET #'R'`,
+`RET #'I'`, `RET #'A'`, `RET #'L'` (the `RET k` opcode: 13 bit — `0x01xx`, 14/15 bit — `0x02xx`,
+16 bit — `0x0Fxx`) and replaces the low bytes with the bytes of a 64-bit serial number (`--serial`),
+least significant byte first. It is performed entirely on the host; the programmer is not involved.
 
-| IC | ID12 | Тип | addr / data біт | Слів | Read cmd → hv | Write cmd → hv | Блок | Erase cmd → hv, clocks | Exclude |
+---
+
+## 9. The IC table (from `fpdkicdata.c`)
+
+Voltages in volts: `cmd` = (VDD / VPP) during entering and the command, `hv` = (VDD / VPP) during the operation.
+The write block = `block_size / clock_groups / clocks_per_group`. RO — writing is not supported in v1.3.
+
+| IC | ID12 | Type | addr / data bits | Words | Read cmd → hv | Write cmd → hv | Block | Erase cmd → hv, clocks | Exclude |
 |---|---|---|---|---|---|---|---|---|---|
 | PMS131 / PMC131 | 0xC83 | 0x22 | 12 / 14 | 0x600 | 3.0/5.0 → 3.0/5.0 | RO | — | — | 0x5F9–0x600 |
 | PMS132 / PMS132B | 0x109 | 0x22 | 12 / 14 | 0x800 | 3.0/5.0 → 3.0/5.0 | RO | — | — | 0x7F6–0x800 |
 | PMS133 / PMS134 | 0xC19 | 0x21 | 12 / 15 | 0x1000 | 3.0/5.0 → 3.0/5.0 | RO | — | — | 0xFF6–0x1000 |
 | PMS150C / PMS15A | 0xA16 | 0x12 | 12 / 13 | 0x400 | 3.0/5.0 → 3.0/5.0 | 4.3/8.0 → 5.8/10.5 | 2/1/8 | — | 0x3F6–0x400 |
 | PMS152 | 0xA27 | 0x22 | 12 / 14 | 0x500 | 3.0/5.0 → 3.0/5.0 | 4.3/8.0 → 5.8/10.5 | 2/1/8 | — | 0x4F6–0x500 |
-| PMS154B / PMS154C | 0xE06 | 0x12 | 12 / 14 | 0x800 | 3.0/5.0 → 3.0/5.0 | 4.3/8.0 → 5.8/11.0 | 2/1/8 | — | адр. 0 + 0x7E8–0x800 |
+| PMS154B / PMS154C | 0xE06 | 0x12 | 12 / 14 | 0x800 | 3.0/5.0 → 3.0/5.0 | 4.3/8.0 → 5.8/11.0 | 2/1/8 | — | addr. 0 + 0x7E8–0x800 |
 | **PFS154** | 0xAA1 | 0xF1 | 13 / 14 | 0x800 | 2.5/5.5 → 2.5/5.5 | 2.5/5.5 → 5.8/8.5 | 4/1/8 | 2.5/5.5 → 3.0/9.0, 2 | 0x7E0–0x7F0 |
 | PMS171B | 0xD36 | 0x22 | 12 / 14 | 0x600 | 3.0/5.0 → 3.0/5.0 | 4.3/8.0 → 5.8/10.5 | 2/1/8 | — | 0x5F6–0x600 |
 | PFS172 | 0xCA6 | 0xF2 | 13 / 14 | 0x800 | 2.5/5.5 → 2.5/**0.0** | 2.5/5.5 → 5.3/**0.0** | 4/1/4 | 2.5/5.5 → 5.3/**0.0**, 14 | 0x7E0–0x7F0 |
@@ -768,16 +768,16 @@ PA4 (наприклад, по переривання від фронту PA3 —
 | PMS271 / PMC271 | 0xA58 | 0x31 | 13 / 16 | 0x400 | 2.5/5.0 → 2.5/5.5 | RO | — | — | 0x3F9–0x400 |
 | MCU390 | 0xC31 | 0x12 | 12 / 14 | 0x800 | 3.0/5.0 → 3.0/5.0 | RO | — | — | 0x700–0x800 |
 
-Примітки:
+Notes:
 
-* PFC154 (є в `docs/` даташит) у таблиці версії 1.3 **відсутній** — для нього потрібні параметри з
-  новіших версій free-pdk або власне дослідження.
-* Поле `otpid` (напр. 0x2AA1 для PFS154) — ID у нотації оригінального програматора PADAUK, в протоколі
-  не використовується.
+* The PFC154 (there is a datasheet in `docs/`) is **absent** from the version 1.3 table — it needs parameters from
+  newer free-pdk versions or your own research.
+* The `otpid` field (e.g. 0x2AA1 for PFS154) is the ID in the notation of the original PADAUK programmer; it is not
+  used in the protocol.
 
 ---
 
-## 10. Приклад обміну (PFS154, читання)
+## 10. Example exchange (PFS154, read)
 
 ```
 PC → 'I' 00
@@ -786,39 +786,39 @@ PC → 'I' 00
 PC → 'R' 1B
      A1 0A            icid = 0x0AA1
      F1               type = FLASH_1
-     C4 09 00 00      vdd_cmd  = 2500 мВ
-     7C 15 00 00      vpp_cmd  = 5500 мВ
-     C4 09 00 00      vdd_read = 2500 мВ
-     7C 15 00 00      vpp_read = 5500 мВ
+     C4 09 00 00      vdd_cmd  = 2500 mV
+     7C 15 00 00      vpp_cmd  = 5500 mV
+     C4 09 00 00      vdd_read = 2500 mV
+     7C 15 00 00      vpp_read = 5500 mV
      00 00            addr = 0
      0D               addr_bits = 13
      00 00            data_offs = 0
      0E               data_bits = 14
      00 08            count = 0x0800
-   ← 'A' 02 00 A1 0A  (успіх, ID echo)
+   ← 'A' 02 00 A1 0A  (success, ID echo)
 
-PC → 'G' 04 00 00 3F 00     (offset 0, 63 байти)
-   ← 'A' 3F 00 <63 байти>
+PC → 'G' 04 00 00 3F 00     (offset 0, 63 bytes)
+   ← 'A' 3F 00 <63 bytes>
    ...
 ```
 
-На лініях IC при цьому: PA3 = 0 → VPP 5.5 В → 100 мкс → VDD 2.5 В → 500 мкс → 32 біти `0xA5A5A5A6` по PA6 →
-16 біт ACK (`xxxx 1010 1010 0001`) → для кожної адреси 13 біт адреси + 5 мкс + 14 біт даних + такт →
-зняти VDD/VPP → 10 мс.
+On the IC lines this looks like: PA3 = 0 → VPP 5.5 V → 100 µs → VDD 2.5 V → 500 µs → 32 bits `0xA5A5A5A6` on PA6 →
+16 ACK bits (`xxxx 1010 1010 0001`) → for each address 13 address bits + 5 µs + 14 data bits + a clock →
+remove VDD/VPP → 10 ms.
 
 ---
 
-## 11. Відомі особливості й підводні камені оригінальної реалізації
+## 11. Known quirks and pitfalls of the original implementation
 
-1. Перевірка меж `S`/`G` у прошивці помилково множить розмір буфера на 2 — фактичний буфер 8192 байти;
-   у своїй реалізації перевіряйте коректно.
-2. `E` для OTP повертає `0xFFFF`, **не виходячи з режиму програмування** (VPP/VDD лишаються ввімкнені).
-   Краще спочатку перевіряти тип, потім подавати напругу.
-3. Хост для `W` використовує тайм-аут 1000 мс (як для читання), не 2000.
-4. `Z`/`R`/`V`: хост шле байт 12 = `vdd_cmd >> 8` замість `vdd_read >> 8` (див. 2.4).
-5. У verify `excl_first` порівнюється з абсолютною адресою, а діапазон exclude — з відносним індексом `p`.
-6. Помилка/таймаут за час однієї операції у хоста = зависання процесу запису; операції мають бути
-   атомарними на боці програматора і завжди закінчуватися `Leave()` (знімання напруг).
-7. `FPDK_SetVDD/SetVPP` завжди повертають успіх — апаратного контролю напруг немає; при перевантаженні
-   (неправильно вставлена мікросхема) захисту немає. Нова апаратура може додати контроль струму/напруги
-   й повертати `0xFFFE`/`0xFFFD`.
+1. The bounds check of `S`/`G` in the firmware mistakenly multiplies the buffer size by 2 — the actual buffer is 8192 bytes;
+   check correctly in your implementation.
+2. `E` for OTP returns `0xFFFF` **without leaving programming mode** (VPP/VDD stay on).
+   It is better to check the type first and then apply voltage.
+3. The host uses a 1000 ms timeout for `W` (as for read), not 2000.
+4. `Z`/`R`/`V`: the host sends byte 12 = `vdd_cmd >> 8` instead of `vdd_read >> 8` (see 2.4).
+5. In verify, `excl_first` is compared with the absolute address, while the exclude range is compared with the relative index `p`.
+6. An error/timeout during a single operation makes the host's write process hang; operations must be
+   atomic on the programmer side and always end with `Leave()` (removing the voltages).
+7. `FPDK_SetVDD/SetVPP` always return success — there is no hardware voltage monitoring; on overload
+   (an incorrectly inserted IC) there is no protection. New hardware can add current/voltage monitoring
+   and return `0xFFFE`/`0xFFFD`.
