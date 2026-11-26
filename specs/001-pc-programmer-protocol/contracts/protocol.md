@@ -66,7 +66,7 @@ CRC — CRC-32/ISO-HDLC (`zlib.crc32`). Формат пакета прошивк
 | `u16` | `max_payload` |
 | `u32` | `max_package_size` — найбільший пакет для запису (ємність слота; F072 — 8192) |
 | `u16` | `max_read_words` — найбільше слів для `READ` (F072 — 4096) |
-| `u32` | `capabilities` (біт0 автономний режим, біт1 калібрування, біт2 RUN/UART, біт3 COPY, біт4 вимірювання VDD/VPP, біт5 `SELF_TEST`, біт6 `PATCH`, біт7 калібрування живлення `CAL_*`, біт8 ручне керування живленням `SUPPLY_*`) |
+| `u32` | `capabilities` (біт0 автономний режим, біт1 калібрування, біт2 RUN/UART, біт3 COPY, біт4 вимірювання VDD/VPP, біт5 `SELF_TEST`, біт6 `PATCH`, біт7 калібрування живлення `CAL_*`, біт8 ручне керування живленням `SUPPLY_*`, біт9 `COPY` з `MEASURE_MASTER` — збірка може його вимкнути, тоді режим 3 → `OP_UNSUPPORTED`) |
 | `char[16]` | `platform` (напр. `"stm32f072c8"`) |
 | `char[24]` | `firmware_version` |
 | `u8` | `chip_table_size` |

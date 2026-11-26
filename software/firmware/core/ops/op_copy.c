@@ -459,6 +459,10 @@ uint16_t op_copy_run(void)
         return PDK_OP_UNSUPPORTED;   /* a package for it could never be written */
     if (measure && !chip_is_flash(chip))
         return PDK_MASTER_NOT_REWRITABLE;
+#ifndef PDK_FEATURE_MEASURE_MASTER
+    if (measure)
+        return PDK_OP_UNSUPPORTED;   /* left out of this build (INFO.capabilities) */
+#endif
 
     op_stage(PDK_STAGE_READ);
     c.chip = chip;

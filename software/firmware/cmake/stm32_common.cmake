@@ -19,10 +19,11 @@ pdk_fetch(tinyusb https://github.com/hathach/tinyusb.git 0.18.0)
 set(TUSB ${tinyusb_SOURCE_DIR}/src)
 set(PDK_COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/platform/common)
 
-# pdk_stm32_firmware(NAME <elf name> DIR <platform dir> LDSCRIPT <file>
+# pdk_stm32_firmware(NAME <elf name> DIR <platform dir> LDSCRIPT <file> FLASH_LIMIT <bytes>
 #                    INCLUDES <dirs...> DEFINES <defs...> USB_DRIVER <tinyusb sources...>)
+# FLASH_LIMIT: the build fails when .text + .data exceeds it (cmake/check_size.cmake, T125).
 function(pdk_stm32_firmware)
-    cmake_parse_arguments(A "" "NAME;DIR;LDSCRIPT" "INCLUDES;DEFINES;USB_DRIVER" ${ARGN})
+    cmake_parse_arguments(A "" "NAME;DIR;LDSCRIPT;FLASH_LIMIT" "INCLUDES;DEFINES;USB_DRIVER" ${ARGN})
 
     add_library(stm32_deps INTERFACE)
     target_include_directories(stm32_deps INTERFACE ${A_DIR} ${PDK_COMMON_DIR} ${cmsis_core_SOURCE_DIR}/Include
@@ -53,6 +54,8 @@ function(pdk_stm32_firmware)
     add_custom_command(TARGET ${A_NAME}.elf POST_BUILD
         COMMAND ${CMAKE_OBJCOPY} -O binary ${A_NAME}.elf ${A_NAME}.bin
         COMMAND ${CMAKE_SIZE} ${A_NAME}.elf
+        COMMAND ${CMAKE_COMMAND} -DSIZE=${CMAKE_SIZE} -DELF=${A_NAME}.elf -DLIMIT=${A_FLASH_LIMIT}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/check_size.cmake
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         COMMENT "${A_NAME}.bin")
 endfunction()

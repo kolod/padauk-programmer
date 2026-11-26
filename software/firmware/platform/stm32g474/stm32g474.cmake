@@ -15,6 +15,7 @@ pdk_stm32_firmware(
     NAME pdkprog-g474
     DIR ${CMAKE_CURRENT_SOURCE_DIR}/platform/stm32g474
     LDSCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/platform/stm32g474/stm32g474ce.ld
+    FLASH_LIMIT 262144   # bank 1; packages and the journal live in bank 2
     INCLUDES ${cmsis_device_g4_SOURCE_DIR}/Include
     DEFINES STM32G474xx CFG_TUSB_MCU=OPT_MCU_STM32G4 $<$<BOOL:${PDK_G474_SUPPLIES}>:PDK_G474_SUPPLIES=1>
     USB_DRIVER ${TUSB}/portable/st/stm32_fsdev/dcd_stm32_fsdev.c)

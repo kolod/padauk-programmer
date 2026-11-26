@@ -192,6 +192,7 @@ enum {
     PDK_CAP_PATCH = 1u << 6,
     PDK_CAP_SUPPLY_CAL = 1u << 7,
     PDK_CAP_SUPPLY_SET = 1u << 8,
+    PDK_CAP_MEASURE_MASTER = 1u << 9,
 };
 
 /* CHIP_DESC.ops bits */

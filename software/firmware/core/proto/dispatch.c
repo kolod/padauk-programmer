@@ -59,13 +59,17 @@ static const pdk_command_t commands[] = {
 static uint32_t capabilities(void)
 {
     /* Bits are set as the corresponding features are implemented. */
-    uint32_t caps = PDK_CAP_RUN_UART;
+    /* local actions, calibration, RUN, COPY (with RESTORE_MASTER) are in every build */
+    uint32_t caps = PDK_CAP_AUTONOMOUS | PDK_CAP_CALIBRATE | PDK_CAP_RUN_UART | PDK_CAP_COPY;
     uint16_t vdd_max, vpp_max;
     hal_power_limits(&vdd_max, &vpp_max);
     if (vdd_max && vpp_max)   /* a board without the supply front end reports 0 V limits */
         caps |= PDK_CAP_MEASURE_POWER | PDK_CAP_SUPPLY_CAL | PDK_CAP_SUPPLY_SET | PDK_CAP_SELF_TEST;
 #ifdef PDK_FEATURE_PATCH
     caps |= PDK_CAP_PATCH;
+#endif
+#ifdef PDK_FEATURE_MEASURE_MASTER
+    caps |= PDK_CAP_MEASURE_MASTER;
 #endif
     return caps;
 }

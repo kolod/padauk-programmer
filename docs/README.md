@@ -2,6 +2,8 @@
 
 | Файл | Опис |
 |---|---|
+| [protocol.md](protocol.md) | Протокол цього програматора, формат пакета, внутрішні інтерфейси (генерується `gen_protocol.py` з `specs/001-pc-programmer-protocol/contracts`) |
+| [padauk-calibration.md](padauk-calibration.md) | Калібрування генераторів PADAUK |
 | [easy-pdk-programmer-protocol.md](easy-pdk-programmer-protocol.md) | Аналіз протоколів Easy PDK Programmer: PC ⇄ програматор ⇄ мікросхема |
 
 ## Даташити PADAUK

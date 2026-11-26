@@ -11,6 +11,7 @@ pdk_stm32_firmware(
     NAME pdkprog
     DIR ${CMAKE_CURRENT_SOURCE_DIR}/platform/stm32f072
     LDSCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/platform/stm32f072/stm32f072c8.ld
+    FLASH_LIMIT 45056   # 44 KB: the rest of the 64 KB holds the package slots and the journal
     INCLUDES ${cmsis_device_f0_SOURCE_DIR}/Include
     DEFINES STM32F072xB CFG_TUSB_MCU=OPT_MCU_STM32F0
     USB_DRIVER ${TUSB}/portable/st/stm32_fsdev/dcd_stm32_fsdev.c)
