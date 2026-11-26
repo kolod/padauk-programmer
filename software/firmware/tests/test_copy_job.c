@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* CopyJob (T106, without MEASURE_MASTER — part 7c): a measurement loop in the master, permissions for
+/* CopyJob (T106): a measurement loop in the master, MEASURE_MASTER (dump committed and flagged before the
+ * first erase, n + 1 erases, no signal → COPIED, cancel → RESTORE, failed restore → PENDING until
+ * RESTORE_MASTER), permissions for
  * modifying the master, MASTER_RESTORE_PENDING blocking COPY / PKG_BEGIN / PKG_DELETE. */
 #include "pdk_test.h"
 
@@ -74,6 +76,156 @@ TEST(modifying_the_master_needs_permission)
     fake_chip_insert(otp);
     measure.flags = 1;   /* ALLOW_MODIFY_MASTER */
     ASSERT_EQ(tops_copy(otp, &measure)->status, PDK_MASTER_NOT_REWRITABLE);
+}
+
+/* ---------------------------------------------------------------- MEASURE_MASTER, RESTORE */
+
+#define ILRC 0x50u
+#define BG 0x60u
+
+static uint16_t master[TOPS_MAX_WORDS];
+static bool pending_at_erase;   /* MASTER_RESTORE_PENDING seen just before the first erase */
+static uint32_t erase_base;     /* erases before the COPY under test */
+
+static uint32_t copy_erases(void) { return fake_chip_erases() - erase_base; }
+
+/* A calibrated FLASH master with IHRC (k 0x5A), ILRC (0x33) and BandGap (0x77) footprints. */
+static void make_master(void)
+{
+    tops_put_calib(&img, chip, ILRC, CALIB_KIND_ILRC, 62500, 4000);
+    tops_put_calib(&img, chip, BG, CALIB_KIND_BG, 0, 3950);
+    fake_chip_insert(chip);
+    fake_chip_calib(FAKE_CAL_OK, 0x5A);
+    fake_chip_calib(FAKE_CAL_OK, 0x33);
+    fake_chip_calib(FAKE_CAL_OK, 0x77);
+    ASSERT_EQ(tops_upload(chip, &img), TP_STAGE_OK);
+    ASSERT_EQ(tops_run(PDK_OP_PROGRAM, 0, PDK_SOURCE_HOST, NULL)->status, PDK_OK);
+    memcpy(master, fake_chip_mem(), 2u * chip->code_words);
+    pending_at_erase = false;
+    erase_base = fake_chip_erases();
+}
+
+static bool master_intact(void) { return !memcmp(master, fake_chip_mem(), 2u * chip->code_words); }
+static bool pending(void) { return (package_store_flags() & PDK_FLAG_MASTER_RESTORE_PENDING) != 0; }
+
+static void watch_pending(void)
+{
+    if (!copy_erases())
+        pending_at_erase = pending();
+}
+
+static void cancel_in_measure(void)
+{
+    op_status_t s;
+    op_manager_status(&s);
+    if (copy_erases() == 1 && s.running)
+        op_manager_cancel(s.op_id);
+}
+
+static void remove_in_restore(void)
+{
+    if (copy_erases() == 2)
+        fake_chip_remove();   /* the restore erased the master, then the chip is gone */
+}
+
+TEST(measure_master_rewrites_once_per_footprint_and_restores)
+{
+    make_master();
+    uint32_t erases = fake_chip_erases();
+    fake_chip_measure(8240000);
+    fake_chip_hook(watch_pending);
+    copy_ext_t e = {.mode_ihrc = 3, .mode_ilrc = 3, .bg_restore = 1, .flags = 1, .mV = 4500};
+    const op_result_t *r = tops_copy(chip, &e);
+    fake_chip_hook(NULL);
+    ASSERT_EQ(r->status, PDK_OK);
+    ASSERT_EQ(fake_chip_erases() - erases, 3u);   /* n + 1 */
+    ASSERT_TRUE(pending_at_erase);                /* the dump was committed and flagged first */
+    ASSERT_TRUE(!pending());
+    ASSERT_TRUE(master_intact());
+    ASSERT_TRUE(r->warnings & PDK_WARN_MASTER_MODIFIED);
+    ASSERT_EQ(r->calib_count, 3);
+    ASSERT_EQ(r->calib[0].mode, 3);
+    ASSERT_EQ(r->calib[0].site_status, PDK_SITE_OK);
+    ASSERT_EQ(r->calib[0].measured_hz, 8240000u);
+    ASSERT_EQ(r->calib[0].master_value, 0x5A);
+    ASSERT_EQ(r->calib[1].measured_hz, 8240000u / 128u);
+    ASSERT_EQ(op_pkg_load(), PDK_OK);
+    ASSERT_TRUE(op_pkg.hdr.flags & 0x100u);
+    ASSERT_EQ(op_pkg.plan.calib_count, 3);
+    ASSERT_EQ(op_pkg.plan.calib[0].target_hz, 8240000u);
+    ASSERT_EQ(op_pkg.plan.calib[0].mV, 4500);
+    ASSERT_EQ(op_pkg.plan.calib[1].target_hz, 8240000u / 128u);
+    ASSERT_EQ(op_pkg.plan.calib[2].kind, CALIB_KIND_BG);
+}
+
+TEST(footprint_without_a_signal_keeps_the_master_value)
+{
+    make_master();
+    uint32_t erases = fake_chip_erases();
+    fake_chip_measure(0);   /* the program never reaches the loop */
+    copy_ext_t e = {.mode_ihrc = 3, .flags = 1};
+    const op_result_t *r = tops_copy(chip, &e);
+    ASSERT_EQ(r->status, PDK_OK);
+    ASSERT_EQ(fake_chip_erases() - erases, 2u);
+    ASSERT_TRUE(master_intact());
+    ASSERT_EQ(r->calib[0].site_status, PDK_SITE_COPIED);
+    ASSERT_TRUE(r->warnings & PDK_WARN_CALIB_VALUE_COPIED);
+    ASSERT_TRUE(r->warnings & PDK_WARN_MASTER_MODIFIED);
+    ASSERT_EQ(op_pkg_load(), PDK_OK);
+    ASSERT_EQ(op_pkg.plan.calib_count, 0);   /* nothing to calibrate: the master's k */
+}
+
+TEST(cancel_during_measure_restores_the_master)
+{
+    make_master();
+    uint32_t erases = fake_chip_erases();
+    fake_chip_measure(8000000);
+    fake_chip_hook(cancel_in_measure);
+    copy_ext_t e = {.mode_ihrc = 3, .flags = 1};
+    const op_result_t *r = tops_copy(chip, &e);
+    fake_chip_hook(NULL);
+    ASSERT_EQ(r->status, PDK_CANCELLED);
+    ASSERT_EQ(r->stage, PDK_STAGE_RESTORE);
+    ASSERT_EQ(fake_chip_erases() - erases, 2u);
+    ASSERT_TRUE(master_intact());
+    ASSERT_TRUE(!pending());
+}
+
+TEST(failed_restore_keeps_pending_until_restore_master)
+{
+    make_master();
+    fake_chip_measure(8000000);
+    fake_chip_hook(remove_in_restore);
+    copy_ext_t e = {.mode_ihrc = 3, .flags = 1};
+    const op_result_t *r = tops_copy(chip, &e);
+    fake_chip_hook(NULL);
+    ASSERT_EQ(r->status, PDK_CHIP_NOT_FOUND);
+    ASSERT_EQ(r->stage, PDK_STAGE_RESTORE);
+    ASSERT_TRUE(pending());
+    ASSERT_EQ(op_pkg_load(), PDK_OK);
+    ASSERT_EQ(strncmp(op_pkg.hdr.name, "master PFS154 ", 14), 0);   /* the dump is the active package */
+    ASSERT_EQ(tops_copy(chip, NULL)->status, PDK_MASTER_RESTORE_PENDING);
+
+    fake_chip_insert(chip);   /* a blank chip of the same type: gets the master's contents */
+    r = tops_run(PDK_OP_RESTORE_MASTER, 0, PDK_SOURCE_HOST, NULL);
+    ASSERT_EQ(r->status, PDK_OK);
+    ASSERT_EQ(r->fuse_written, 0x3FFD);
+    ASSERT_TRUE(master_intact());
+    ASSERT_TRUE(!pending());
+    ASSERT_EQ(tops_run(PDK_OP_RESTORE_MASTER, 0, PDK_SOURCE_HOST, NULL)->status, PDK_NOT_ALLOWED_NOW);
+}
+
+TEST(restore_master_checks_the_chip)
+{
+    make_master();
+    fake_chip_measure(8000000);
+    fake_chip_hook(remove_in_restore);
+    copy_ext_t e = {.mode_ihrc = 3, .flags = 1};
+    tops_copy(chip, &e);
+    fake_chip_hook(NULL);
+    fake_chip_insert(tops_chip("PMS150C"));
+    ASSERT_EQ(tops_run(PDK_OP_RESTORE_MASTER, 0, PDK_SOURCE_HOST, NULL)->status, PDK_CHIP_ID_MISMATCH);
+    ASSERT_TRUE(pending());
 }
 
 TEST(restore_pending_blocks_copy_and_the_package_store)

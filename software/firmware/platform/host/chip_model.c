@@ -12,7 +12,9 @@
  *    changes the frequency, PA0 driven for BandGap (pa0=float: not) → CALIB_WRONG_SITE;
  *  - protected: the fuse reads with the protection bit on (research R10);
  *  - weak=ADDR: writes to ADDR after the first one do not stick (FR-048); slow=US: each write block
- *    takes US microseconds (to act in the middle of an operation);
+ *    takes US microseconds (to act in the middle of an operation); halt=ADDR: the program never gets
+ *    past ADDR, so a measurement loop at or after it gives no signal; each erase prints "chip erase"
+ *    on stderr (MEASURE_MASTER erase count);
  *  - --chip-state FILE keeps the chip memory across runs; --power-fail-after also counts chip writes
  *    (the cut write is half done). */
 #include <stdio.h>
@@ -42,6 +44,7 @@ static struct {
     bool weak;
     uint16_t weak_addr;
     uint32_t slow_us;
+    uint32_t halt;             /* 0: the program runs everywhere */
     uint16_t mem[MAX_WORDS];
     uint8_t written[MAX_WORDS];
     uint32_t erases;
@@ -97,6 +100,8 @@ bool host_chip_config(const char *spec)
             c.pa0_float = true;
         else if (len == 9 && !strncmp(o, "protected", 9))
             c.protect = true;
+        else if (!strncmp(o, "halt=", 5))
+            c.halt = (uint32_t)strtoul(o + 5, NULL, 0);
         else if (!strncmp(o, "slow=", 5))
             c.slow_us = (uint32_t)strtoul(o + 5, NULL, 0);
         else
@@ -225,6 +230,7 @@ uint16_t chip_engine_erase(const struct chip_info *chip, chip_poll_fn poll)
         return st;
     bool cut = host_power_fail_now();
     c.erases++;
+    fprintf(stderr, "chip erase\n");
     for (unsigned i = 0; i < chip->code_words; i++)
         if (!cut || i < chip->code_words / 2u) {
             c.mem[i] = chip_word_mask(chip);
@@ -285,6 +291,8 @@ static bool running_loop(uint16_t *addr, calib_match_t *m)
     bool found = false;
     for (uint32_t a = 0; a + CALIB_RC_LEN <= c.chip->code_words; a++) {
         calib_match_t t;
+        if (c.halt && a >= c.halt)
+            break;   /* the program stops before it */
         if (calib_match(c.chip, c.mem + a, c.chip->code_words - a, (uint16_t)a, &t) && t.form == CALIB_FORM_LOOP) {
             *addr = (uint16_t)a;
             *m = t;

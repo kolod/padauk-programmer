@@ -92,6 +92,16 @@ void package_store_read(uint32_t offset, uint8_t *buf, size_t len)
     slots_read(journal_get()->active_slot, offset, buf, len);
 }
 
+bool package_store_set_pending(bool on)
+{
+    journal_state_t st = *journal_get();
+    if (on)
+        st.flags |= PDK_FLAG_MASTER_RESTORE_PENDING;
+    else
+        st.flags &= (uint16_t)~PDK_FLAG_MASTER_RESTORE_PENDING;
+    return journal_append(&st);
+}
+
 bool package_store_bump(uint32_t *rec_seq)
 {
     journal_state_t st = *journal_get();
