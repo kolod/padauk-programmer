@@ -270,14 +270,14 @@ description: "Task list for 001-pc-programmer-protocol"
 
 ### Tests for User Story 6
 
-- [ ] T119 [P] [US6] Контрактний тест `software/client/tests/contract/test_run.py`: `OP_START(RUN, 5000)` → `EVT_UART_LINK`, `EVT_UART_RX`; `UART_TX` доходить до моделі; `UART_TX` поза `RUN` → `NOT_ALLOWED_NOW`; `OP_CANCEL` → напруга знята, `OK`; розрив сесії → `HOST_DISCONNECTED`, напруга знята
+- [X] T119 [P] [US6] Контрактний тест `software/client/tests/contract/test_run.py`: `OP_START(RUN, 5000)` → `EVT_UART_LINK`, `EVT_UART_RX`; `UART_TX` доходить до моделі; `UART_TX` поза `RUN` → `NOT_ALLOWED_NOW`; `OP_CANCEL` → напруга знята, `OK`; розрив сесії → `HOST_DISCONNECTED`, напруга знята
 
 ### Implementation for User Story 6
 
-- [ ] T120 [P] [US6] Додати інтерфейс UART-мосту `software/firmware/hal/hal_uart.h` (старт з автовизначенням швидкості, відправка, прийом у кільцевий буфер, подія «швидкість визначено») і хост-реалізацію «hello + ехо» у `software/firmware/platform/host/hal_host_uart.c`
-- [ ] T121 [US6] Реалізувати конвеєр `RUN` (VDD через `power_apply` з `param`/`run_vdd_mV`/5000, VPP = 0, UART-міст, `EVT_UART_LINK`, `EVT_UART_RX`, зупинка `OP_CANCEL` і обривом сесії) і команду `UART_TX` у `software/firmware/core/ops/op_run.c` (залежить від T084, T120)
-- [ ] T122 [P] [US6] Реалізувати UART-міст для F072 (USART1 PB6/PB7, автовизначення швидкості по старт-біту, DMA-прийом, пропуск першого `'U'`) у `software/firmware/platform/stm32f072/hal_f072_uart.c`
-- [ ] T123 [US6] Додати CLI-підкоманду `start [-r VDD]` (вивід `EVT_UART_RX`, клавіатура → `UART_TX`, Esc → `OP_CANCEL`) у `software/client/padauk_prog/cli.py` (залежить від T090)
+- [X] T120 [P] [US6] Додати інтерфейс UART-мосту `software/firmware/hal/hal_uart.h` (старт з автовизначенням швидкості, відправка, прийом у кільцевий буфер, подія «швидкість визначено») і хост-реалізацію «hello + ехо» у `software/firmware/platform/host/hal_host_uart.c`
+- [X] T121 [US6] Реалізувати конвеєр `RUN` (VDD через `power_apply` з `param`/`run_vdd_mV`/5000, VPP = 0, UART-міст, `EVT_UART_LINK`, `EVT_UART_RX`, зупинка `OP_CANCEL` і обривом сесії) і команду `UART_TX` у `software/firmware/core/ops/op_run.c` (залежить від T084, T120)
+- [X] T122 [P] [US6] Реалізувати UART-міст для F072 (USART1 PB6/PB7, автовизначення швидкості по старт-біту, DMA-прийом, пропуск першого `'U'`) у `software/firmware/platform/stm32f072/hal_f072_uart.c`
+- [X] T123 [US6] Додати CLI-підкоманду `start [-r VDD]` (вивід `EVT_UART_RX`, клавіатура → `UART_TX`, Esc → `OP_CANCEL`) у `software/client/padauk_prog/cli.py` (залежить від T090)
 
 **Checkpoint**: усі історії перевірено на `pdk-sim`
 

@@ -16,6 +16,7 @@ void HardFault_Handler(void) __attribute__((weak, alias("Default_Handler")));
 void SysTick_Handler(void) __attribute__((weak, alias("Default_Handler")));
 void USB_HP_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
 void USB_LP_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
+void USART1_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
 void USBWakeUp_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
 
 volatile uint32_t g474_ecc_errors;
@@ -34,6 +35,7 @@ __attribute__((section(".isr_vector"), used)) static void (*const vectors[16 + 1
     [15] = SysTick_Handler,
     [16 + 19] = USB_HP_IRQHandler,
     [16 + 20] = USB_LP_IRQHandler,
+    [16 + 37] = USART1_IRQHandler,
     [16 + 42] = USBWakeUp_IRQHandler,
 };
 

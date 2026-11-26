@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "op_manager.h"
+#include "op_run.h"
 #include "package/upload.h"
 #include "proto/le.h"
 #include "proto/proto_defs.h"
@@ -54,7 +55,7 @@ uint16_t op_cmd_status(const uint8_t *req, uint16_t len, uint8_t *rsp, uint16_t 
     op_status_t s;
     op_manager_status(&s);
     const journal_state_t *j = journal_get();
-    rsp[0] = s.running ? PDK_STATE_OPERATION : upload_active() ? PDK_STATE_UPLOAD : PDK_STATE_IDLE;
+    rsp[0] = op_run_active() ? PDK_STATE_RUNNING : s.running ? PDK_STATE_OPERATION : upload_active() ? PDK_STATE_UPLOAD : PDK_STATE_IDLE;
     put16(rsp + 1, s.op_id);
     rsp[3] = s.op_type;
     rsp[4] = s.stage;

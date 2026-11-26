@@ -608,6 +608,26 @@ class Programmer:
             ext += name.encode()[:32].ljust(32, bytes(1))
         return self.run_op(Op.COPY, chip_id12=chip_id12, ext=ext, on_progress=on_progress, timeout=timeout)
 
+    def run_start(self, vdd_mV: int = 0) -> int:
+        """OP_START(RUN): the chip runs with VDD (0: the package's run_vdd_mV or 5 V) and a UART bridge;
+        returns the op_id. Output arrives as EVT_UART_LINK / EVT_UART_RX; OP_CANCEL stops it."""
+        return self.start_op(Op.RUN, param=vdd_mV)
+
+    def uart_tx(self, data: bytes, timeout: float = 2.0) -> None:
+        """UART_TX in 64-byte pieces (the programmer's TX buffer is small); BUSY (no speed yet, buffer
+        full) is retried until `timeout`."""
+        for i in range(0, len(data), 64):
+            piece = data[i:i + 64]
+            deadline = time.monotonic() + timeout
+            while True:
+                try:
+                    self.call(Cmd.UART_TX, piece)
+                    break
+                except ProgrammerError as e:
+                    if e.status != Status.BUSY or time.monotonic() >= deadline:
+                        raise
+                    time.sleep(0.01)
+
     def restore_master(self, on_progress=None, timeout: float = 120.0) -> Result:
         """RESTORE_MASTER: writes the stored master dump back after an interrupted MEASURE_MASTER."""
         return self.run_op(Op.RESTORE_MASTER, on_progress=on_progress, timeout=timeout)

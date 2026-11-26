@@ -13,6 +13,7 @@ void Default_Handler(void);
 void HardFault_Handler(void) __attribute__((weak, alias("Default_Handler")));
 void SysTick_Handler(void) __attribute__((weak, alias("Default_Handler")));
 void USB_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
+void USART1_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
 
 __attribute__((section(".isr_vector"), used)) static void (*const vectors[16 + 32])(void) = {
     (void (*)(void))&__stack_top,
@@ -22,6 +23,7 @@ __attribute__((section(".isr_vector"), used)) static void (*const vectors[16 + 3
     [11] = Default_Handler,   /* SVCall */
     [14] = Default_Handler,   /* PendSV */
     [15] = SysTick_Handler,
+    [16 + 27] = USART1_IRQHandler,
     [16 + 31] = USB_IRQHandler,
 };
 

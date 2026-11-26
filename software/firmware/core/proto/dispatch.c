@@ -12,6 +12,7 @@
 #include "ops/op_cmds.h"
 #include "ops/op_read.h"
 #include "ops/op_manager.h"
+#include "ops/op_run.h"
 #include "package/pkg_cmds.h"
 #include "power/supply_cal.h"
 #include "power/supply_set.h"
@@ -52,12 +53,13 @@ static const pdk_command_t commands[] = {
     {PDK_CMD_CAL_CLEAR, 0, supply_cal_cmd_clear},
     {PDK_CMD_SUPPLY_SET, 0, supply_set_cmd_set},
     {PDK_CMD_SUPPLY_GET, 0, supply_set_cmd_get},
+    {PDK_CMD_UART_TX, PDK_CMDF_DURING_OP, op_run_cmd_uart_tx},
 };
 
 static uint32_t capabilities(void)
 {
     /* Bits are set as the corresponding features are implemented. */
-    uint32_t caps = 0;
+    uint32_t caps = PDK_CAP_RUN_UART;
     uint16_t vdd_max, vpp_max;
     hal_power_limits(&vdd_max, &vpp_max);
     if (vdd_max && vpp_max)   /* a board without the supply front end reports 0 V limits */
