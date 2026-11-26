@@ -231,6 +231,7 @@ uint16_t chip_engine_erase(const struct chip_info *chip, chip_poll_fn poll)
     bool cut = host_power_fail_now();
     c.erases++;
     fprintf(stderr, "chip erase\n");
+    fflush(stderr);
     for (unsigned i = 0; i < chip->code_words; i++)
         if (!cut || i < chip->code_words / 2u) {
             c.mem[i] = chip_word_mask(chip);
@@ -418,10 +419,11 @@ uint16_t chip_engine_measure_freq(const struct chip_info *chip, uint16_t site_ad
     return PDK_OK;
 }
 
+/* RUN: VDD only, VPP 0; the chip's program is the UART model in hal_host_uart.c. */
 uint16_t chip_engine_run_start(uint16_t vdd_mV)
 {
     chip_engine_safe_state();
-    return PDK_OP_UNSUPPORTED;
+    return supplies(0, vdd_mV);
 }
 
 void chip_engine_run_stop(void) { chip_engine_safe_state(); }

@@ -2,9 +2,12 @@
 /* Chip engine stub for MCU platforms without the engine yet: the bit-level PADAUK algorithms come
  * with feature 002-chip-engine. Every primitive answers OP_UNSUPPORTED and leaves the chip in the
  * safe state. */
+#include <stddef.h>
+
 #include "chip_engine.h"
 #include "hal_power.h"
 #include "platform_common.h"
+#include "power/power.h"
 #include "proto/proto_defs.h"
 
 void chip_engine_safe_state(void)
@@ -53,10 +56,14 @@ uint16_t chip_engine_measure_freq(const struct chip_info *chip, uint16_t site_ad
     return PDK_OP_UNSUPPORTED;
 }
 
+/* RUN needs no PADAUK algorithm: VDD on (VPP stays 0), the lines stay Hi-Z for the UART bridge. */
 uint16_t chip_engine_run_start(uint16_t vdd_mV)
 {
     chip_engine_safe_state();
-    return PDK_OP_UNSUPPORTED;
+    uint16_t st = power_apply(PDK_RAIL_VDD, vdd_mV, POWER_PAUSE_VDD_CMD_US, NULL);
+    if (st != PDK_OK)
+        chip_engine_safe_state();
+    return st;
 }
 
 void chip_engine_run_stop(void) { chip_engine_safe_state(); }

@@ -3,6 +3,7 @@
 
 #include "hal_ui.h"
 #include "ops/op_manager.h"
+#include "ops/op_run.h"
 #include "package/upload.h"
 #include "power/power.h"
 #include "power/supply_cal.h"
@@ -43,4 +44,5 @@ void pdk_core_on_session_reset(void)
     upload_abort();
     supply_cal_abort();   /* supplies raised for calibration or by SUPPLY_SET are not left on without a host */
     supply_set_abort();
+    op_run_session_reset();   /* RUN is the exception: it stops (HOST_DISCONNECTED) */
 }

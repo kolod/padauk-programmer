@@ -45,6 +45,7 @@ uint16_t op_manager_start(const op_request_t *req, uint16_t *op_id)
     case PDK_OP_READ:
     case PDK_OP_COPY:
     case PDK_OP_RESTORE_MASTER:
+    case PDK_OP_RUN:
     case PDK_OP_ERASE:
     case PDK_OP_BLANK_CHECK:
     case PDK_OP_PROGRAM:
@@ -232,6 +233,7 @@ void op_manager_poll(void)
     case PDK_OP_READ: st = op_read_run(); break;
     case PDK_OP_COPY: st = op_copy_run(); break;
     case PDK_OP_RESTORE_MASTER: st = op_restore_run(); break;
+    case PDK_OP_RUN: st = op_run_run(); break;
     case PDK_OP_ERASE: st = op_erase_run(); break;
     case PDK_OP_BLANK_CHECK: st = op_blank_check_run(); break;
     case PDK_OP_VERIFY: st = op_verify_run(); break;

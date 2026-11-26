@@ -6,6 +6,7 @@
 #include "hal_crc.h"
 #include "hal_entropy.h"
 #include "fake_chip.h"
+#include "fake_uart.h"
 #include "hal_flash.h"
 #include "hal_platform.h"
 #include "hal_time.h"
@@ -73,6 +74,7 @@ void fake_reset(void)
     for (int i = 0; i < 12; i++)
         f.uid[i] = (uint8_t)(0xA0 + i);
     fake_chip_reset();
+    fake_uart_reset();
 }
 
 /* ---------------- transport ---------------- */

@@ -5,6 +5,8 @@
 
 #include "chip_engine.h"
 #include "chips/calib_footprint.h"
+#include "hal_power.h"
+#include "power/power.h"
 #include "proto/proto_defs.h"
 
 #define MAX_WORDS 0x1000u
@@ -192,7 +194,11 @@ uint16_t chip_engine_measure_freq(const struct chip_info *chip, uint16_t site_ad
 uint16_t chip_engine_run_start(uint16_t vdd_mV)
 {
     chip_engine_safe_state();
-    return PDK_OP_UNSUPPORTED;
+    return power_apply(PDK_RAIL_VDD, vdd_mV, POWER_PAUSE_VDD_CMD_US, NULL);
 }
 
-void chip_engine_run_stop(void) { chip_engine_safe_state(); }
+void chip_engine_run_stop(void)
+{
+    hal_power_off_all();
+    chip_engine_safe_state();
+}

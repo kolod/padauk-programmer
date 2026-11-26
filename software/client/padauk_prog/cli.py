@@ -14,7 +14,7 @@ from .protocol import (CALIB_KINDS, COPY_ALLOW_MASTER_LOOP, COPY_ALLOW_MODIFY_MA
                        COPY_TARGET, CAP_SUPPLY_CAL, CAP_SUPPLY_SET, FAMILY_NAMES, OPF_CALIB_FINALIZE_ON_FAIL,
                        OPF_SKIP_BLANK_CHECK, OPF_SKIP_ERASE, OPF_SKIP_VERIFY, PATCH_EXPECT_ACTIVE_PACKAGE,
                        PATCH_EXPECT_NORMALIZED, PATCH_EXPECT_RAW, SITE_STATUS, Op, PkgState, Programmer,
-                       EVT_OP_DONE, EVT_OP_STARTED, EVT_PROGRESS, Progress, ProgrammerError, ProtocolError, Result,
+                       EVT_OP_DONE, EVT_OP_STARTED, EVT_PROGRESS, Evt, Progress, ProgrammerError, ProtocolError, Result,
                        Status, connect, stage_name, status_name)
 from .transport import TransportError
 
@@ -624,6 +624,108 @@ def cmd_copy(prog: Programmer, a) -> int:
     return 0
 
 
+class KeyReader:
+    """Keys typed in the terminal without waiting for Enter (Windows console or a POSIX tty); nothing when
+    stdin is not a terminal."""
+
+    def __enter__(self):
+        self.mode = None
+        if not sys.stdin.isatty():
+            return self
+        if os.name == "nt":
+            self.mode = "nt"
+        else:
+            import termios
+            import tty
+            self.fd = sys.stdin.fileno()
+            self.saved = termios.tcgetattr(self.fd)
+            tty.setcbreak(self.fd)
+            self.mode = "posix"
+        return self
+
+    def __exit__(self, *exc):
+        if self.mode == "posix":
+            import termios
+            termios.tcsetattr(self.fd, termios.TCSADRAIN, self.saved)
+
+    def read(self) -> bytes:
+        out = b""
+        if self.mode == "nt":
+            import msvcrt
+            while msvcrt.kbhit():
+                ch = msvcrt.getwch()
+                if ch in ("\x00", "\xe0"):   # function / arrow key: two codes, not sent
+                    msvcrt.getwch()
+                    continue
+                out += ch.encode("utf-8")
+        elif self.mode == "posix":
+            import select
+            while select.select([sys.stdin], [], [], 0)[0]:
+                ch = os.read(self.fd, 1)
+                if not ch:
+                    break
+                out += ch
+        return out
+
+
+ESC = b"\x1b"
+
+
+def cmd_start(prog: Programmer, a) -> int:
+    mv = int(round(a.vdd * 1000)) if a.vdd else 0
+    op_id = prog.run_start(mv)
+    print(f"Running the chip at {a.vdd:.2f} V" if a.vdd else "Running the chip", end="", file=sys.stderr)
+    print(" - Esc or Ctrl+C stops it.", file=sys.stderr)
+    deadline = time.monotonic() + a.seconds if a.seconds else None
+    result = None
+    cancelled = False
+
+    def cancel():
+        nonlocal cancelled
+        if not cancelled:
+            cancelled = True
+            try:
+                prog.cancel_op(op_id)
+            except ProgrammerError:
+                pass   # already done
+
+    try:
+        with KeyReader() as keys:
+            while result is None:
+                for e in prog.poll_events(0.05):
+                    if e.code == Evt.UART_LINK:
+                        print(f"Connected @{struct.unpack_from('<I', e.payload)[0]} baud", file=sys.stderr)
+                    elif e.code == Evt.UART_RX:
+                        sys.stdout.write(e.payload.decode("latin-1"))
+                        sys.stdout.flush()
+                    elif e.code == EVT_OP_DONE:
+                        r = Result.parse(e.payload)
+                        if r.op_id == op_id:
+                            result = r
+                if result is not None:
+                    break
+                data = keys.read()
+                if ESC in data:
+                    data = data[:data.index(ESC)]
+                    if data:
+                        prog.uart_tx(data)
+                    cancel()
+                elif data and not cancelled:
+                    prog.uart_tx(data)
+                if deadline is not None and time.monotonic() >= deadline:
+                    cancel()
+    except KeyboardInterrupt:
+        cancel()
+    if result is None:
+        result = prog.wait_op(op_id, timeout=10)
+    print(file=sys.stderr)
+    if not result.ok:
+        print(f"error: {describe_result(result)}", file=sys.stderr)
+        return 1
+    print("Stopped, the chip is switched off.", file=sys.stderr)
+    return 0
+
+
 def cmd_restore_master(prog: Programmer, a) -> int:
     r = prog.restore_master(on_progress=None if a.quiet else show_progress)
     if not a.quiet:
@@ -877,6 +979,11 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--yes", action="store_true", help="do not ask before rewriting the master")
     q.add_argument("-q", "--quiet", action="store_true", help="no progress line")
     q.set_defaults(func=cmd_copy)
+
+    q = sub.add_parser("start", help="run the chip with a UART bridge (Esc stops it)")
+    q.add_argument("-r", "--vdd", type=float, metavar="V", help="VDD in volts (default: the package's, else 5)")
+    q.add_argument("--seconds", type=float, metavar="S", help="stop after this many seconds")
+    q.set_defaults(func=cmd_start)
 
     q = sub.add_parser("restore-master", help="write the stored master dump back after an interrupted copy")
     q.add_argument("-q", "--quiet", action="store_true", help="no progress line")

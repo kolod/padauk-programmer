@@ -179,7 +179,7 @@ TEST(op_commands_and_status)
     uint8_t bad[6] = {PDK_OP_PROBE, PDK_OPF_SKIP_ERASE, 0, 0, 0, 0};   /* op_flags are for PROGRAM only */
     ASSERT_EQ(tp_call(tops_seq++, PDK_CMD_OP_START, bad, sizeof bad, &rsp), 0);
     ASSERT_EQ(rsp.status, PDK_BAD_PAYLOAD);
-    uint8_t run[6] = {PDK_OP_RUN, 0, 0, 0, 0, 0};   /* RUN comes with US6 */
-    ASSERT_EQ(tp_call(tops_seq++, PDK_CMD_OP_START, run, sizeof run, &rsp), 0);
+    uint8_t unknown[6] = {0x0C, 0, 0, 0, 0, 0};   /* no such operation type */
+    ASSERT_EQ(tp_call(tops_seq++, PDK_CMD_OP_START, unknown, sizeof unknown, &rsp), 0);
     ASSERT_EQ(rsp.status, PDK_OP_UNSUPPORTED);
 }
