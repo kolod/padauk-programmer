@@ -1,23 +1,23 @@
-# Прошивка програматора
+# Programmer firmware
 
-Ядро на C11 без залежностей від заліза (`core/`), інтерфейси заліза (`hal/`) і платформи (`platform/`):
+The core is C11 with no hardware dependencies (`core/`), hardware interfaces (`hal/`), and platforms (`platform/`):
 
-| Платформа | Що це | Рушій мікросхем |
+| Platform | What it is | IC engine |
 |---|---|---|
-| `host` | симулятор `pdk-sim` (протокол через TCP) і модульні тести | модель мікросхеми `platform/host/chip_model.c` |
-| `stm32f072` | ціль налагодження: плати Easy PDK Programmer | заглушка (`OP_UNSUPPORTED`; фіча `002-chip-engine`) |
-| `stm32g474` | плата WeAct STM32G474 + `hardware/stm32g474-board` | заглушка |
+| `host` | the `pdk-sim` simulator (protocol over TCP) and unit tests | IC model `platform/host/chip_model.c` |
+| `stm32f072` | debug target: Easy PDK Programmer boards | stub (`OP_UNSUPPORTED`; feature `002-chip-engine`) |
+| `stm32g474` | WeAct STM32G474 board + `hardware/stm32g474-board` | stub |
 
-Протокол і формат пакета — [`docs/protocol.md`](../../docs/protocol.md).
+The protocol and package format are in [`docs/protocol.md`](../../docs/protocol.md).
 
-## Збірка
+## Build
 
-Потрібні CMake ≥ 3.20 і gcc/clang (на Windows — MinGW-w64; MSVC не підтримується). Для STM32 —
-`arm-none-eabi-gcc` ≥ 12. CMSIS і TinyUSB завантажуються під час конфігурації (FetchContent, фіксовані
-версії), у репозиторії їх немає.
+Requires CMake ≥ 3.20 and gcc/clang (MinGW-w64 on Windows; MSVC is not supported). For STM32,
+`arm-none-eabi-gcc` ≥ 12. CMSIS and TinyUSB are downloaded at configure time (FetchContent, pinned
+versions) and are not in the repository.
 
 ```sh
-# симулятор і модульні тести
+# simulator and unit tests
 cmake -S software/firmware -B build/host -G Ninja -DPLATFORM=host
 cmake --build build/host
 ctest --test-dir build/host --output-on-failure
@@ -33,63 +33,63 @@ cmake -S software/firmware -B build/g474 -G Ninja -DPLATFORM=stm32g474 -DCMAKE_B
 cmake --build build/g474          # → build/g474/pdkprog-g474.bin
 ```
 
-Опції збірки:
+Build options:
 
-| Опція | Типово | Що робить |
+| Option | Default | What it does |
 |---|---|---|
-| `PDK_FEATURE_MEASURE_MASTER` | `ON` | `COPY` у режимі `MEASURE_MASTER` (біт 9 `INFO.capabilities`; вимкнено → режим 3 дає `OP_UNSUPPORTED`) |
-| `PDK_FEATURE_PATCH` | `ON` | операція `PATCH` (біт 6) |
-| `PDK_G474_SUPPLIES` | `ON` | джерела VDD/VPP плати `hardware/stm32g474-board`; `OFF` — голий модуль WeAct без живлення |
+| `PDK_FEATURE_MEASURE_MASTER` | `ON` | `COPY` in `MEASURE_MASTER` mode (bit 9 of `INFO.capabilities`; when off, mode 3 returns `OP_UNSUPPORTED`) |
+| `PDK_FEATURE_PATCH` | `ON` | the `PATCH` operation (bit 6) |
+| `PDK_G474_SUPPLIES` | `ON` | the VDD/VPP supplies of the `hardware/stm32g474-board` board; `OFF` — a bare WeAct module without supplies |
 
-Після компонування збірка перевіряє розмір (`cmake/check_size.cmake`): `.text + .data` понад 44 КБ на F072
-або 256 КБ (банк 1) на G474 — помилка з порадою вимкнути функції. Зараз F072 займає близько 28 КБ
-(без `MEASURE_MASTER` і `PATCH` — близько 26 КБ).
+After linking, the build checks the size (`cmake/check_size.cmake`): `.text + .data` above 44 KB on F072
+or 256 KB (bank 1) on G474 is an error with a hint to disable features. F072 currently takes about 28 KB
+(about 26 KB without `MEASURE_MASTER` and `PATCH`).
 
-## Прошивка через DFU
+## Flashing via DFU
 
-Обидві STM32 мають вбудований завантажувач USB DFU (`0483:df11`): утримати BOOT0, натиснути й відпустити
-NRST, відпустити BOOT0.
+Both STM32s have a built-in USB DFU bootloader (`0483:df11`): hold BOOT0, press and release
+NRST, release BOOT0.
 
 ```sh
 dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D build/f072/pdkprog.bin
 dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D build/g474/pdkprog-g474.bin
 ```
 
-Після старту програматор — USB CDC `1209:0001`. На Windows 7 завантажувачу потрібен WinUSB (Zadig), а
-COM-порту — [`software/drivers/windows/padauk-programmer.inf`](../drivers/windows/); Windows 10 і новіші
-обходяться без драйверів. Подробиці G474 — [`platform/stm32g474/README.md`](platform/stm32g474/README.md).
+After start, the programmer is a USB CDC device `1209:0001`. On Windows 7 the bootloader needs WinUSB (Zadig), and the
+COM port needs [`software/drivers/windows/padauk-programmer.inf`](../drivers/windows/); Windows 10 and later
+need no drivers. G474 details are in [`platform/stm32g474/README.md`](platform/stm32g474/README.md).
 
-## Розмітка flash
+## Flash layout
 
-Пакет зберігається у слоті, активний слот і лічильники — у журналі станів (записи по 40 байт із власним CRC у
-двох сторінках, research R6). Новий пакет завжди пишеться в неактивний слот і стає активним одним записом
-журналу, тож обрив живлення лишає або старий, або новий пакет.
+A package is stored in a slot; the active slot and the counters are kept in the state log (40-byte records with their own CRC in
+two pages, research R6). A new package is always written to the inactive slot and becomes active with a single log
+record, so a power loss leaves either the old or the new package.
 
-| Область | STM32F072 (64 КБ) | STM32G474 (512 КБ, DBANK = 1) |
+| Area | STM32F072 (64 KB) | STM32G474 (512 KB, DBANK = 1) |
 |---|---|---|
-| прошивка | `0x08000000` – `0x0800AFFF` (44 КБ) | банк 1: `0x08000000` – `0x0803FFFF` |
-| слоти пакетів | 2 × 8 КБ: `0x0800B000`, `0x0800D000` | 4 × 16 КБ: `0x08040000`, `0x08044000`, `0x08048000`, `0x0804C000` |
-| журнал станів | `0x0800F000`, `0x0800F800` (по 2 КБ) | `0x08050000`, `0x08051000` |
+| firmware | `0x08000000` – `0x0800AFFF` (44 KB) | bank 1: `0x08000000` – `0x0803FFFF` |
+| package slots | 2 × 8 KB: `0x0800B000`, `0x0800D000` | 4 × 16 KB: `0x08040000`, `0x08044000`, `0x08048000`, `0x0804C000` |
+| state log | `0x0800F000`, `0x0800F800` (2 KB each) | `0x08050000`, `0x08051000` |
 
-На G474 сховище в банку 2: стирання не зупиняє процесор (read-while-write). Розмір слота визначає
+On G474 the storage is in bank 2: erasing does not stall the CPU (read-while-write). The slot size is given by
 `INFO.max_package_size`.
 
-## Симулятор `pdk-sim`
+## The `pdk-sim` simulator
 
 ```sh
 build/host/pdk-sim --tcp 127.0.0.1:5555 --chip PFS154 --chip-state chip.bin
 pdkprog --port tcp://127.0.0.1:5555 info
 ```
 
-| Параметр | Що робить |
+| Option | What it does |
 |---|---|
-| `--flash FILE` | емульований flash програматора у файлі (переживає перезапуск) |
-| `--chip none \| NAME[:опції]` | мікросхема в панельці; опції моделі: `offset=±N` (зсув генератора, %), `osc=broken`, `weak=ADDR`, `order=reverse`, `deaf`, `pa0=float`, `slow=US`, `protected`, `halt=ADDR` (програма не доходить далі ADDR) |
-| `--chip-state FILE` | пам'ять мікросхеми у файлі |
-| `--power-fail-after N` | «вимкнути живлення» на N-й операції запису flash або мікросхеми (код виходу 99) |
-| `--power-fault RAIL:MODE`, `--power-scale RAIL:OUT:MEAS` | несправне або неточне джерело VDD/VPP |
-| `--corrupt-flash-during-write` | збої читання flash під час запису мікросхеми |
+| `--flash FILE` | emulated programmer flash in a file (survives restarts) |
+| `--chip none \| NAME[:options]` | the IC in the socket; model options: `offset=±N` (oscillator offset, %), `osc=broken`, `weak=ADDR`, `order=reverse`, `deaf`, `pa0=float`, `slow=US`, `protected`, `halt=ADDR` (the program does not get past ADDR) |
+| `--chip-state FILE` | IC memory in a file |
+| `--power-fail-after N` | "cut the power" at the N-th flash or IC write operation (exit code 99) |
+| `--power-fault RAIL:MODE`, `--power-scale RAIL:OUT:MEAS` | a faulty or inaccurate VDD/VPP supply |
+| `--corrupt-flash-during-write` | flash read glitches while the IC is being written |
 
-Команди зі stdin (органи керування програматора): `local-start program|copy|verify|selftest|restore`,
-`local-cancel`, `swap-chip SPEC` (вставити іншу, чисту мікросхему). Модель мікросхеми в `RUN` шле `'U'` і
-`"hello\n"`, потім повертає ехом усе отримане; кожне стирання й байт `UART_TX` видно в stderr.
+Commands from stdin (the programmer's controls): `local-start program|copy|verify|selftest|restore`,
+`local-cancel`, `swap-chip SPEC` (insert another, blank IC). In `RUN` the IC model sends `'U'` and
+`"hello\n"`, then echoes everything it receives; every erase and `UART_TX` byte is visible on stderr.

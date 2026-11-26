@@ -1,76 +1,76 @@
-# Contract: внутрішні інтерфейси ядро ⇄ рушій мікросхем ⇄ живлення
+# Contract: internal interfaces core ⇄ IC engine ⇄ power
 
-Внутрішній (не мережевий) контракт між платформонезалежним ядром прошивки, рушієм мікросхем
-(реалізація для PADAUK — фіча `002-chip-engine`; у цій фічі — модель для симулятора й заглушка для F072)
-і апаратною частиною живлення. Фіксує гарантії принципу III конституції й FR-040.
+An internal (non-network) contract between the platform-independent firmware core, the IC engine
+(the PADAUK implementation is feature `002-chip-engine`; in this feature — a model for the simulator and a stub for F072),
+and the power hardware. It fixes the guarantees of constitution principle III and FR-040.
 
-## 1. `hal_power.h` — апаратне живлення (реалізує платформа)
+## 1. `hal_power.h` — power hardware (implemented by the platform)
 
-| Функція | Опис |
+| Function | Description |
 |---|---|
-| `power_set(rail, mV)` | задати VDD або VPP; `0` — вимкнути з активним розрядом |
-| `power_measure(rail) → mV` | виміряна напруга шини (усереднення — відповідальність платформи) |
-| `power_off_all()` | негайно VDD = VPP = 0, розряд увімкнено; безпечна з будь-якого контексту, включно з обробником помилки |
-| `power_limits() → {vdd_max_mV, vpp_max_mV}` | апаратні межі джерел |
+| `power_set(rail, mV)` | set VDD or VPP; `0` — switch off with active discharge |
+| `power_measure(rail) → mV` | the measured rail voltage (averaging is the platform's responsibility) |
+| `power_off_all()` | immediately VDD = VPP = 0, discharge on; safe to call from any context, including the fault handler |
+| `power_limits() → {vdd_max_mV, vpp_max_mV}` | the hardware limits of the supplies |
 
-Платформа MUST мати апаратне обмеження максимальної напруги, незалежне від прошивки (конституція, III).
+The platform MUST have a hardware maximum-voltage limit that is independent of the firmware (constitution, III).
 
-## 2. `core/power` — політика встановлення (реалізує ядро)
+## 2. `core/power` — the settling policy (implemented by the core)
 
-`power_apply(rail, mV, min_pause_us) → OK | VDD_FAULT | VPP_FAULT` — правило з
-[protocol.md §6.1](protocol.md): мінімальна пауза **і** 3 послідовні виміри в межах ±2 % / ±30 мВ, тайм-аут
-20 мс; при невдачі сам викликає `power_off_all()` і заповнює `{rail, set_mV, meas_mV}` для `RESULT`.
+`power_apply(rail, mV, min_pause_us) → OK | VDD_FAULT | VPP_FAULT` — the rule from
+[protocol.md §6.1](protocol.md): the minimum pause **and** 3 consecutive measurements within ±2 % / ±30 mV, a 20 ms
+timeout; on failure it itself calls `power_off_all()` and fills in `{rail, set_mV, meas_mV}` for `RESULT`.
 
-Рушій MUST змінювати напруги **лише** через `power_apply` (ніколи напряму через `hal_power`).
+The engine MUST change voltages **only** through `power_apply` (never directly through `hal_power`).
 
-## 3. `chip_engine.h` — рушій мікросхем
+## 3. `chip_engine.h` — the IC engine
 
-| Примітив | Опис |
+| Primitive | Description |
 |---|---|
-| `probe(&id, &family)` | визначення мікросхеми на низьких напругах (VPP 4.5 В, VDD 2.0 В) |
-| `read(chip, addr, count, sink)` | читання слів у приймач (слот flash / суми / порівняння) |
-| `erase(chip)` | стирання FLASH |
-| `blank_check(chip, range, excl)` | перевірка чистоти |
-| `write_block(chip, addr, words)` | запис одного блоку (розмір блоку — з таблиці) |
-| `calibrate(chip, site, target_hz, mV) → {value, measured_hz}` | калібрування з вимірювальним циклом; перевіряє, що активна саме ця вставка (FR-055) → інакше `CALIB_WRONG_SITE` |
-| `measure_freq(chip, site, start_value, mV) → hz` | вимір частоти без імпульсів на PA4 (R9, `MEASURE_MASTER`) |
-| `run_start(vdd_mV)` / `run_stop()` | режим виконання з UART-мостом |
-| `safe_state()` | VDD = VPP = 0 через `power_off_all()`, лінії IC — Hi-Z |
+| `probe(&id, &family)` | identify the IC at low voltages (VPP 4.5 V, VDD 2.0 V) |
+| `read(chip, addr, count, sink)` | read words into a sink (a flash slot / sums / comparison) |
+| `erase(chip)` | erase FLASH |
+| `blank_check(chip, range, excl)` | check for blank |
+| `write_block(chip, addr, words)` | write one block (the block size is from the table) |
+| `calibrate(chip, site, target_hz, mV) → {value, measured_hz}` | calibration with a measurement loop; checks that exactly this stub is active (FR-055) → otherwise `CALIB_WRONG_SITE` |
+| `measure_freq(chip, site, start_value, mV) → hz` | frequency measurement without pulses on PA4 (R9, `MEASURE_MASTER`) |
+| `run_start(vdd_mV)` / `run_stop()` | run mode with a UART bridge |
+| `safe_state()` | VDD = VPP = 0 through `power_off_all()`, IC lines Hi-Z |
 
-Гарантії (перевіряються модульними тестами на фейковому `hal_power` і моделлю мікросхеми):
+Guarantees (verified by unit tests on a fake `hal_power` and an IC model):
 
-1. **ID до HV**: будь-який примітив, що подає напруги запису/стирання, спершу перевіряє ID мікросхеми
-   (FR-020); невідповідність → `CHIP_ID_MISMATCH` без подачі HV.
-2. **Напруги підтверджено**: жоден біт не передається мікросхемі, поки остання зміна напруги не пройшла
+1. **ID before HV**: any primitive that applies write/erase voltages first checks the IC ID
+   (FR-020); a mismatch → `CHIP_ID_MISMATCH` without applying HV.
+2. **Voltages confirmed**: no bit is passed to the IC until the last voltage change has passed
    `power_apply` (FR-040, SC-011).
-3. **Безпечний вихід**: кожен примітив на будь-якому шляху виходу (успіх, помилка, скасування через
-   `poll`) лишає мікросхему в `safe_state()`, якщо наступний крок операції явно не продовжує сесію.
-4. **Атомарні кроки < 100 мс**: між викликами `poll()` минає не більше 100 мс (найдовший крок —
-   імпульс стирання FLASH_2, 40 мс; встановлення напруги — до 20 мс), щоб виконувалась FR-024.
-5. **Скасування**: `poll()` повертає «скасувати» → примітив завершується з `CANCELLED` після
-   `safe_state()`; виняток — етапи `MEASURE`/`RESTORE` операції `COPY` (data-model `CopyJob`).
-6. **Та сама вставка** (FR-055, `docs/padauk-calibration.md` §8): `calibrate` до першого імпульсу «+1»
-   міряє частоту й порівнює з очікуваною для типу вставки (`target_hz / 7` на PA3; допуск 1/4…4); під час
-   підбору стежить, що частота монотонно змінюється з кроком; для BG перевіряє, що PA0 ведеться
-   мікросхемою (перемикаючи слабку підтяжку вгору/вниз, рівень не має за нею йти). Порушення →
-   `CALIB_WRONG_SITE` без жодного імпульсу далі й без запису.
+3. **Safe exit**: every primitive on any exit path (success, error, cancellation through
+   `poll`) leaves the IC in `safe_state()` unless the next step of the operation explicitly continues the session.
+4. **Atomic steps < 100 ms**: no more than 100 ms passes between `poll()` calls (the longest step is the
+   FLASH_2 erase pulse, 40 ms; voltage settling takes up to 20 ms), so that FR-024 is met.
+5. **Cancellation**: `poll()` returns "cancel" → the primitive ends with `CANCELLED` after
+   `safe_state()`; the exception is the `MEASURE`/`RESTORE` stages of the `COPY` operation (data-model `CopyJob`).
+6. **The same stub** (FR-055, `docs/padauk-calibration.md` §8): before the first "+1" pulse `calibrate`
+   measures the frequency and compares it with the one expected for the stub type (`target_hz / 7` on PA3; tolerance 1/4…4); during
+   the search it watches that the frequency changes monotonically with the step; for BG it checks that PA0 is driven
+   by the IC (switching a weak pull-up/pull-down, the level must not follow it). A violation →
+   `CALIB_WRONG_SITE` with no further pulse and no write.
 
-## 4. Платформа органів керування (локальний запуск)
+## 4. The controls platform (local start)
 
-Ядро отримує від платформи лише події `local_start(request)` і `local_cancel()` і повідомляє стан
-індикації `ui_state(state, detail)`; відображення на кнопки, перемикачі, дисплей і сигнали конвеєра —
-окрема фіча (research R16). Набір фіксований (FR-054):
+The core receives only the events `local_start(request)` and `local_cancel()` from the platform and reports the indication state
+`ui_state(state, detail)`; the mapping to buttons, switches, a display, and handler signals is
+a separate feature (research R16). The set is fixed (FR-054):
 
-| `request` | Операція | Примітка |
+| `request` | Operation | Note |
 |---|---|---|
-| `PROGRAM` | `PROGRAM` активного пакета | пріоритети R16 можуть замінити на `SELF_TEST` / `RESTORE_MASTER` |
-| `COPY` | `COPY` з режимами `cfg_copy_*` | те саме |
-| `VERIFY` | `VERIFY` підключеної мікросхеми проти активного пакета | |
-| `SELF_TEST` | `SELF_TEST` | явний запит оператора |
-| `RESTORE_MASTER` | `RESTORE_MASTER` | лише при `MASTER_RESTORE_PENDING`, інакше ігнорується |
-| `local_cancel()` | `OP_CANCEL` поточної локальної операції | як з PC; для `COPY` у `MEASURE` — спершу відновлення |
+| `PROGRAM` | `PROGRAM` of the active package | the R16 priorities may replace it with `SELF_TEST` / `RESTORE_MASTER` |
+| `COPY` | `COPY` with the `cfg_copy_*` modes | the same |
+| `VERIFY` | `VERIFY` of the connected IC against the active package | |
+| `SELF_TEST` | `SELF_TEST` | an explicit operator request |
+| `RESTORE_MASTER` | `RESTORE_MASTER` | only with `MASTER_RESTORE_PENDING`, otherwise ignored |
+| `local_cancel()` | `OP_CANCEL` of the current local operation | as from a PC; for `COPY` in `MEASURE` — restore first |
 
-`ui_state.state`: `READY`, `BUSY` (`detail` = етап і відсоток), `SUCCESS`, `FAIL` (`detail` = клас:
-`STORAGE`, `NO_PACKAGE`, `CHIP`, `CALIB`, `POWER_SELFTEST`, `MASTER_PENDING` + код статусу), `BLOCKED`
-(локальний запис замінюється самоперевіркою). Еталонна плата F072 у цій фічі: одна кнопка →
-`local_start(PROGRAM)`, три LED — спрощене відображення станів.
+`ui_state.state`: `READY`, `BUSY` (`detail` = stage and percent), `SUCCESS`, `FAIL` (`detail` = class:
+`STORAGE`, `NO_PACKAGE`, `CHIP`, `CALIB`, `POWER_SELFTEST`, `MASTER_PENDING` + the status code), `BLOCKED`
+(local programming is replaced by the self-test). The F072 reference board in this feature: one button →
+`local_start(PROGRAM)`, three LEDs — a simplified display of the states.

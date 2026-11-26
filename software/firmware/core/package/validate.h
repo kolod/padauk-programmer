@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* Full package check at PKG_COMMIT (contracts/package-format.md, "У PKG_COMMIT"). */
+/* Full package check at PKG_COMMIT (contracts/package-format.md, "In PKG_COMMIT"). */
 #ifndef PDK_VALIDATE_H
 #define PDK_VALIDATE_H
 

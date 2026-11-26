@@ -1,34 +1,35 @@
 # PADAUK Smart Programmer
 
-Автономний програматор для мікроконтролерів PADAUK (PFS/PMS/PMC) з USB CDC-інтерфейсом і клієнтом на PC.
-Натхненний проєктом [free-pdk / Easy PDK Programmer](https://free-pdk.github.io), але не є його копією.
+A standalone programmer for PADAUK microcontrollers (PFS/PMS/PMC) with a USB CDC interface and a PC client.
+Inspired by the [free-pdk / Easy PDK Programmer](https://free-pdk.github.io) project, but not a copy of it.
 
-## Структура
+## Layout
 
-| Каталог | Вміст |
+| Directory | Contents |
 |---|---|
-| `hardware/` | схема, плата, корпус |
-| `software/` | прошивка програматора та клієнт на PC |
-| `docs/` | документація, даташити, опис протоколів |
-| `easy-pdk-programmer-*` | оригінальні проєкти free-pdk (git-субмодулі, лише для довідки) |
-| `specs/` | специфікації функцій (вимоги, план, задачі) |
+| `hardware/` | schematic, board, enclosure |
+| `software/` | programmer firmware and PC client |
+| `docs/` | documentation, datasheets, protocol descriptions |
+| `easy-pdk-programmer-*` | the original free-pdk projects (git submodules, reference only) |
+| `specs/` | feature specifications (requirements, plan, tasks) |
 
-## Документація
+## Documentation
 
-- [Протокол PC ⇄ програматор і формат пакета](docs/protocol.md) — для власного клієнта або порту прошивки
-- [Клієнт `pdkprog`](software/client/README.md) — встановлення й підкоманди, відповідність `easypdkprog`
-- [Прошивка](software/firmware/README.md) — збірка, симулятор `pdk-sim`, DFU, розмітка flash
+- [PC ⇄ programmer protocol and package format](docs/protocol.md) — for a custom client or a firmware port
+- [`pdkprog` client](software/client/README.md) — installation and subcommands, mapping to `easypdkprog`
+- [Firmware](software/firmware/README.md) — build, the `pdk-sim` simulator, DFU, flash layout
 
-## Ліцензії
+## Licenses
 
-| Частина | Ліцензія | Файл |
+| Part | License | File |
 |---|---|---|
-| Апаратна частина (`hardware/`) | [CERN-OHL-S-2.0](https://ohwr.org/cern_ohl_s_v2.txt) | [LICENSE-HARDWARE](LICENSE-HARDWARE) |
-| Програмне забезпечення (`software/`) | [GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html) | [LICENSE-SOFTWARE](LICENSE-SOFTWARE) |
+| Hardware (`hardware/`) | [CERN-OHL-S-2.0](https://ohwr.org/cern_ohl_s_v2.txt) | [LICENSE-HARDWARE](LICENSE-HARDWARE) |
+| Software (`software/`) | [GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html) | [LICENSE-SOFTWARE](LICENSE-SOFTWARE) |
 
-Документація в `docs/`, створена в цьому проєкті, поширюється на умовах ліцензії тієї частини,
-яку вона описує. Даташити PADAUK у `docs/` належать їхнім правовласникам і не підпадають під
-ліцензії проєкту. Субмодулі `easy-pdk-programmer-*` мають власні ліцензії (CC-BY-SA-4.0 / GPL-3.0).
+Documentation in `docs/` created in this project is distributed under the license of the part it
+describes. The PADAUK datasheets in `docs/` belong to their rights holders and are not covered by
+the project licenses. The `easy-pdk-programmer-*` submodules have their own licenses
+(CC-BY-SA-4.0 / GPL-3.0).
 
-Джерело апаратного дизайну (Source Location згідно з CERN-OHL-S-2.0):
+Hardware design source (Source Location per CERN-OHL-S-2.0):
 <https://github.com/kolod/padauk-programmer>

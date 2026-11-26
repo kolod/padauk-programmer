@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Effective image: what is written into / expected from the chip for a stored package
- * (contracts/package-format.md, "Ефективний образ"; data-model EffectiveImagePlan). Computed word by
+ * (contracts/package-format.md, "Effective image"; data-model EffectiveImagePlan). Computed word by
  * word from the package and the plan of PKG_COMMIT, no RAM copy of the image. */
 #ifndef PDK_EFFECTIVE_IMAGE_H
 #define PDK_EFFECTIVE_IMAGE_H

@@ -1,108 +1,108 @@
-# Калібрування генераторів і BandGap мікросхем PADAUK
+# Calibration of the oscillators and BandGap of PADAUK ICs
 
-Документ описує, як працює калібрування мікросхем PADAUK у форматі free-pdk / Easy PDK, і як його
-відтворює наш програматор. Джерела: `easy-pdk-programmer-software/fpdkiccalib.c` (шаблони вставок і
-вимірювальних циклів), `easy-pdk-programmer-software/easypdkprog.c` (хід калібрування на PC),
-`easy-pdk-programmer-software/Firmware/source/Src/fpdk.c` (вимір і пошук значення в прошивці
-програматора), `easy-pdk-programmer-software/Examples/src/easypdk/pdkcommon.h` (макроси вставок),
-даташит PFS154 (регістри компаратора). Ці файли — лише референс; код проєкту їх не використовує.
+This document describes how the calibration of PADAUK ICs works in the free-pdk / Easy PDK format, and how our
+programmer reproduces it. Sources: `easy-pdk-programmer-software/fpdkiccalib.c` (stub templates and
+measurement loops), `easy-pdk-programmer-software/easypdkprog.c` (the calibration flow on the PC),
+`easy-pdk-programmer-software/Firmware/source/Src/fpdk.c` (measurement and value search in the programmer
+firmware), `easy-pdk-programmer-software/Examples/src/easypdk/pdkcommon.h` (the stub macros),
+the PFS154 datasheet (comparator registers). These files are only a reference; the project code does not use them.
 
-## 1. Що калібрується і навіщо
+## 1. What is calibrated and why
 
-| Тип | Код | Що підлаштовується | Регістр | Чим перевіряється |
+| Type | Code | What is trimmed | Register | How it is checked |
 |---|---|---|---|---|
-| IHRC | 1 | внутрішній RC-генератор ~16 МГц (і тактова, що з нього ділиться) | `IHRCR` | частота |
-| ILRC | 2 | внутрішній низькочастотний RC-генератор (~55–95 кГц) | `ILRCR` | частота |
-| BG | 3 | опорна напруга BandGap 1,20 В | `BGTR` | компаратор проти дільника VDD |
+| IHRC | 1 | the internal RC oscillator ~16 MHz (and the system clock divided from it) | `IHRCR` | frequency |
+| ILRC | 2 | the internal low-frequency RC oscillator (~55–95 kHz) | `ILRCR` | frequency |
+| BG | 3 | the BandGap reference voltage 1.20 V | `BGTR` | comparator against a VDD divider |
 
-Заводське налаштування PADAUK робить сам фірмовий програматор (Writer) — у вільних інструментах
-його немає. Тому free-pdk кладе в програму **вставку** — блок слів-заповнювачів, який програматор
-перетворює на вимірювальний цикл, калібрує й замінює остаточним кодом `MOV A,#k; MOV IO(reg),A`.
+PADAUK's factory trimming is done by PADAUK's own programmer (the Writer) — free tools do not have
+it. So free-pdk puts a **stub** into the program — a block of placeholder words that the programmer
+turns into a measurement loop, calibrates, and replaces with the final code `MOV A,#k; MOV IO(reg),A`.
 
-## 2. Вставки в програмі
+## 2. Stubs in the program
 
-Програма отримує вставку макросами з `pdkcommon.h`:
+The program gets a stub through the macros from `pdkcommon.h`:
 
 ```c
-EASY_PDK_INIT_SYSCLOCK_8MHZ();               // спершу вибрати джерело й дільник тактової
-EASY_PDK_CALIBRATE_IHRC(8000000, 4000);      // підлаштувати SYSCLK під 8 МГц при VDD = 4,0 В
-EASY_PDK_CALIBRATE_ILRC(ILRC_FREQ, 4000);    // або ILRC
+EASY_PDK_INIT_SYSCLOCK_8MHZ();               // first choose the clock source and divider
+EASY_PDK_CALIBRATE_IHRC(8000000, 4000);      // trim SYSCLK to 8 MHz at VDD = 4.0 V
+EASY_PDK_CALIBRATE_ILRC(ILRC_FREQ, 4000);    // or ILRC
 EASY_PDK_CALIBRATE_BG();                     // BandGap
 ```
 
-Кожен макрос — це послідовність команд `AND A,#k`. Сама по собі вона безглузда (тому й безпечна як
-заповнювач), а байти `k` несуть параметри калібрування:
+Each macro is a sequence of `AND A,#k` instructions. By itself it is meaningless (which is why it is safe as a
+placeholder), and the bytes `k` carry the calibration parameters:
 
-**IHRC / ILRC** — 10 слів:
+**IHRC / ILRC** — 10 words:
 
-| Слово | `k` |
+| Word | `k` |
 |---|---|
 | 0 | `'R'` (0x52) |
 | 1 | `'C'` (0x43) |
-| 2 | тип: 1 — IHRC, 2 — ILRC |
-| 3…6 | цільова частота SYSCLK, Гц, `u32` молодшим байтом уперед |
-| 7…8 | VDD калібрування, мВ, `u16` |
-| 9 | IO-адреса регістра (`IHRCR` або `ILRCR`) |
+| 2 | type: 1 — IHRC, 2 — ILRC |
+| 3…6 | target SYSCLK frequency, Hz, `u32` least significant byte first |
+| 7…8 | calibration VDD, mV, `u16` |
+| 9 | IO address of the register (`IHRCR` or `ILRCR`) |
 
-**BandGap** — 14 слів:
+**BandGap** — 14 words:
 
-| Слово | `k` |
+| Word | `k` |
 |---|---|
 | 0 | `'B'` (0x42) |
 | 1 | `'G'` (0x47) |
 | 2 | 3 |
-| 3…4 | VDD калібрування: завжди 3950 мВ |
-| 5 | IO-адреса `BGTR` |
-| 6 | IO-адреса `GPCC` (керування компаратором) |
-| 7 | IO-адреса `GPCS` (вибір дільника компаратора) |
+| 3…4 | calibration VDD: always 3950 mV |
+| 5 | IO address of `BGTR` |
+| 6 | IO address of `GPCC` (comparator control) |
+| 7 | IO address of `GPCS` (comparator divider selection) |
 | 8…13 | 0 |
 
-Опкод `AND A,#k` залежить від розрядності ядра:
+The `AND A,#k` opcode depends on the core width:
 
-| Ядро | Мікросхеми | `AND A,#k` |
+| Core | ICs | `AND A,#k` |
 |---|---|---|
-| 13 біт | PMS150C, PMS15A | `0x14kk` |
-| 14 біт | PMS152, PMS154B/C, PFS154, PMS171B, PFS172 | `0x2Ckk` |
-| 15 біт | PMS133/134, PFS173 | `0x54kk` |
-| 16 біт | PMC251, PMS271 | `0x1Ckk` (вставок для 16 біт free-pdk не має) |
+| 13 bit | PMS150C, PMS15A | `0x14kk` |
+| 14 bit | PMS152, PMS154B/C, PFS154, PMS171B, PFS172 | `0x2Ckk` |
+| 15 bit | PMS133/134, PFS173 | `0x54kk` |
+| 16 bit | PMC251, PMS271 | `0x1Ckk` (free-pdk has no stubs for 16 bit) |
 
-Пошук вставки — порівняння зі шаблоном: перші два слова точні (`'R','C'` або `'B','G'`), решта —
-будь-яке `AND A,#*` (у BG останні шість — саме `AND A,#0`). Шість і більше `AND A,#*` поспіль, що не
-складаються в відому вставку, free-pdk вважає невідомою вставкою й відмовляється писати програму;
-наш програматор у цьому разі повертає `PKG_CALIB_UNKNOWN` з адресою (`core/chips/calib_sites.c`).
+Finding a stub is a comparison with a template: the first two words are exact (`'R','C'` or `'B','G'`), the rest are
+any `AND A,#*` (in BG the last six are exactly `AND A,#0`). Six or more `AND A,#*` in a row that do not
+form a known stub are treated by free-pdk as an unknown stub, and it refuses to write the program;
+our programmer in this case returns `PKG_CALIB_UNKNOWN` with the address (`core/chips/calib_sites.c`).
 
-## 3. Вимірювальний цикл IHRC / ILRC
+## 3. The IHRC / ILRC measurement loop
 
-Перед калібруванням програматор записує на місце вставки цикл. Розшифровка для 13-бітного ядра
-(для 14 і 15 біт — ті самі команди з іншими опкодами, див. таблицю нижче):
+Before calibration the programmer writes a loop in place of the stub. Decoded for a 13-bit core
+(for 14 and 15 bit — the same instructions with different opcodes, see the table below):
 
 ```
-pos+0  SET1  PAC.3          ; PA3 — вихід
-pos+1  SET1  PADIER.4       ; PA4 — цифровий вхід
+pos+0  SET1  PAC.3          ; PA3 — output
+pos+1  SET1  PADIER.4       ; PA4 — digital input
 pos+2  MOV   A, 0xFF
-pos+3  ADD   A, 1           ; A = 0 — стартове значення
+pos+3  ADD   A, 1           ; A = 0 — the starting value
 loop:
 pos+4  SET1  PA.3           ; PA3 = 1
 pos+5  MOV   IO(reg), A     ; IHRCR/ILRCR = A
-pos+6  T0SN  PA.4           ; PA4 = 0 → пропустити наступну команду
+pos+6  T0SN  PA.4           ; PA4 = 0 → skip the next instruction
 pos+7  ADD   A, 1           ; PA4 = 1 → A + 1
 pos+8  SET0  PA.3           ; PA3 = 0
 pos+9  GOTO  pos+4
 ```
 
-- **PA3 — вихід частоти.** Прохід циклу займає рівно 7 тактів незалежно від PA4: пропуск у `T0SN`
-  коштує 2 такти, а `ADD` — 1. PA3 тримається в 1 протягом 4 тактів і в 0 — 3 такти, тож
-  `f_SYSCLK = 7 × f(PA3)` (`loopcycles = 7` у free-pdk).
-- **PA4 — вхід «+1».** Раз за прохід мікросхема читає PA4; якщо там 1, значення `A` зростає на 1, і з
-  наступного проходу генератор працює з новим налаштуванням. Імпульс має накрити рівно один момент
-  опитування: при SYSCLK 8 МГц прохід триває 875 нс, тож імпульс мусить бути синхронним із PA3
-  (див. розділ 6).
-- **Цикл нескінченний.** PA4 не виводить мікросхему з циклу — лише змінює значення регістра. Цикл
-  закінчується тим, що програматор знімає живлення й перезаписує вставку (розділ 7).
+- **PA3 is the frequency output.** One pass of the loop takes exactly 7 clocks regardless of PA4: the skip in `T0SN`
+  costs 2 clocks, and `ADD` — 1. PA3 stays at 1 for 4 clocks and at 0 for 3 clocks, so
+  `f_SYSCLK = 7 × f(PA3)` (`loopcycles = 7` in free-pdk).
+- **PA4 is the "+1" input.** Once per pass the IC reads PA4; if it is 1, the value of `A` increases by 1, and from the
+  next pass the oscillator runs with the new setting. The pulse must cover exactly one polling
+  moment: at SYSCLK 8 MHz a pass takes 875 ns, so the pulse must be synchronous with PA3
+  (see section 6).
+- **The loop is endless.** PA4 does not take the IC out of the loop — it only changes the register value. The loop
+  ends when the programmer removes power and rewrites the stub (section 7).
 
-Опкоди циклу (`reg` — IO-адреса з вставки, `p` — адреса вставки):
+Loop opcodes (`reg` is the IO address from the stub, `p` is the stub address):
 
-| Слово | Команда | 13 біт | 14 біт | 15 біт |
+| Word | Instruction | 13 bit | 14 bit | 15 bit |
 |---|---|---|---|---|
 | 0 | `SET1 PAC.3` | `0x0F71` | `0x1ED1` | `0x3D91` |
 | 1 | `SET1 PADIER.4` | `0x0F8D` | `0x1F0D` | `0x3E0D` |
@@ -115,16 +115,16 @@ pos+9  GOTO  pos+4
 | 8 | `SET0 PA.3` | `0x0E70` | `0x1CD0` | `0x3990` |
 | 9 | `GOTO p+4` | `0x1804 + p` | `0x3004 + p` | `0x6004 + p` |
 
-## 4. Вимірювальний цикл BandGap
+## 4. The BandGap measurement loop
 
 ```
 pos+0   MOV   A, 0x09
-pos+1   MOV   PAC, A          ; PA0 і PA3 — виходи
-pos+2   SET1  PADIER.4        ; PA4 — цифровий вхід
+pos+1   MOV   PAC, A          ; PA0 and PA3 — outputs
+pos+2   SET1  PADIER.4        ; PA4 — digital input
 pos+3   MOV   A, 0x84
-pos+4   MOV   IO(gpcc), A     ; компаратор: увімкнено, (−) = BandGap 1,20 В, (+) = дільник VDD
+pos+4   MOV   IO(gpcc), A     ; comparator: on, (−) = BandGap 1.20 V, (+) = VDD divider
 pos+5   MOV   A, 0xA3
-pos+6   MOV   IO(gpcs), A     ; вихід компаратора на PA0, «високий» діапазон, N = 3
+pos+6   MOV   IO(gpcs), A     ; comparator output on PA0, "high" range, N = 3
 pos+7   MOV   A, 0xFF
 loop:
 pos+8   SET1  PA.3
@@ -135,103 +135,103 @@ pos+12  SET0  PA.3
 pos+13  GOTO  pos+8
 ```
 
-Розшифровка регістрів компаратора за даташитом PFS154:
+Decoding the comparator registers per the PFS154 datasheet:
 
-- `GPCC = 0x84`: біт7 — увімкнути; біти 3…1 = `010` — мінусовий вхід = BandGap 1,20 В; біт0 = 0 —
-  плюсовий вхід = внутрішній дільник `Vinternal R`.
-- `GPCS = 0xA3`: біт7 — вихід компаратора на PA0; біт5 — «високий» діапазон дільника; біти 3…0 =
-  N = 3. У цьому діапазоні `Vinternal R = VDD · (N + 9) / 40`, тобто при VDD = 3,95 В —
-  3,95 · 12 / 40 ≈ 1,185 В.
+- `GPCC = 0x84`: bit7 — enable; bits 3…1 = `010` — the negative input = BandGap 1.20 V; bit0 = 0 —
+  the positive input = the internal divider `Vinternal R`.
+- `GPCS = 0xA3`: bit7 — comparator output on PA0; bit5 — the "high" divider range; bits 3…0 =
+  N = 3. In this range `Vinternal R = VDD · (N + 9) / 40`, that is, at VDD = 3.95 V —
+  3.95 · 12 / 40 ≈ 1.185 V.
 
-Отже, цикл порівнює BandGap з ≈1,185 В, і результат видно на **PA0**. PA3 і PA4 працюють так само,
-як у циклі IHRC: PA4 — «+1» до `BGTR`, PA3 — синхронізація.
+So the loop compares the BandGap with ≈1.185 V, and the result is visible on **PA0**. PA3 and PA4 work the same way
+as in the IHRC loop: PA4 is "+1" to `BGTR`, PA3 is synchronization.
 
-Опкоди BG-циклу (14 біт; для 13 і 15 біт — аналогічно, див. `fpdkiccalib.c`): `0x2F09, 0x0191, 0x1F0D,
+BG loop opcodes (14 bit; for 13 and 15 bit — similarly, see `fpdkiccalib.c`): `0x2F09, 0x0191, 0x1F0D,
 0x2F84, 0x0180|gpcc, 0x2FA3, 0x0180|gpcs, 0x2FFF, 0x1ED0, 0x0180|bgtr, 0x1910, 0x2801, 0x1CD0,
 0x3008 + p`.
 
-## 5. Хід калібрування
+## 5. The calibration flow
 
-Так його веде Easy PDK (`easypdkprog.c`, `fpdk.c`); наш програматор повторює ту саму послідовність
-усередині прошивки (специфікація `001-pc-programmer-protocol`, етап `CALIBRATE`).
+This is how Easy PDK runs it (`easypdkprog.c`, `fpdk.c`); our programmer repeats the same sequence
+inside the firmware (specification `001-pc-programmer-protocol`, stage `CALIBRATE`).
 
-1. **Запис.** Програма записується з усіма вставками, заміненими вимірювальними циклами.
-2. **Вибір вставки.** Калібрується вставка з найменшою адресою серед ще не відкаліброваних.
-3. **Запуск.** На мікросхему подається лише VDD калібрування з вставки (наприклад, 4,0 В; для BG —
-   3,95 В), без VPP — мікросхема стартує з reset і виконує програму **як зазвичай**, доки не дійде до
-   циклу. Код перед вставкою виконується з невідкаліброваним генератором.
-4. **Пошук значення:**
-   - **IHRC**: значення 0…0x9F крок за кроком: «+1», виміряти частоту, запам'ятати найближче до цілі
-     (`f_SYSCLK = 7 · f(PA3)`). 0x9F — практичний максимум `IHRCR`.
-   - **ILRC**: 0…0xF0 з кроком 0x10 (значущі лише старші 4 біти `ILRCR`): виміряти, далі 16 імпульсів
-     «+1» до наступного кроку.
-   - **BG**: 0…0xF0 з кроком 0x10: після кожного кроку зачекати 500 мкс і прочитати PA0; перше
-     значення, при якому компаратор видає 0 (BandGap ≥ дільника), — результат.
-5. **Перевірка.** Для IHRC/ILRC найкраща частота має бути в межах ±10 % від цілі, інакше
-   калібрування невдале (у нас — `CALIB_FAILED`, політика FR-043).
-6. **Завершення вставки** (розділ 7) і перезапис програми; VDD знімається.
-7. **Наступна вставка**: мікросхема знову стартує, проходить уже завершену вставку й зупиняється в
-   циклі наступної. Повторювати, доки не залишиться вставок.
+1. **Write.** The program is written with all stubs replaced by measurement loops.
+2. **Stub selection.** The stub with the lowest address among those not yet calibrated is calibrated.
+3. **Start.** Only the calibration VDD from the stub (for example 4.0 V; 3.95 V for BG) is applied to the IC,
+   without VPP — the IC starts from reset and runs the program **as usual** until it reaches the
+   loop. The code before the stub runs with an uncalibrated oscillator.
+4. **Value search:**
+   - **IHRC**: values 0…0x9F step by step: "+1", measure the frequency, remember the one closest to the target
+     (`f_SYSCLK = 7 · f(PA3)`). 0x9F is the practical maximum of `IHRCR`.
+   - **ILRC**: 0…0xF0 in steps of 0x10 (only the upper 4 bits of `ILRCR` are significant): measure, then 16 "+1"
+     pulses to the next step.
+   - **BG**: 0…0xF0 in steps of 0x10: after each step wait 500 µs and read PA0; the first
+     value at which the comparator outputs 0 (BandGap ≥ divider) is the result.
+5. **Check.** For IHRC/ILRC the best frequency must be within ±10 % of the target, otherwise
+   the calibration failed (in our case — `CALIB_FAILED`, policy FR-043).
+6. **Finishing the stub** (section 7) and rewriting the program; VDD is removed.
+7. **The next stub**: the IC starts again, passes the already finished stub, and stops in the
+   loop of the next one. Repeat until no stubs remain.
 
-Якщо за 1 с на PA3 немає сигналу (мікросхема не дійшла до циклу), вимір невдалий.
+If there is no signal on PA3 within 1 s (the IC did not reach the loop), the measurement failed.
 
-## 6. Вимір частоти і синхронні імпульси
+## 6. Frequency measurement and synchronous pulses
 
-### Як це робить Easy PDK (STM32F072)
+### How Easy PDK does it (STM32F072)
 
-SPI1 у режимі **slave**: PA3 мікросхеми — такт SPI (SCK, на PB3), PA4 мікросхеми — MISO
-програматора (PB4). Режим `CPOL = 0, CPHA = 0`: біт змінюється по спаду PA3 і стабільний, коли
-мікросхема опитує PA4 після фронту. SPI крутиться безперервно через DMA (блоки по 16 байт).
+SPI1 in **slave** mode: the IC's PA3 is the SPI clock (SCK, on PB3), the IC's PA4 is the programmer's
+MISO (PB4). Mode `CPOL = 0, CPHA = 0`: the bit changes on the falling edge of PA3 and is stable when the
+IC polls PA4 after the edge. SPI runs continuously through DMA (blocks of 16 bytes).
 
-- **Частота**: TIM2 рахує системні такти 48 МГц, поки SPI приймає N блоків; частота PA3 =
-  `48 МГц · 8 · розмір_блоку · (N − 1) / такти`. Вікно залежить від цілі: 24 блоки по 16 байт (понад
-  4 МГц), 8 (до 4 МГц), 4 (до 1 МГц), 2 блоки по 4 байти (до 100 кГц).
-- **Імпульси «+1»**: у буфер передавання записується `(1 << n) − 1` — n одиниць поспіль (n ≤ 16).
-  Кожен біт SPI припадає рівно на один прохід циклу, тож регістр зростає рівно на n. Після цього
-  один блок пропускається, поки генератор встановлюється.
+- **Frequency**: TIM2 counts 48 MHz system clocks while SPI receives N blocks; the PA3 frequency =
+  `48 MHz · 8 · block_size · (N − 1) / clocks`. The window depends on the target: 24 blocks of 16 bytes (over
+  4 MHz), 8 (up to 4 MHz), 4 (up to 1 MHz), 2 blocks of 4 bytes (up to 100 kHz).
+- **"+1" pulses**: `(1 << n) − 1` is written to the transmit buffer — n ones in a row (n ≤ 16).
+  Each SPI bit falls on exactly one loop pass, so the register grows by exactly n. After that
+  one block is skipped while the oscillator settles.
 
-### Як це робити на STM32G474 (наш програматор)
+### How to do it on the STM32G474 (our programmer)
 
-| Вивід мікросхеми | Пін G474 | Функція при калібруванні |
+| IC pin | G474 pin | Function during calibration |
 |---|---|---|
-| PA3 | PB3 | SPI3_SCK (AF6) — такт slave, імпульси синхронізуються з циклом |
-| PA3 (та сама лінія) | PA15 | TIM2_CH1 (AF1) — захоплення фронтів для виміру частоти |
-| PA4 | PC11 | SPI3_MISO (AF6) — імпульси «+1» |
-| PA0 | PB6 | GPIO, вхід — результат компаратора при BG (PB6 — FT_c, лише до 5,0 В; рекомендовано PA9, див. README G474, «Допустимі напруги») |
+| PA3 | PB3 | SPI3_SCK (AF6) — slave clock, the pulses are synchronized with the loop |
+| PA3 (the same line) | PA15 | TIM2_CH1 (AF1) — edge capture for frequency measurement |
+| PA4 | PC11 | SPI3_MISO (AF6) — "+1" pulses |
+| PA0 | PB6 | GPIO, input — the comparator result for BG (PB6 is FT_c, up to 5.0 V only; PA9 is recommended, see the G474 README, "Permissible voltages on the pins") |
 
-Лінія PA3 заводиться на два піни: один пін не може одночасно бути тактом SPI3 і входом захоплення
-TIM2, а так вимір і імпульси йдуть паралельно, без перемикання альтернативних функцій. Під час
-програмування PB3 — звичайний GPIO-вихід такту.
+The PA3 line goes to two pins: one pin cannot be both the SPI3 clock and a TIM2 capture input at the same time,
+and this way measurement and pulses run in parallel, without switching alternate functions. During
+programming PB3 is an ordinary GPIO clock output.
 
-Вимір — **взаємний (reciprocal)**: TIM2 (32 біт) тактується від 170 МГц, CH1 захоплює фронти PA3 з
-подільником входу ÷8 і невеликим цифровим фільтром; прошивка бере N = 64 захоплення (опитуванням або
+The measurement is **reciprocal**: TIM2 (32-bit) is clocked from 170 MHz, CH1 captures the PA3 edges with an
+input prescaler of ÷8 and a small digital filter; the firmware takes N = 64 captures (by polling or
 DMA):
 
 ```
-f(PA3) = 8 · (N − 1) · 170 МГц / (t_останнє − t_перше)
+f(PA3) = 8 · (N − 1) · 170 MHz / (t_last − t_first)
 f_SYSCLK = 7 · f(PA3)
 ```
 
-При SYSCLK 8 МГц (PA3 ≈ 1,14 МГц) 504 періоди займають ~0,44 мс ≈ 75 000 тактів таймера —
-роздільність ~0,001 %, тож навіть 160 кроків IHRC проходять швидко. Перезахоплення (прапорець
-`CC1OF`) означає, що сигнал швидший, ніж встигає прошивка, — тоді збільшити подільник.
+At SYSCLK 8 MHz (PA3 ≈ 1.14 MHz) 504 periods take ~0.44 ms ≈ 75,000 timer clocks —
+a resolution of ~0.001 %, so even 160 IHRC steps go quickly. An overcapture (the
+`CC1OF` flag) means the signal is faster than the firmware can keep up with — then increase the prescaler.
 
-Точність задає опорна частота МК — кварц HSE 8 МГц (±20 ppm). Якщо прошивка працює від
-внутрішнього HSI16 (±1 %), калібрування частоти треба заборонити або явно попередити.
+The accuracy is set by the MCU's reference frequency — the HSE 8 MHz crystal (±20 ppm). If the firmware runs from the
+internal HSI16 (±1 %), frequency calibration must be forbidden or an explicit warning given.
 
-## 7. Завершення вставки
+## 7. Finishing the stub
 
-Після калібрування цикл перетворюється на остаточний код: усі слова → `NOP` (`0x0000`), крім двох:
+After calibration the loop is turned into the final code: all words → `NOP` (`0x0000`), except two:
 
-| Вставка | Слово | Стає |
+| Stub | Word | Becomes |
 |---|---|---|
-| IHRC/ILRC | 2 (`MOV A,0xFF`) | `MOV A,#k` — знайдене значення |
-| IHRC/ILRC | 5 (`MOV IO(reg),A`) | лишається |
+| IHRC/ILRC | 2 (`MOV A,0xFF`) | `MOV A,#k` — the value found |
+| IHRC/ILRC | 5 (`MOV IO(reg),A`) | stays |
 | BG | 7 (`MOV A,0xFF`) | `MOV A,#k` |
-| BG | 9 (`MOV IO(bgtr),A`) | лишається |
+| BG | 9 (`MOV IO(bgtr),A`) | stays |
 
 ```
-; IHRC після калібрування
+; IHRC after calibration
 NOP
 NOP
 MOV  A, #k
@@ -244,92 +244,92 @@ NOP
 NOP
 ```
 
-Усі переходи «цикл → остаточний код» лише скидають біти (1 → 0): `NOP` = `0x0000`, а
-`MOV A,0xFF` → `MOV A,#k` змінює тільки молодший байт з `0xFF`. Тому завершення можливе й на
-**OTP**-мікросхемах: одна повна програма й один перезапис кожної вставки. Це ж дозволяє повторну
-спробу після обриву живлення (FR-044) — наш програматор перевіряє, що на місці вставки цикл або вже
-остаточний код, і дописує лише потрібні нулі.
+All "loop → final code" transitions only clear bits (1 → 0): `NOP` = `0x0000`, and
+`MOV A,0xFF` → `MOV A,#k` changes only the low byte from `0xFF`. So finishing is possible on
+**OTP** ICs too: one full program write and one rewrite of each stub. This also allows a retry
+after a power loss (FR-044) — our programmer checks that in the stub's place there is either the loop or the already
+final code, and writes only the needed zeros.
 
-## 8. Яка вставка зараз активна
+## 8. Which stub is active now
 
-Програматор не аналізує хід програми й не бачить, у якому циклі мікросхема. Easy PDK просто
-**вважає**, що мікросхема виконує вставки в порядку їхніх адрес:
+The programmer does not analyze the program flow and cannot see which loop the IC is in. Easy PDK simply
+**assumes** that the IC executes the stubs in the order of their addresses:
 
-1. Програма записується з **усіма** вставками, вже заміненими на вимірювальні цикли. Записати циклом
-   лише одну, а решту лишити заповнювачами, не можна: на OTP перехід «заповнювач → цикл» потребує
-   бітів 0 → 1.
-2. Калібрується вставка з найменшою адресою серед ще не відкаліброваних — програматор вважає, що
-   мікросхема зараз стоїть саме в ній.
-3. Вставку завершують, програму перезаписують, мікросхему перезапускають: вона проходить готову
-   вставку й зупиняється в наступному циклі.
+1. The program is written with **all** stubs already replaced by measurement loops. Writing a loop for
+   only one and leaving the rest as placeholders is not possible: on OTP the "placeholder → loop" transition needs
+   0 → 1 bits.
+2. The stub with the lowest address among those not yet calibrated is calibrated — the programmer assumes that the
+   IC is currently in exactly that one.
+3. The stub is finished, the program is rewritten, and the IC is restarted: it passes the finished
+   stub and stops in the next loop.
 
-Типовий випадок — дві вставки підряд на початку `main`:
+A typical case is two stubs in a row at the start of `main`:
 
 ```c
 EASY_PDK_INIT_SYSCLOCK_8MHZ();
-EASY_PDK_CALIBRATE_IHRC(8000000, 4000);   // нижча адреса — калібрується першою
+EASY_PDK_CALIBRATE_IHRC(8000000, 4000);   // the lower address — calibrated first
 EASY_PDK_CALIBRATE_ILRC(ILRC_FREQ, 4000);
 ```
 
-Послідовний код компілятор розкладає в тому ж порядку, тож порядок виконання збігається з порядком
-адрес. Припущення ламається, коли вставки стоять у різних функціях, в умовних гілках або програма
-спершу викликає функцію з вищою адресою. Тоді мікросхема, скажімо, стоїть у циклі ILRC, програматор
-думає, що це IHRC, імпульси «+1» підлаштовують `ILRCR`, а знайдене значення записалося б не в ту вставку.
+The compiler lays out sequential code in the same order, so the execution order matches the address order.
+The assumption breaks when the stubs are in different functions, in conditional branches, or the program
+first calls a function with a higher address. Then the IC, say, is in the ILRC loop, the programmer
+thinks it is IHRC, the "+1" pulses trim `ILRCR`, and the value found would be written to the wrong stub.
 
-### Перевірки нашого програматора (FR-055)
+### Our programmer's checks (FR-055)
 
-Програматор перевіряє, що мікросхема виконує саме ту вставку, яку він калібрує:
+The programmer checks that the IC is executing exactly the stub it is calibrating:
 
-1. **Правдоподібність частоти.** Цикл однаковий для IHRC і ILRC, а частоти різняться на два порядки:
-   IHRC на 8 МГц дає на PA3 ≈ 1,14 МГц, ILRC ~95 кГц — ≈ 13,6 кГц. Перший вимір, до будь-якого
-   імпульсу «+1», має лежати в межах від 1/4 до 4 очікуваної частоти циклу (`ціль / 7`). Межі широкі,
-   бо стартове значення регістра далеке від налаштованого, але переплутати IHRC з ILRC вони не дають.
-2. **Відгук на крок.** Під час підбору частота має змінюватися з кожним кроком значення в одному
-   напрямку (з поправкою на шум виміру). Відсутність реакції або хаотична зміна означають, що імпульси
-   потрапляють не в той цикл. Для BandGap програматор ще перевіряє, що PA0 веде мікросхема (вихід
-   компаратора): він перемикає слабку підтяжку PA0 вгору й униз, і рівень не має за нею йти. У циклах
-   RC PA0 — вхід мікросхеми.
+1. **Frequency plausibility.** The loop is the same for IHRC and ILRC, but the frequencies differ by two orders of magnitude:
+   IHRC at 8 MHz gives ≈ 1.14 MHz on PA3, ILRC ~95 kHz — ≈ 13.6 kHz. The first measurement, before any
+   "+1" pulse, must lie between 1/4 and 4 of the loop's expected frequency (`target / 7`). The limits are wide,
+   because the starting register value is far from the trimmed one, but they do not allow mistaking IHRC for ILRC.
+2. **Response to a step.** During the search the frequency must change with each step of the value in one
+   direction (allowing for measurement noise). No reaction or a chaotic change means the pulses
+   are going into the wrong loop. For BandGap the programmer also checks that PA0 is driven by the IC (the comparator
+   output): it switches a weak pull-up on PA0 up and down, and the level must not follow it. In the RC loops
+   PA0 is an input of the IC.
 
-Порушення будь-якої умови → код `CALIB_WRONG_SITE` (0x0415). Як і при `CALIB_FAILED` (FR-043), далі
-нічого не записується, але примусове завершення найкращим значенням (`CALIB_FINALIZE_ON_FAIL`) тут не
-діє: значення знайдене для чужої вставки, записувати його немає сенсу. Клієнт пояснює, що вставки
-виконуються не в порядку адрес.
+A violation of any condition → code `CALIB_WRONG_SITE` (0x0415). As with `CALIB_FAILED` (FR-043), nothing more
+is written, but forced finishing with the best value (`CALIB_FINALIZE_ON_FAIL`) does not
+apply here: the value was found for someone else's stub, so there is no point in writing it. The client explains that the stubs
+are not executed in address order.
 
-Обмеження: дві вставки одного типу з близькими цілями (наприклад, дві IHRC) ці перевірки не
-розрізнять. Суворішу гарантію дав би вимірювальний цикл із міткою — два варіанти з різною
-шпаруватістю PA3 (4/3 і 3/4 такти при тому ж періоді 7 тактів і тому ж остаточному коді), які таймер
-розрізняє, захоплюючи обидва фронти. Цей варіант поки не прийнято: він відходить від шаблонів free-pdk.
+Limitation: two stubs of the same type with close targets (for example, two IHRC) are not
+distinguished by these checks. A stricter guarantee would be given by a measurement loop with a marker — two variants with different
+PA3 duty cycles (4/3 and 3/4 clocks with the same 7-clock period and the same final code) that the timer
+tells apart by capturing both edges. This option has not been adopted yet: it departs from the free-pdk templates.
 
-## 9. Що треба знати автору програми
+## 9. What the program author needs to know
 
-- **Порядок.** Вставки калібруються в порядку адрес, а мікросхема доходить до них у порядку
-  виконання. Програма має виконувати вставки в тому ж порядку, що й адреси (зазвичай — на початку
-  `main`, підряд). Інакше наш програматор зупиниться з `CALIB_WRONG_SITE` (розділ 8), а Easy PDK
-  підлаштував би не той регістр.
-- **Тактова до вставки.** `EASY_PDK_INIT_SYSCLOCK_*` має стояти **перед** `EASY_PDK_CALIBRATE_IHRC`:
-  цикл міряє SYSCLK, а не IHRC напряму.
-- **Код до вставки** виконується з невідкаліброваним генератором і має дійти до вставки швидко (за
-  1 с) і не чекати зовнішніх подій.
-- **Сторожовий таймер.** Цикл його не скидає. Якщо програма вмикає WDT до вставки, мікросхема
-  перезапускатиметься посеред виміру.
-- **Без калібрування** — просто не ставити макрос: тоді регістр лишається заводським (наш
-  програматор попереджає, якщо в пакеті немає жодної вставки, FR-050).
+- **Order.** Stubs are calibrated in address order, and the IC reaches them in execution order. The program must
+  execute the stubs in the same order as their addresses (usually at the start of
+  `main`, in a row). Otherwise our programmer stops with `CALIB_WRONG_SITE` (section 8), and Easy PDK
+  would trim the wrong register.
+- **Clock before the stub.** `EASY_PDK_INIT_SYSCLOCK_*` must come **before** `EASY_PDK_CALIBRATE_IHRC`:
+  the loop measures SYSCLK, not IHRC directly.
+- **Code before the stub** runs with an uncalibrated oscillator and must reach the stub quickly (within
+  1 s) and not wait for external events.
+- **Watchdog.** The loop does not reset it. If the program enables the WDT before the stub, the IC
+  will restart in the middle of the measurement.
+- **Without calibration** — simply do not place the macro: then the register stays at its factory value (our
+  programmer warns if the package has no stubs at all, FR-050).
 
-## 10. Сліди калібрування в дампі (копіювання)
+## 10. Calibration traces in a dump (copying)
 
-Прочитана з мікросхеми програма не містить вставок — лише остаточний код
-`NOP, NOP, MOV A,#k, NOP, NOP, MOV IO(reg),A, NOP…` (або вимірювальний цикл, якщо калібрування не
-завершилось). Наш програматор розпізнає такі сліди за адресою регістра з таблиці мікросхеми й при
-`COPY` замінює їх стандартними вставками з визначеною ціллю (специфікація
+A program read from the IC does not contain stubs — only the final code
+`NOP, NOP, MOV A,#k, NOP, NOP, MOV IO(reg),A, NOP…` (or a measurement loop, if calibration did not
+finish). Our programmer recognizes such traces by the register address from the IC table and during
+`COPY` replaces them with standard stubs with a determined target (specification
 `001-pc-programmer-protocol`, research R9; FR-051…FR-053).
 
-## 11. Де це в коді проєкту
+## 11. Where this is in the project code
 
-| Що | Де |
+| What | Where |
 |---|---|
-| Пошук вставок, `PKG_CALIB_UNKNOWN` | `software/firmware/core/chips/calib_sites.c` |
-| IO-адреси `IHRCR`/`ILRCR`/`BGTR`/`GPCC`/`GPCS` по мікросхемах | `software/firmware/core/chips/chip_table.c` |
-| Вимірювальний цикл, завершення вставки | ефективний образ і `PROGRAM` (задачі T081, T085) |
-| Примітив виміру частоти рушія | `measure_freq` (задача T112) |
-| Перевірка активної вставки (FR-055) | примітив `calibrate`, задачі T131–T133 |
-| Розкладка пінів G474 | `software/firmware/platform/stm32g474/README.md` |
+| Stub search, `PKG_CALIB_UNKNOWN` | `software/firmware/core/chips/calib_sites.c` |
+| IO addresses of `IHRCR`/`ILRCR`/`BGTR`/`GPCC`/`GPCS` per IC | `software/firmware/core/chips/chip_table.c` |
+| Measurement loop, finishing a stub | the effective image and `PROGRAM` (tasks T081, T085) |
+| The engine's frequency measurement primitive | `measure_freq` (task T112) |
+| Active-stub check (FR-055) | the `calibrate` primitive, tasks T131–T133 |
+| G474 pin layout | `software/firmware/platform/stm32g474/README.md` |

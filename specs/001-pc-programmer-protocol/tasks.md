@@ -3,7 +3,7 @@
 description: "Task list for 001-pc-programmer-protocol"
 ---
 
-# Tasks: Протокол обміну PC ⇄ програматор
+# Tasks: PC ⇄ programmer exchange protocol
 
 **Input**: Design documents from `specs/001-pc-programmer-protocol/`
 
@@ -11,287 +11,287 @@ description: "Task list for 001-pc-programmer-protocol"
 [contracts/protocol.md](contracts/protocol.md), [contracts/package-format.md](contracts/package-format.md),
 [contracts/chip-engine.md](contracts/chip-engine.md), [quickstart.md](quickstart.md)
 
-**Tests**: обов'язкові за принципом VI конституції — модульні тести ядра на PC, контрактні тести клієнта
-проти симулятора `pdk-sim` з ін'єкцією помилок, задачі перевірки на залізі. У кожній історії тести пишуться
-першими й мають падати до реалізації.
+**Tests**: mandatory under constitution principle VI — core unit tests on the PC, client contract tests
+against the `pdk-sim` simulator with fault injection, hardware validation tasks. In every story the tests are written
+first and must fail before implementation.
 
-**Organization**: задачі згруповано за історіями користувача (US1…US6 зі spec.md).
+**Organization**: tasks are grouped by user story (US1…US6 from spec.md).
 
 ## Format: `[ID] [P?] [Story] Description`
 
-- **[P]**: можна виконувати паралельно (інші файли, без залежності від незавершених задач)
-- **[Story]**: історія користувача (US1…US6)
+- **[P]**: can run in parallel (different files, no dependency on unfinished tasks)
+- **[Story]**: the user story (US1…US6)
 
 ## Path Conventions
 
-- Прошивка: `software/firmware/` (`core/`, `hal/`, `platform/stm32f072/`, `platform/host/`, `tests/`)
-- Клієнт: `software/client/` (`padauk_prog/`, `tests/unit/`, `tests/contract/`)
-- Спільні тестові вектори: `software/tests/vectors/`
-- Усі байтові формати — строго за `contracts/protocol.md`, `contracts/package-format.md`; внутрішні
-  інтерфейси — за `contracts/chip-engine.md`
-- Кожен новий файл починається з `SPDX-License-Identifier: GPL-3.0-or-later`; код, перенесений з
-  `easy-pdk-programmer-software`, зберігає копірайт free-pdk. Субмодулі не змінюються й не є залежністю збірки
+- Firmware: `software/firmware/` (`core/`, `hal/`, `platform/stm32f072/`, `platform/host/`, `tests/`)
+- Client: `software/client/` (`padauk_prog/`, `tests/unit/`, `tests/contract/`)
+- Shared test vectors: `software/tests/vectors/`
+- All byte formats strictly follow `contracts/protocol.md`, `contracts/package-format.md`; internal
+  interfaces follow `contracts/chip-engine.md`
+- Every new file starts with `SPDX-License-Identifier: GPL-3.0-or-later`; code ported from
+  `easy-pdk-programmer-software` keeps the free-pdk copyright. The submodules are not modified and are not a build dependency
 
 ---
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-**Purpose**: каркас підпроєктів, збірка для двох платформ, тестові фреймворки
+**Purpose**: the subproject skeleton, the build for two platforms, test frameworks
 
-- [X] T001 Створити дерево каталогів за plan.md: `software/firmware/{core/{proto,package,storage,power,ops,chips},hal,platform/{stm32f072,host},tests,cmake}`, `software/client/{padauk_prog,tests/{unit,contract}}`, `software/tests/vectors/` (з `.gitkeep` у порожніх)
-- [X] T002 Створити `software/firmware/CMakeLists.txt`: C11, `-Wall -Wextra -Werror`, опція `PLATFORM` (`host` | `stm32f072`), бібліотека `pdk_core` з `core/*`, для `host` — виконуваний `pdk-sim` і тести CTest, для `stm32f072` — `pdkprog.elf/.bin`
-- [X] T003 [P] Створити тулчейн-файл `software/firmware/cmake/arm-none-eabi.cmake` (Cortex-M0, `-mcpu=cortex-m0 -mthumb -Os -flto -ffunction-sections -fdata-sections`, `--gc-sections`, `--specs=nano.specs`)
-- [X] T004 [P] Створити мінімальний тестовий фреймворк `software/firmware/tests/pdk_test.h` (макроси `TEST`, `ASSERT_EQ`, `ASSERT_MEM_EQ`, реєстрація й запуск, ненульовий код виходу при падінні) і `software/firmware/tests/CMakeLists.txt`, що реєструє кожен `test_*.c` у CTest
-- [X] T005 [P] Створити `software/client/pyproject.toml`: пакет `padauk_prog`, Python ≥ 3.8, залежність `pyserial`, extra `dev` = `pytest`, консольний скрипт `pdkprog = padauk_prog.cli:main`; `software/client/padauk_prog/__init__.py` з `__version__ = "0.1.0"`
-- [X] T006 [P] Створити `software/client/tests/conftest.py` з опцією `--sim PATH` (шлях до `pdk-sim`) і пропуском контрактних тестів, якщо симулятор не задано
-- [X] T007 [P] Додати в `.gitignore` кореня: `build/`, `software/client/**/__pycache__/`, `*.egg-info/`, `.pytest_cache/`
+- [X] T001 Create the directory tree per plan.md: `software/firmware/{core/{proto,package,storage,power,ops,chips},hal,platform/{stm32f072,host},tests,cmake}`, `software/client/{padauk_prog,tests/{unit,contract}}`, `software/tests/vectors/` (with `.gitkeep` in empty ones)
+- [X] T002 Create `software/firmware/CMakeLists.txt`: C11, `-Wall -Wextra -Werror`, a `PLATFORM` option (`host` | `stm32f072`), the `pdk_core` library from `core/*`, for `host` — the `pdk-sim` executable and CTest tests, for `stm32f072` — `pdkprog.elf/.bin`
+- [X] T003 [P] Create the toolchain file `software/firmware/cmake/arm-none-eabi.cmake` (Cortex-M0, `-mcpu=cortex-m0 -mthumb -Os -flto -ffunction-sections -fdata-sections`, `--gc-sections`, `--specs=nano.specs`)
+- [X] T004 [P] Create the minimal test framework `software/firmware/tests/pdk_test.h` (macros `TEST`, `ASSERT_EQ`, `ASSERT_MEM_EQ`, registration and running, a nonzero exit code on failure) and `software/firmware/tests/CMakeLists.txt`, which registers every `test_*.c` in CTest
+- [X] T005 [P] Create `software/client/pyproject.toml`: package `padauk_prog`, Python ≥ 3.8, dependency `pyserial`, extra `dev` = `pytest`, console script `pdkprog = padauk_prog.cli:main`; `software/client/padauk_prog/__init__.py` with `__version__ = "0.1.0"`
+- [X] T006 [P] Create `software/client/tests/conftest.py` with the option `--sim PATH` (the path to `pdk-sim`) and skipping the contract tests if the simulator is not given
+- [X] T007 [P] Add to the root `.gitignore`: `build/`, `software/client/**/__pycache__/`, `*.egg-info/`, `.pytest_cache/`
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-**Purpose**: кадрування, CRC, сесія, HAL, політика напруг, таблиця мікросхем, симулятор і базовий клієнт — потрібні всім історіям
+**Purpose**: framing, CRC, the session, the HAL, the voltage policy, the IC table, the simulator, and the base client — needed by all stories
 
-**⚠️ CRITICAL**: жодна історія не починається до завершення цієї фази
+**⚠️ CRITICAL**: no story starts until this phase is complete
 
-### Тести фундаменту (писати першими)
+### Foundation tests (write first)
 
-- [X] T008 [P] Згенерувати спільні вектори `software/tests/vectors/frames.json` скриптом `software/tests/vectors/gen_frames.py` на `zlib`: CRC-32 (`"123456789"` → `0xCBF43926`, порожній рядок, 1 КБ псевдовипадкових байтів), COBS (порожній, `00`, `11 00 22`, 254 і 255 ненульових байтів, лише нулі), 6 кадрів (REQ/RSP/EVT/NAK) у hex до й після COBS; опція `--c-header PATH` генерує `software/firmware/tests/vectors_frames.h`
-- [X] T009 [P] Модульні тести CRC-32 і COBS проти векторів у `software/firmware/tests/test_crc_cobs.c`
-- [X] T010 [P] Модульні тести кадру в `software/firmware/tests/test_frame.c`: кодування/декодування всіх типів, відхилення неправильної довжини, CRC, `len > max_payload`, обрізаного COBS, ресинхронізація на наступному `0x00` після сміття
-- [X] T011 [P] Модульні тести сесії в `software/firmware/tests/test_session.c`: дубльований `seq` → та сама відповідь без повторного виконання (лічильник викликів обробника = 1), `NAK` на пошкоджений кадр, команди до `HELLO` → `NO_SESSION`, `HELLO` з іншою мажорною версією → `PROTO_VERSION` + `INFO`, скидання сесії й незавершеного завантаження при зміні DTR (операція з мікросхемою не скасовується — FR-023), невідомий `code` → `UNKNOWN_COMMAND`
-- [X] T012 [P] Модульні тести політики встановлення напруг у `software/firmware/tests/test_power.c` з фейковим `hal_power` (contracts/chip-engine.md §2, protocol §6.1): `power_off_all()` — перший крок `pdk_core_init()` до будь-якої іншої ініціалізації (зняття напруг після скидання, принцип III); мінімальна пауза етапу дотримується навіть при миттєвому встановленні; 3 послідовні виміри в межах ±2 % / ±30 мВ (більше з двох); тайм-аут 20 мс → `VDD_FAULT`/`VPP_FAULT` з `rail/set_mV/meas_mV` і викликом `power_off_all()`; 0 В при знятті підпадає під те саме правило
-- [X] T013 [P] Модульні тести клієнтського кадрування в `software/client/tests/unit/test_framing.py` проти `software/tests/vectors/frames.json`
-- [X] T014 [P] Модульні тести stop-and-wait клієнта в `software/client/tests/unit/test_reliability.py` з фейковим транспортом: повтор того ж `seq` після `NAK`, після пошкодженої відповіді, після тайм-ауту 300 мс; помилка сесії після 5 повторів; події між відповідями доставляються окремо
+- [X] T008 [P] Generate the shared vectors `software/tests/vectors/frames.json` with the script `software/tests/vectors/gen_frames.py` on `zlib`: CRC-32 (`"123456789"` → `0xCBF43926`, an empty string, 1 KB of pseudo-random bytes), COBS (empty, `00`, `11 00 22`, 254 and 255 nonzero bytes, only zeros), 6 frames (REQ/RSP/EVT/NAK) in hex before and after COBS; the option `--c-header PATH` generates `software/firmware/tests/vectors_frames.h`
+- [X] T009 [P] Unit tests of CRC-32 and COBS against the vectors in `software/firmware/tests/test_crc_cobs.c`
+- [X] T010 [P] Frame unit tests in `software/firmware/tests/test_frame.c`: encoding/decoding of all types, rejection of a wrong length, CRC, `len > max_payload`, truncated COBS, resynchronization on the next `0x00` after garbage
+- [X] T011 [P] Session unit tests in `software/firmware/tests/test_session.c`: a duplicated `seq` → the same response without re-executing (handler call count = 1), `NAK` on a corrupted frame, commands before `HELLO` → `NO_SESSION`, `HELLO` with a different major version → `PROTO_VERSION` + `INFO`, resetting the session and an unfinished upload on a DTR change (an IC operation is not cancelled — FR-023), an unknown `code` → `UNKNOWN_COMMAND`
+- [X] T012 [P] Unit tests of the voltage settling policy in `software/firmware/tests/test_power.c` with a fake `hal_power` (contracts/chip-engine.md §2, protocol §6.1): `power_off_all()` — the first step of `pdk_core_init()` before any other initialization (removing voltages after reset, principle III); the stage's minimum pause is observed even with instant settling; 3 consecutive measurements within ±2 % / ±30 mV (whichever is larger); a 20 ms timeout → `VDD_FAULT`/`VPP_FAULT` with `rail/set_mV/meas_mV` and a call to `power_off_all()`; 0 V on removal falls under the same rule
+- [X] T013 [P] Client framing unit tests in `software/client/tests/unit/test_framing.py` against `software/tests/vectors/frames.json`
+- [X] T014 [P] Client stop-and-wait unit tests in `software/client/tests/unit/test_reliability.py` with a fake transport: a retry with the same `seq` after `NAK`, after a corrupted response, after a 300 ms timeout; a session error after 5 retries; events between responses are delivered separately
 
-### Реалізація фундаменту — прошивка
+### Foundation implementation — firmware
 
-- [X] T015 [P] Оголосити коди статусу, команд, подій, типів операцій, етапів, `warnings`, `site_status`, `STATUS.flags/selftest_state` з `contracts/protocol.md` §4–§6 у `software/firmware/core/proto/proto_defs.h` (enum-и з точними числовими значеннями; зарезервовані коди позначити коментарем) і `PDK_PROTO_MAJOR 1`, `PDK_PROTO_MINOR 0`
-- [X] T016 [P] Реалізувати CRC-32/ISO-HDLC (півбайтова таблиця 16×u32, інкрементальний API `crc32_init/update/final`) у `software/firmware/core/proto/crc32.c` і `crc32.h`
-- [X] T017 [P] Реалізувати COBS-кодер і потоковий декодер з ресинхронізацією в `software/firmware/core/proto/cobs.c` і `cobs.h`
-- [X] T018 Реалізувати кодування/розбір кадру (`frame_encode`, `frame_parse` → `FRAME_ERROR`) у `software/firmware/core/proto/frame.c` і `frame.h` (залежить від T016, T017)
-- [X] T019 [P] Оголосити інтерфейси HAL у `software/firmware/hal/` за `contracts/chip-engine.md`: `hal_transport.h` (read/write, `is_open()` = DTR, подія зміни стану), `hal_flash.h` (геометрія слотів і журналу, erase_page, program, read), `hal_crc.h` (апаратний CRC-32 з фолбеком на `core/proto/crc32.c`), `hal_power.h` (`power_set`, `power_measure`, `power_off_all`, `power_limits`), `hal_entropy.h` (сирі біти шуму, UID МК), `hal_ui.h` (`local_start(request)` як подія від платформи, `ui_state(state)`), `hal_time.h` (мілісекунди, мікросекунди), `chip_engine.h` (примітиви й 5 гарантій із §3, колбек `poll`)
-- [X] T020 Реалізувати політику встановлення напруг `power_apply(rail, mV, min_pause_us)` за contracts/chip-engine.md §2 у `software/firmware/core/power/power.c` і `power.h` (залежить від T019)
-- [X] T021 Реалізувати сесію (стан порту, `HELLO`, кеш останньої відповіді, лічильник подій, `NAK`, обмеження payload) у `software/firmware/core/proto/session.c` і `session.h` (залежить від T018, T019)
-- [X] T022 Реалізувати диспетчер команд (таблиця `code → handler`, прапорець «дозволено під час операції», `BUSY`/`UNKNOWN_COMMAND`/`BAD_PAYLOAD`) і обробники `HELLO`, `GET_INFO` (структура `INFO` з contracts §4, біти можливостей) у `software/firmware/core/proto/dispatch.c` і `dispatch.h` (залежить від T021)
-- [X] T023 Перенести таблицю мікросхем із `easy-pdk-programmer-software/fpdkicdata.c` (13 записів, з копірайтом free-pdk) у `software/firmware/core/chips/chip_table.c` і `chip_table.h`: публічна частина (`CHIP_DESC`) і внутрішня (напруги, мінімальні паузи етапів, параметри блоку запису, імпульси стирання, IO-адреси `IHRCR`/`ILRCR`/`BGTR`/`GPCC`/`GPCS` з `easy-pdk-programmer-software/Examples/src/easypdk/*.h`; невідомі — `0xFF`); пошук за ID і назвою/варіантом
-- [X] T024 Реалізувати команду `LIST_CHIPS` з пагінацією за `first_index` у `software/firmware/core/chips/chip_list_cmd.c` і зареєструвати в диспетчері (залежить від T022, T023)
-- [X] T025 Реалізувати головний цикл ядра `pdk_core_init()` (першим кроком — `power_off_all()` і лінії IC у Hi-Z) / `pdk_core_poll()` (транспорт → декодер → сесія → диспетчер → відправка) у `software/firmware/core/pdk_core.c` і `pdk_core.h` (залежить від T022)
-- [X] T026 [P] Реалізувати хост-HAL: транспорт stdio і TCP (`--tcp host:port`, DTR = TCP-з'єднання), час, програмний CRC, ентропія з ОС у `software/firmware/platform/host/hal_host_transport.c`, `hal_host_misc.c`
-- [X] T027 [P] Реалізувати емуляцію flash для хоста з геометрією F072 (сторінки 2 КБ, слоти `0x0800B000`/`0x0800D000`, журнал `0x0800F000`), файлом стану (`--flash FILE`), правилом «програмувати лише стерте», ін'єкцією обриву живлення після N-ї операції запису/стирання (`--power-fail-after N`, код виходу 99) і пошкодженням читання під час запису (`--corrupt-flash-during-write`) у `software/firmware/platform/host/hal_host_flash.c`
-- [X] T028 [P] Реалізувати модель живлення для хоста (джерела VDD/VPP з постійною часу встановлення, шум вимірювання, несправності `--power-fault vdd:low|vpp:slow|vpp:stuck`, лічильник часу під напругою для перевірки SC-011) у `software/firmware/platform/host/hal_host_power.c`
-- [X] T029 Реалізувати `pdk-sim` (`main`: аргументи `--tcp`, `--flash`, `--chip`, `--chip-state`, `--power-fail-after`, `--power-fault`, `--corrupt-flash-during-write`, команди stdin `local-start program|copy|verify|selftest|restore`, `local-cancel`, `swap-chip SPEC`; цикл `pdk_core_poll`; вивід `ui_state` у stderr) у `software/firmware/platform/host/sim_main.c` (залежить від T025, T026, T027, T028)
-- [X] T030 [P] Реалізувати платформу цілі налагодження STM32F072 (плати Easy PDK; основна МК — наступна специфікація): `startup.s`, лінкер-скрипт із розміткою flash з research R5 (`FLASH 44K`, символи `__slot0`, `__slot1`, `__journal`), тактування 48 МГц від HSE + HSI48 для USB у `software/firmware/platform/stm32f072/` (`startup.s`, `stm32f072c8.ld`, `system.c`)
-- [X] T031 Інтегрувати TinyUSB (FetchContent з фіксованим тегом у `software/firmware/CMakeLists.txt`; CDC ACM, VID/PID `0x1209:0x0001`, дескриптори), транспорт HAL з DTR через `tud_cdc_connected()` у `software/firmware/platform/stm32f072/usb_descriptors.c`, `tusb_config.h`, `hal_f072_transport.c` (залежить від T030)
-- [X] T032 [P] Реалізувати HAL для F072: flash (стирання сторінки, програмування півслів), апаратний CRC (`REV_IN`/`REV_OUT`), SysTick і мікросекундний таймер, ентропія (молодші біти АЦП VREFINT/датчика температури + UID 96 біт), живлення (ЦАП + АЦП VDD/VPP за схемою Easy PDK, активний розряд — через ЦАП = 0), заглушка `hal_ui` (кнопка PA15 → `local_start(PROGRAM)`, LED PC13–PC15) у `software/firmware/platform/stm32f072/hal_f072_flash.c`, `hal_f072_crc.c`, `hal_f072_power.c`, `hal_f072_misc.c`
-- [X] T033 Реалізувати `main()` для F072 (на самому початку — ЦАП VDD/VPP = 0 і лінії IC у Hi-Z до тактування й USB; потім ініціалізація, TinyUSB task + `pdk_core_poll`) та заглушку `chip_engine` (усі примітиви → `OP_UNSUPPORTED`, `safe_state` = `power_off_all()` + лінії IC у Hi-Z) у `software/firmware/platform/stm32f072/main.c`, `chip_engine_stub.c` (залежить від T031, T032)
+- [X] T015 [P] Declare the status, command, event, operation-type, stage, `warnings`, `site_status`, and `STATUS.flags/selftest_state` codes from `contracts/protocol.md` §4–§6 in `software/firmware/core/proto/proto_defs.h` (enums with exact numeric values; mark reserved codes with a comment) and `PDK_PROTO_MAJOR 1`, `PDK_PROTO_MINOR 0`
+- [X] T016 [P] Implement CRC-32/ISO-HDLC (a nibble table 16×u32, an incremental API `crc32_init/update/final`) in `software/firmware/core/proto/crc32.c` and `crc32.h`
+- [X] T017 [P] Implement the COBS encoder and a streaming decoder with resynchronization in `software/firmware/core/proto/cobs.c` and `cobs.h`
+- [X] T018 Implement frame encoding/parsing (`frame_encode`, `frame_parse` → `FRAME_ERROR`) in `software/firmware/core/proto/frame.c` and `frame.h` (depends on T016, T017)
+- [X] T019 [P] Declare the HAL interfaces in `software/firmware/hal/` per `contracts/chip-engine.md`: `hal_transport.h` (read/write, `is_open()` = DTR, a state-change event), `hal_flash.h` (slot and log geometry, erase_page, program, read), `hal_crc.h` (a hardware CRC-32 with a fallback to `core/proto/crc32.c`), `hal_power.h` (`power_set`, `power_measure`, `power_off_all`, `power_limits`), `hal_entropy.h` (raw noise bits, the MCU UID), `hal_ui.h` (`local_start(request)` as an event from the platform, `ui_state(state)`), `hal_time.h` (milliseconds, microseconds), `chip_engine.h` (the primitives and the 5 guarantees from §3, the `poll` callback)
+- [X] T020 Implement the voltage settling policy `power_apply(rail, mV, min_pause_us)` per contracts/chip-engine.md §2 in `software/firmware/core/power/power.c` and `power.h` (depends on T019)
+- [X] T021 Implement the session (port state, `HELLO`, the cache of the last response, the event counter, `NAK`, the payload limit) in `software/firmware/core/proto/session.c` and `session.h` (depends on T018, T019)
+- [X] T022 Implement the command dispatcher (a `code → handler` table, an "allowed during an operation" flag, `BUSY`/`UNKNOWN_COMMAND`/`BAD_PAYLOAD`) and the handlers `HELLO`, `GET_INFO` (the `INFO` structure from contracts §4, the capability bits) in `software/firmware/core/proto/dispatch.c` and `dispatch.h` (depends on T021)
+- [X] T023 Port the IC table from `easy-pdk-programmer-software/fpdkicdata.c` (13 entries, with the free-pdk copyright) into `software/firmware/core/chips/chip_table.c` and `chip_table.h`: a public part (`CHIP_DESC`) and an internal one (voltages, stage minimum pauses, write block parameters, erase pulses, the IO addresses of `IHRCR`/`ILRCR`/`BGTR`/`GPCC`/`GPCS` from `easy-pdk-programmer-software/Examples/src/easypdk/*.h`; unknown ones — `0xFF`); lookup by ID and by name/variant
+- [X] T024 Implement the `LIST_CHIPS` command with pagination by `first_index` in `software/firmware/core/chips/chip_list_cmd.c` and register it in the dispatcher (depends on T022, T023)
+- [X] T025 Implement the core main loop `pdk_core_init()` (the first step — `power_off_all()` and the IC lines Hi-Z) / `pdk_core_poll()` (transport → decoder → session → dispatcher → send) in `software/firmware/core/pdk_core.c` and `pdk_core.h` (depends on T022)
+- [X] T026 [P] Implement the host HAL: stdio and TCP transport (`--tcp host:port`, DTR = the TCP connection), time, a software CRC, OS entropy in `software/firmware/platform/host/hal_host_transport.c`, `hal_host_misc.c`
+- [X] T027 [P] Implement the flash emulation for the host with the F072 geometry (2 KB pages, slots `0x0800B000`/`0x0800D000`, the log `0x0800F000`), a state file (`--flash FILE`), the "program only erased" rule, injection of a power cut after the N-th write/erase operation (`--power-fail-after N`, exit code 99), and read corruption during a write (`--corrupt-flash-during-write`) in `software/firmware/platform/host/hal_host_flash.c`
+- [X] T028 [P] Implement the power model for the host (VDD/VPP sources with a settling time constant, measurement noise, the faults `--power-fault vdd:low|vpp:slow|vpp:stuck`, a time-under-voltage counter for checking SC-011) in `software/firmware/platform/host/hal_host_power.c`
+- [X] T029 Implement `pdk-sim` (`main`: the arguments `--tcp`, `--flash`, `--chip`, `--chip-state`, `--power-fail-after`, `--power-fault`, `--corrupt-flash-during-write`, the stdin commands `local-start program|copy|verify|selftest|restore`, `local-cancel`, `swap-chip SPEC`; the `pdk_core_poll` loop; `ui_state` output to stderr) in `software/firmware/platform/host/sim_main.c` (depends on T025, T026, T027, T028)
+- [X] T030 [P] Implement the STM32F072 debug target platform (Easy PDK boards; the primary MCU is the next specification): `startup.s`, a linker script with the flash layout from research R5 (`FLASH 44K`, the symbols `__slot0`, `__slot1`, `__journal`), 48 MHz clocking from HSE + HSI48 for USB in `software/firmware/platform/stm32f072/` (`startup.s`, `stm32f072c8.ld`, `system.c`)
+- [X] T031 Integrate TinyUSB (FetchContent with a pinned tag in `software/firmware/CMakeLists.txt`; CDC ACM, VID/PID `0x1209:0x0001`, descriptors), the HAL transport with DTR via `tud_cdc_connected()` in `software/firmware/platform/stm32f072/usb_descriptors.c`, `tusb_config.h`, `hal_f072_transport.c` (depends on T030)
+- [X] T032 [P] Implement the HAL for F072: flash (page erase, half-word programming), a hardware CRC (`REV_IN`/`REV_OUT`), SysTick and a microsecond timer, entropy (the low bits of the ADC on VREFINT/the temperature sensor + the 96-bit UID), power (DAC + ADC for VDD/VPP per the Easy PDK schematic, active discharge — through DAC = 0), a `hal_ui` stub (button PA15 → `local_start(PROGRAM)`, LEDs PC13–PC15) in `software/firmware/platform/stm32f072/hal_f072_flash.c`, `hal_f072_crc.c`, `hal_f072_power.c`, `hal_f072_misc.c`
+- [X] T033 Implement `main()` for F072 (at the very start — the VDD/VPP DAC = 0 and the IC lines Hi-Z before clocking and USB; then initialization, the TinyUSB task + `pdk_core_poll`) and a `chip_engine` stub (all primitives → `OP_UNSUPPORTED`, `safe_state` = `power_off_all()` + the IC lines Hi-Z) in `software/firmware/platform/stm32f072/main.c`, `chip_engine_stub.c` (depends on T031, T032)
 
-### Реалізація фундаменту — клієнт
+### Foundation implementation — client
 
-- [X] T034 [P] Реалізувати CRC/COBS/кадри в `software/client/padauk_prog/framing.py` (`zlib.crc32`, потоковий декодер COBS)
-- [X] T035 [P] Реалізувати транспорти `serial` (pyserial, DTR=1) і `tcp://host:port` з автопошуком порту за VID/PID `0x1209:0x0001` у `software/client/padauk_prog/transport.py`
-- [X] T036 Реалізувати `software/client/padauk_prog/protocol.py`: enum-и кодів з contracts §4–§6, клас `Programmer` (stop-and-wait, повтори, черга подій, `hello()`, `get_info()`, `list_chips()` з розбором `INFO` і `CHIP_DESC`), виняток `ProgrammerError(status, payload)` (залежить від T034, T035)
-- [X] T037 Реалізувати TCP-проксі ін'єкції помилок `software/client/tests/contract/fault_proxy.py` (пошкодження біта, обрізання, дублювання, затримка кадрів в обох напрямах, детермінований seed, примусовий розрив з'єднання) і фікстури `pdk_sim`, `fault_proxy`, вимір латентності кожного RSP у `software/client/tests/contract/conftest.py` (залежить від T029, T036)
+- [X] T034 [P] Implement CRC/COBS/frames in `software/client/padauk_prog/framing.py` (`zlib.crc32`, a streaming COBS decoder)
+- [X] T035 [P] Implement the `serial` (pyserial, DTR=1) and `tcp://host:port` transports with automatic port discovery by VID/PID `0x1209:0x0001` in `software/client/padauk_prog/transport.py`
+- [X] T036 Implement `software/client/padauk_prog/protocol.py`: code enums from contracts §4–§6, a `Programmer` class (stop-and-wait, retries, an event queue, `hello()`, `get_info()`, `list_chips()` with parsing of `INFO` and `CHIP_DESC`), a `ProgrammerError(status, payload)` exception (depends on T034, T035)
+- [X] T037 Implement the TCP fault-injection proxy `software/client/tests/contract/fault_proxy.py` (bit corruption, truncation, duplication, frame delay in both directions, a deterministic seed, a forced connection drop) and the fixtures `pdk_sim`, `fault_proxy`, a latency measurement of every RSP in `software/client/tests/contract/conftest.py` (depends on T029, T036)
 
-**Checkpoint**: `ctest` і `pytest tests/unit` зелені; бібліотека клієнта отримує `INFO` і `LIST_CHIPS` від `pdk-sim` і від F072
+**Checkpoint**: `ctest` and `pytest tests/unit` are green; the client library gets `INFO` and `LIST_CHIPS` from `pdk-sim` and from F072
 
 ---
 
-## Phase 3: User Story 1 — Завантаження пакета прошивки в програматор (Priority: P1) 🎯 MVP
+## Phase 3: User Story 1 — Uploading a firmware package to the programmer (Priority: P1) 🎯 MVP
 
-**Goal**: клієнт формує пакет із HEX, передає його з гарантією цілісності; програматор перевіряє за своєю таблицею й атомарно зберігає, повертає CRC
+**Goal**: the client builds a package from HEX and sends it with an integrity guarantee; the programmer checks it against its own table and atomically stores it, returning the CRC
 
-**Independent Test**: завантажити пакет, «перезапустити» `pdk-sim` (той самий `--flash`), `PKG_INFO` → CRC, ім'я й заголовок збігаються з клієнтськими
+**Independent Test**: upload a package, "restart" `pdk-sim` (the same `--flash`), `PKG_INFO` → the CRC, name, and header match the client's
 
 ### Tests for User Story 1
 
-- [X] T038 [P] [US1] Згенерувати вектори пакетів `software/tests/vectors/packages/` скриптом `software/tests/vectors/gen_packages.py`: валідний PFS154 із 3 слів (еталон із package-format), валідний `helloworld_pfs154` із вставкою IHRC, валідний пакет зі вставкою серійного номера, пакет без калібрувальних вставок; по одному невалідному на кожен рядок таблиць перевірок `package-format.md` (зокрема: порожнє/некоректне `name`, ненульові зарезервовані біти й поля, `CREATED_BY_COPY` від клієнта, OTP-пакет PMS150C із `SKIP_BLANK_CHECK`, невідома вставка з 6+ `AND A`) з очікуваним кодом і `addr` у `manifest.json`
-- [X] T039 [P] [US1] Модульні тести перевірки заголовка й комміту в `software/firmware/tests/test_package_validate.c` за `manifest.json` (кожен невалідний вектор → точний код і `addr`; `calib_sites`/`serial_sites` для валідних)
-- [X] T040 [P] [US1] Модульні тести пошуку калібрувальних вставок і вставок серійного номера в `software/firmware/tests/test_sites.c`: шаблони для 13/14/15-бітних ядер, позиція будь-де в пам'яті, до 16 вставок, ≥ 6 невідомих `AND A` → `PKG_CALIB_UNKNOWN` з адресою, відсутність хибних збігів на прикладах із `easy-pdk-programmer-software/Examples/*.ihx`
-- [X] T041 [P] [US1] Модульні тести журналу стану в `software/firmware/tests/test_journal.c`: запис 40 Б і CRC байтів 0–35, вибір чинного запису за `rec_seq`, ігнорування недописаного запису, переповнення сторінки й перехід на другу, обрив живлення під час стирання другої сторінки
-- [X] T042 [P] [US1] Модульні тести завантаження в `software/firmware/tests/test_upload.c`: послідовні `PKG_DATA`, `PKG_OFFSET` з `expected`, розбіжність заголовка `PKG_DATA` і `PKG_BEGIN`, `PKG_ABORT`, обрив сесії, поступове стирання сторінок (≤ 1 сторінка на виклик), атомарний комміт
-- [X] T043 [P] [US1] Модульні тести клієнта в `software/client/tests/unit/test_ihex_package.py`: розбір Intel HEX (байтові адреси → слова LE, маска заданих слів), ім'я за замовчуванням з імені файлу, побудова пакета побітово ідентична векторам T038
-- [X] T044 [P] [US1] Контрактний тест `software/client/tests/contract/test_upload.py`: завантаження → `PKG_INFO`/`PKG_READ` побайтово збігаються; перезапуск симулятора зберігає пакет; кожен невалідний вектор → точний код; активний пакет не змінюється після відхилення; пакет без вставок → `calib_sites = 0` і попередження клієнта (FR-050)
-- [X] T045 [P] [US1] Контрактний тест SC-001 `software/client/tests/contract/test_frame_corruption.py`: 1000 завантажень пакета `max_package_size` через `fault_proxy` з ≥ 1 % пошкоджених/втрачених/дубльованих кадрів у кожному напрямі; кожне завантаження → збережений пакет ідентичний вихідному
-- [X] T046 [P] [US1] Контрактний тест SC-007 `software/client/tests/contract/test_power_loss.py`: ≥ 100 запусків `pdk-sim --power-fail-after N` з випадковим N посеред завантаження; після перезапуску `pkg_state = VALID` і CRC = старому або новому пакету
-- [X] T047 [P] [US1] Контрактний тест `software/client/tests/contract/test_duplicate_seq.py`: повтор `PKG_DATA` із тим самим `seq` не дублює дані; повтор `PKG_COMMIT` не робить другого запису журналу
-- [X] T048 [P] [US1] Контрактний тест FR-024 `software/client/tests/contract/test_latency.py`: кожен RSP ≤ 100 мс, окремо — `PKG_DATA` на межі сторінки flash, `PKG_COMMIT` пакета `max_package_size`, запис журналу з переходом на іншу сторінку
+- [X] T038 [P] [US1] Generate the package vectors `software/tests/vectors/packages/` with the script `software/tests/vectors/gen_packages.py`: a valid PFS154 of 3 words (the reference from package-format), a valid `helloworld_pfs154` with an IHRC stub, a valid package with a serial-number stub, a package without calibration stubs; one invalid one for each row of the `package-format.md` check tables (including: an empty/invalid `name`, nonzero reserved bits and fields, `CREATED_BY_COPY` from the client, an OTP package PMS150C with `SKIP_BLANK_CHECK`, an unknown stub of 6+ `AND A`) with the expected code and `addr` in `manifest.json`
+- [X] T039 [P] [US1] Unit tests of header and commit validation in `software/firmware/tests/test_package_validate.c` per `manifest.json` (each invalid vector → the exact code and `addr`; `calib_sites`/`serial_sites` for the valid ones)
+- [X] T040 [P] [US1] Unit tests of the search for calibration stubs and serial-number stubs in `software/firmware/tests/test_sites.c`: templates for 13/14/15-bit cores, a position anywhere in memory, up to 16 stubs, ≥ 6 unknown `AND A` → `PKG_CALIB_UNKNOWN` with an address, no false matches on the examples from `easy-pdk-programmer-software/Examples/*.ihx`
+- [X] T041 [P] [US1] State log unit tests in `software/firmware/tests/test_journal.c`: a 40 B record and the CRC of bytes 0–35, choosing the current record by `rec_seq`, ignoring an incompletely written record, page overflow and the switch to the second one, a power cut during the erase of the second page
+- [X] T042 [P] [US1] Upload unit tests in `software/firmware/tests/test_upload.c`: sequential `PKG_DATA`, `PKG_OFFSET` with `expected`, a mismatch of the `PKG_DATA` and `PKG_BEGIN` header, `PKG_ABORT`, a dropped session, gradual page erase (≤ 1 page per call), an atomic commit
+- [X] T043 [P] [US1] Client unit tests in `software/client/tests/unit/test_ihex_package.py`: Intel HEX parsing (byte addresses → LE words, a mask of defined words), the default name from the file name, building a package bit-identical to the T038 vectors
+- [X] T044 [P] [US1] Contract test `software/client/tests/contract/test_upload.py`: upload → `PKG_INFO`/`PKG_READ` match byte for byte; restarting the simulator keeps the package; each invalid vector → the exact code; the active package does not change after a rejection; a package without stubs → `calib_sites = 0` and a client warning (FR-050)
+- [X] T045 [P] [US1] Contract test SC-001 `software/client/tests/contract/test_frame_corruption.py`: 1000 uploads of a `max_package_size` package through `fault_proxy` with ≥ 1 % corrupted/lost/duplicated frames in each direction; every upload → the stored package is identical to the source
+- [X] T046 [P] [US1] Contract test SC-007 `software/client/tests/contract/test_power_loss.py`: ≥ 100 runs of `pdk-sim --power-fail-after N` with a random N in the middle of an upload; after a restart `pkg_state = VALID` and the CRC = the old or the new package
+- [X] T047 [P] [US1] Contract test `software/client/tests/contract/test_duplicate_seq.py`: a repeated `PKG_DATA` with the same `seq` does not duplicate data; a repeated `PKG_COMMIT` does not make a second log record
+- [X] T048 [P] [US1] Contract test FR-024 `software/client/tests/contract/test_latency.py`: every RSP ≤ 100 ms, separately — `PKG_DATA` at a flash page boundary, `PKG_COMMIT` of a `max_package_size` package, a log write that moves to another page
 
 ### Implementation for User Story 1
 
-- [X] T049 [P] [US1] Реалізувати структуру й розбір заголовка (поля з package-format, `name`/`label` UTF-8, зарезервовані біти й поля = 0), перевірки рівня `PKG_BEGIN` (зокрема `SKIP_BLANK_CHECK` для OTP → `PKG_OTP_BLANK_CHECK_REQUIRED`, `CREATED_BY_COPY` від клієнта → `PKG_HEADER_INVALID`) у `software/firmware/core/package/header.c` і `header.h`
-- [X] T050 [P] [US1] Перенести шаблони калібрувальних вставок (IHRC/ILRC/BG для 13/14/15 біт, вимірювальні цикли й пост-калібрувальні патчі з `easy-pdk-programmer-software/fpdkiccalib.c`, з копірайтом) і пошук вставок за research R8 у `software/firmware/core/chips/calib_sites.c` і `calib_sites.h`
-- [X] T051 [P] [US1] Перенести шаблони вставки серійного номера (`RET 'F','P','S','E','R','I','A','L'` для 13/14/15/16 біт, з `fpdkicserial.c`) і пошук позицій у `software/firmware/core/chips/serial_sites.c` і `serial_sites.h`
-- [X] T052 [US1] Реалізувати повну перевірку пакета при комміті (CRC з flash через `hal_crc`, службові області, fuse з останнього слова vs `FUSE_PRESENT`, біт захисту vs `ALLOW_SECURITY_FUSE`, розпізнаваність вставок; результат `calib_sites`, `serial_sites`, `effective_words`, код + `addr`) у `software/firmware/core/package/validate.c` і `validate.h` (залежить від T049, T050, T051)
-- [X] T053 [P] [US1] Реалізувати слоти (адреси з `hal_flash`, вибір неактивного, поступове стирання сторінок під час запису, читання) у `software/firmware/core/storage/slots.c` і `slots.h`
-- [X] T054 [P] [US1] Реалізувати журнал стану (`StateRecord` 40 Б з data-model, пошук чинного запису, дописування, переповнення сторінки, копіювання на другу сторінку) у `software/firmware/core/storage/journal.c` і `journal.h`
-- [X] T055 [US1] Реалізувати `PackageState` (EMPTY/VALID/CORRUPTED) при старті й на запит у `software/firmware/core/storage/package_store.c` і `package_store.h` (залежить від T053, T054)
-- [X] T056 [US1] Реалізувати автомат завантаження (IDLE/RECEIVING/COMPLETE) і команди `PKG_BEGIN`, `PKG_DATA`, `PKG_COMMIT`, `PKG_ABORT`, скидання завантаження при обриві сесії, подію `EVT_PKG_STATE` у `software/firmware/core/package/upload.c` і `upload.h` (залежить від T052, T055)
-- [X] T057 [US1] Реалізувати команди `PKG_INFO`, `PKG_READ`, `PKG_DELETE`, `PKG_CHECK` і зареєструвати всі `PKG_*` у диспетчері в `software/firmware/core/package/pkg_cmds.c` (залежить від T056)
-- [X] T058 [P] [US1] Реалізувати розбір Intel HEX (записи 00/01/02/04, контрольні суми рядків) і запис Intel HEX 8-біт у `software/client/padauk_prog/ihex.py`
-- [X] T059 [US1] Реалізувати побудову пакета (Header 128 Б з `header_crc32`, `name` за замовчуванням з імені файлу, `label`, слова, маска, `package_crc32`, прапорці з опцій, перевірка розміру за `CHIP_DESC` до відправки) у `software/client/padauk_prog/package.py` (залежить від T058)
-- [X] T060 [US1] Додати в `Programmer` методи `upload_package()` (BEGIN, DATA чанками ≤ `max_payload − 4`, COMMIT, порівняння CRC), `package_info()`, `package_read()`, `package_delete()`, `package_check()` у `software/client/padauk_prog/protocol.py` (залежить від T059)
-- [X] T061 [US1] Реалізувати CLI `software/client/padauk_prog/cli.py`: глобальні `--port`, `-v`; `upload FILE -n NAME [--fuse --allowsecfuse --securefill --noerase --noblankchk --noverify --runvdd --name --label]`; відмова на `--nocalibrate` («приберіть макрос калібрування») і `--serial` («номер випадковий, автоматично»); відмова на `--noblankchk` для OTP за `CHIP_DESC.family`; `pkg info|read FILE|delete|check`; повідомлення для кожного `PKG_*` з `addr`; попередження при `calib_sites = 0` (залежить від T060)
+- [X] T049 [P] [US1] Implement the header structure and parsing (the fields from package-format, `name`/`label` UTF-8, reserved bits and fields = 0), the `PKG_BEGIN`-level checks (including `SKIP_BLANK_CHECK` for OTP → `PKG_OTP_BLANK_CHECK_REQUIRED`, `CREATED_BY_COPY` from the client → `PKG_HEADER_INVALID`) in `software/firmware/core/package/header.c` and `header.h`
+- [X] T050 [P] [US1] Port the calibration stub templates (IHRC/ILRC/BG for 13/14/15 bit, the measurement loops and post-calibration patches from `easy-pdk-programmer-software/fpdkiccalib.c`, with the copyright) and the stub search per research R8 into `software/firmware/core/chips/calib_sites.c` and `calib_sites.h`
+- [X] T051 [P] [US1] Port the serial-number stub templates (`RET 'F','P','S','E','R','I','A','L'` for 13/14/15/16 bit, from `fpdkicserial.c`) and the position search into `software/firmware/core/chips/serial_sites.c` and `serial_sites.h`
+- [X] T052 [US1] Implement the full package check at commit (the CRC from flash through `hal_crc`, reserved areas, the fuse from the last word vs `FUSE_PRESENT`, the protection bit vs `ALLOW_SECURITY_FUSE`, stub recognizability; the result `calib_sites`, `serial_sites`, `effective_words`, a code + `addr`) in `software/firmware/core/package/validate.c` and `validate.h` (depends on T049, T050, T051)
+- [X] T053 [P] [US1] Implement the slots (addresses from `hal_flash`, choosing the inactive one, gradual page erase during a write, reading) in `software/firmware/core/storage/slots.c` and `slots.h`
+- [X] T054 [P] [US1] Implement the state log (the 40 B `StateRecord` from the data-model, finding the current record, appending, page overflow, copying to the second page) in `software/firmware/core/storage/journal.c` and `journal.h`
+- [X] T055 [US1] Implement `PackageState` (EMPTY/VALID/CORRUPTED) at start and on request in `software/firmware/core/storage/package_store.c` and `package_store.h` (depends on T053, T054)
+- [X] T056 [US1] Implement the upload state machine (IDLE/RECEIVING/COMPLETE) and the commands `PKG_BEGIN`, `PKG_DATA`, `PKG_COMMIT`, `PKG_ABORT`, resetting the upload on a dropped session, the `EVT_PKG_STATE` event in `software/firmware/core/package/upload.c` and `upload.h` (depends on T052, T055)
+- [X] T057 [US1] Implement the commands `PKG_INFO`, `PKG_READ`, `PKG_DELETE`, `PKG_CHECK` and register all `PKG_*` in the dispatcher in `software/firmware/core/package/pkg_cmds.c` (depends on T056)
+- [X] T058 [P] [US1] Implement Intel HEX parsing (records 00/01/02/04, line checksums) and 8-bit Intel HEX writing in `software/client/padauk_prog/ihex.py`
+- [X] T059 [US1] Implement package building (a 128 B Header with `header_crc32`, a default `name` from the file name, `label`, words, the mask, `package_crc32`, flags from options, a size check against `CHIP_DESC` before sending) in `software/client/padauk_prog/package.py` (depends on T058)
+- [X] T060 [US1] Add to `Programmer` the methods `upload_package()` (BEGIN, DATA in chunks ≤ `max_payload − 4`, COMMIT, CRC comparison), `package_info()`, `package_read()`, `package_delete()`, `package_check()` in `software/client/padauk_prog/protocol.py` (depends on T059)
+- [X] T061 [US1] Implement the CLI `software/client/padauk_prog/cli.py`: global `--port`, `-v`; `upload FILE -n NAME [--fuse --allowsecfuse --securefill --noerase --noblankchk --noverify --runvdd --name --label]`; a refusal on `--nocalibrate` ("remove the calibration macro") and `--serial` ("the number is random, automatic"); a refusal on `--noblankchk` for OTP by `CHIP_DESC.family`; `pkg info|read FILE|delete|check`; a message for each `PKG_*` with `addr`; a warning when `calib_sites = 0` (depends on T060)
 
-**Checkpoint**: US1 працює самостійно на `pdk-sim`; T044–T048 зелені
+**Checkpoint**: US1 works on its own on `pdk-sim`; T044–T048 are green
 
 ---
 
-## Phase 4: User Story 2 — Запис мікросхеми з PC з прогресом і результатом (Priority: P1)
+## Phase 4: User Story 2 — Programming an IC from the PC with progress and a result (Priority: P1)
 
-**Goal**: `PROGRAM` — програматор виконує всі кроки (зокрема повторну спробу OTP, калібрування, фінальну перевірку), шле прогрес і підсумок; `VERIFY` з урахуванням вставок; `PATCH`; скасування; обрив USB не перериває запис
+**Goal**: `PROGRAM` — the programmer performs all steps (including an OTP retry, calibration, the final check), sends progress and a summary; `VERIFY` taking stubs into account; `PATCH`; cancellation; a USB drop does not interrupt programming
 
-**Independent Test**: на `pdk-sim --chip PFS154` клієнт без таблиці мікросхем записує пакет і бачить усі етапи, прогрес ≥ 1/с, `RESULT` з калібруванням, випадковим серійним номером і сумами вмісту
+**Independent Test**: on `pdk-sim --chip PFS154` a client without an IC table programs a package and sees all stages, progress ≥ 1/s, a `RESULT` with calibration, a random serial number, and content sums
 
 ### Tests for User Story 2
 
-- [X] T062 [P] [US2] Модульні тести ефективного образу в `software/firmware/tests/test_effective_image.c`: незадані слова, `SECURE_FILL` до службових областей, виключення fuse, вставка серійного номера (молодший байт першим), вставка калібрування → вимірювальний цикл → завершена форма (порівняння з опкодами `fpdkiccalib.c`); усі переходи «цикл → завершена» лише 1→0
-- [X] T063 [P] [US2] Згенерувати вектори відкаліброваних дампів `software/tests/vectors/footprints/` скриптом `software/tests/vectors/gen_footprints.py`: для 13/14/15 біт — завершені сліди IHRC/ILRC/BG, вимірювальні цикли з довільним `MOV A,#…`, сліди з «чужою» адресою регістра, запис константи в `IHRCR` поза слідом; очікувані відновлені вставки й нормалізовані суми в `manifest.json`
-- [X] T064 [P] [US2] Модульні тести детектора слідів і циклів у `software/firmware/tests/test_calib_footprint.c` за векторами T063: позиція, тип, `k`; розпізнавання вимірювального циклу; відновлення вставки побітово як у free-pdk; невідповідна адреса регістра → не слід
-- [X] T065 [P] [US2] Модульні тести сум вмісту в `software/firmware/tests/test_image_crc.c`: пропуск службових областей і `reserved_first_word`, обнулення бітів вище `code_bits`, нормалізація слідів і вставок серійного номера; дві мікросхеми з однаковою прошивкою, різним `k` і серійним номером → однакова `image_crc_norm`, різна `image_crc_raw`; сума з ефективного образу пакета = сумі вмісту моделі після `PROGRAM`
-- [X] T066 [P] [US2] Модульні тести генератора серійних номерів у `software/firmware/tests/test_serial_rng.c` з фейковим `hal_entropy`: 64 біти, різні значення для послідовних мікросхем і для різних UID при однаковій «ентропії», тест повторів/пропорцій сирих біт → відмова джерела = операція не починається (`INTERNAL`)
-- [X] T067 [P] [US2] Модульні тести менеджера операцій у `software/firmware/tests/test_op_manager.c` з фейковим рушієм: послідовність етапів `PROGRAM` (`PKG_CHECK → ID → ERASE → BLANK_CHECK → WRITE → VERIFY → CALIBRATE → PKG_CHECK → FUSE → FINAL_VERIFY`), пропуск за прапорцями, `EVT_PROGRESS` при зміні етапу і ≤ 500 мс, `OP_CANCEL` → `CANCELLED` + `safe_state`, обрив сесії **не** скасовує операцію, `BUSY` для заборонених команд і обробка дозволених під час операції, запис `StateRecord` після завершення, кожна зміна напруги через `power_apply`
-- [X] T068 [P] [US2] Модульні тести гілок `PROGRAM` у `software/firmware/tests/test_program_branches.c`: OTP чиста / сумісна (повторна спроба, `RESUMED`) / усе вже записано (`CHIP_ALREADY_PROGRAMMED`) / несумісна (`CHIP_NOT_BLANK` без запису); вставка серійного номера чиста → новий номер, записана → номер з мікросхеми; `CALIB_FAILED` → нічого не записано після циклу, fuse не записаний; `CALIB_FINALIZE_ON_FAIL` лише при `source = 0`; розбіжність потокового CRC → `STORE_CORRUPTED` до fuse (FR-049); `FINAL_VERIFY` ловить «слабке» слово (FR-048)
-- [X] T069 [P] [US2] Модульні тести `VERIFY` і `PATCH` у `software/firmware/tests/test_verify_patch.c`: `VERIFY` з урахуванням вставок (завершений слід з будь-яким `k` → OK + фактичні `k` і серійний номер; цикл → `VERIFY_FAILED`, `site_status = FAILED`); `PATCH`: правило `(current AND value) == value`, конфлікт → `PATCH_CONFLICT` без жодного запису, `expect_mode` RAW/NORMALIZED/ACTIVE_PACKAGE → `PATCH_IMAGE_MISMATCH` без запису, службова область, `addr ≥ code_words`, `count` 0/>64, захисний fuse, `CHECK_ONLY`, повна перевірка після запису
-- [X] T070 [P] [US2] Контрактний тест `software/client/tests/contract/test_program.py`: `PROGRAM` на моделі PFS154 → усі етапи в порядку, `RESULT` з `calib_count = 1` у межах ±10 %, випадковим `serial_written`, `image_crc_raw/norm`; вміст моделі = ефективному образу з фактичними `k`; `CHIP_ID_MISMATCH` з `chip_id_found`; `CHIP_NOT_BLANK` для несумісної OTP-моделі
-- [X] T071 [P] [US2] Контрактний тест `software/client/tests/contract/test_busy_cancel.py`: під час `PROGRAM` `PKG_BEGIN`/`OP_START` → `BUSY`, `GET_STATUS`/`OP_RESULT` працюють; `OP_CANCEL` → `CANCELLED` з етапом, напруги зняті
-- [X] T072 [P] [US2] Контрактний тест SC-008 `software/client/tests/contract/test_disconnect.py`: ≥ 100 розривів TCP у довільний момент `PROGRAM` → вміст моделі як без розриву, після перепідключення `OP_RESULT(0)` → `OK`
-- [X] T073 [P] [US2] Контрактний тест SC-002 `software/client/tests/contract/test_stored_corruption.py`: по черзі пошкоджує кожен байт пакета у файлі flash симулятора; `PROGRAM` → `STORE_CORRUPTED` на `PKG_CHECK`, модель мікросхеми не змінена
-- [X] T074 [P] [US2] Контрактний тест SC-012 `software/client/tests/contract/test_otp_retry.py`: ≥ 100 «обривів живлення» в довільній точці `PROGRAM` OTP-моделі PMS150C (`--chip-state`), повторний `PROGRAM` тим самим і «іншим» симулятором (окремий `--flash`, той самий пакет) → `OK` + `RESUMED` або `CHIP_NOT_BLANK` без змін; жодного зайвого нуля; записаний серійний номер зберігається
-- [X] T075 [P] [US2] Контрактний тест SC-013 `software/client/tests/contract/test_calib_fail.py`: модель із «несправним» осцилятором → `CALIB_FAILED`, після циклу нічого не записано; з `CALIB_FINALIZE_ON_FAIL` → `CALIB_FORCED`; після «ремонту» повторний `PROGRAM` → `OK` + `RESUMED`
-- [X] T076 [P] [US2] Контрактний тест SC-011 `software/client/tests/contract/test_power_fault.py`: `--power-fault vpp:slow|vpp:stuck|vdd:low` → `VPP_FAULT`/`VDD_FAULT` ≤ 20 мс після зміни, `RESULT.v_rail/v_set_mV/v_meas_mV` заповнено, модель мікросхеми без жодного запису
-- [X] T077 [P] [US2] Контрактний тест `software/client/tests/contract/test_verify_final.py`: `VERIFY` каліброваної мікросхеми з серійним номером → `OK` з фактичними `k` і номером; незавершене калібрування → `VERIFY_FAILED`; модель із «слабким» записом слова вставки або fuse → `VERIFY_FAILED` на `FINAL_VERIFY`; `--corrupt-flash-during-write` → `STORE_CORRUPTED` до fuse
-- [X] T078 [P] [US2] Контрактний тест `software/client/tests/contract/test_patch.py` на записаній OTP-моделі PMS150C: сумісний патч з `--expect-package` → змінено й верифіковано лише задані слова; партія з трьох моделей із різним зсувом IHRC і серійними номерами проходить з однією нормалізованою сумою; мікросхема з іншою прошивкою → `PATCH_IMAGE_MISMATCH`, модель незмінна; конфлікт 0→1 → `PATCH_CONFLICT`, модель незмінна; `--check` показує обидві суми й нічого не пише
+- [X] T062 [P] [US2] Effective image unit tests in `software/firmware/tests/test_effective_image.c`: undefined words, `SECURE_FILL` up to reserved areas, fuse exclusion, a serial-number stub (least significant byte first), a calibration stub → a measurement loop → the finished form (compared with the opcodes of `fpdkiccalib.c`); all "loop → finished" transitions are only 1→0
+- [X] T063 [P] [US2] Generate the calibrated dump vectors `software/tests/vectors/footprints/` with the script `software/tests/vectors/gen_footprints.py`: for 13/14/15 bit — finished IHRC/ILRC/BG traces, measurement loops with an arbitrary `MOV A,#…`, traces with a "foreign" register address, a constant write to `IHRCR` outside a trace; the expected restored stubs and normalized sums in `manifest.json`
+- [X] T064 [P] [US2] Unit tests of the trace and loop detector in `software/firmware/tests/test_calib_footprint.c` against the T063 vectors: position, type, `k`; recognizing a measurement loop; restoring a stub bit for bit as in free-pdk; a non-matching register address → not a trace
+- [X] T065 [P] [US2] Content sum unit tests in `software/firmware/tests/test_image_crc.c`: skipping reserved areas and `reserved_first_word`, zeroing bits above `code_bits`, normalizing traces and serial-number stubs; two ICs with the same firmware, different `k` and serial number → the same `image_crc_norm`, a different `image_crc_raw`; the sum from the package's effective image = the sum of the model's contents after `PROGRAM`
+- [X] T066 [P] [US2] Serial-number generator unit tests in `software/firmware/tests/test_serial_rng.c` with a fake `hal_entropy`: 64 bits, different values for consecutive ICs and for different UIDs with the same "entropy", a repetition/proportion test of raw bits → a source failure = the operation does not start (`INTERNAL`)
+- [X] T067 [P] [US2] Operation manager unit tests in `software/firmware/tests/test_op_manager.c` with a fake engine: the `PROGRAM` stage sequence (`PKG_CHECK → ID → ERASE → BLANK_CHECK → WRITE → VERIFY → CALIBRATE → PKG_CHECK → FUSE → FINAL_VERIFY`), skipping by flags, `EVT_PROGRESS` on a stage change and ≤ 500 ms, `OP_CANCEL` → `CANCELLED` + `safe_state`, a dropped session does **not** cancel the operation, `BUSY` for forbidden commands and handling of those allowed during an operation, a `StateRecord` write after completion, every voltage change through `power_apply`
+- [X] T068 [P] [US2] `PROGRAM` branch unit tests in `software/firmware/tests/test_program_branches.c`: OTP blank / compatible (a retry, `RESUMED`) / everything already written (`CHIP_ALREADY_PROGRAMMED`) / incompatible (`CHIP_NOT_BLANK` with no write); a serial-number stub blank → a new number, written → the number from the IC; `CALIB_FAILED` → nothing written after the loop, the fuse not written; `CALIB_FINALIZE_ON_FAIL` only with `source = 0`; a streaming CRC mismatch → `STORE_CORRUPTED` before the fuse (FR-049); `FINAL_VERIFY` catches a "weak" word (FR-048)
+- [X] T069 [P] [US2] `VERIFY` and `PATCH` unit tests in `software/firmware/tests/test_verify_patch.c`: `VERIFY` taking stubs into account (a finished trace with any `k` → OK + the actual `k` and serial number; a loop → `VERIFY_FAILED`, `site_status = FAILED`); `PATCH`: the rule `(current AND value) == value`, a conflict → `PATCH_CONFLICT` with no write, `expect_mode` RAW/NORMALIZED/ACTIVE_PACKAGE → `PATCH_IMAGE_MISMATCH` with no write, a reserved area, `addr ≥ code_words`, `count` 0/>64, a protection fuse, `CHECK_ONLY`, a full check after writing
+- [X] T070 [P] [US2] Contract test `software/client/tests/contract/test_program.py`: `PROGRAM` on a PFS154 model → all stages in order, a `RESULT` with `calib_count = 1` within ±10 %, a random `serial_written`, `image_crc_raw/norm`; the model's contents = the effective image with the actual `k`; `CHIP_ID_MISMATCH` with `chip_id_found`; `CHIP_NOT_BLANK` for an incompatible OTP model
+- [X] T071 [P] [US2] Contract test `software/client/tests/contract/test_busy_cancel.py`: during `PROGRAM` `PKG_BEGIN`/`OP_START` → `BUSY`, `GET_STATUS`/`OP_RESULT` work; `OP_CANCEL` → `CANCELLED` with the stage, voltages removed
+- [X] T072 [P] [US2] Contract test SC-008 `software/client/tests/contract/test_disconnect.py`: ≥ 100 TCP drops at an arbitrary moment of `PROGRAM` → the model's contents as without the drop, after reconnecting `OP_RESULT(0)` → `OK`
+- [X] T073 [P] [US2] Contract test SC-002 `software/client/tests/contract/test_stored_corruption.py`: corrupts each byte of the package in the simulator's flash file in turn; `PROGRAM` → `STORE_CORRUPTED` at `PKG_CHECK`, the IC model unchanged
+- [X] T074 [P] [US2] Contract test SC-012 `software/client/tests/contract/test_otp_retry.py`: ≥ 100 "power cuts" at an arbitrary point of `PROGRAM` of the OTP model PMS150C (`--chip-state`), a repeated `PROGRAM` with the same and with a "different" simulator (a separate `--flash`, the same package) → `OK` + `RESUMED` or `CHIP_NOT_BLANK` with the model unchanged; no extra zeros; a written serial number is kept
+- [X] T075 [P] [US2] Contract test SC-013 `software/client/tests/contract/test_calib_fail.py`: a model with a "faulty" oscillator → `CALIB_FAILED`, nothing written after the loop; with `CALIB_FINALIZE_ON_FAIL` → `CALIB_FORCED`; after a "repair" a repeated `PROGRAM` → `OK` + `RESUMED`
+- [X] T076 [P] [US2] Contract test SC-011 `software/client/tests/contract/test_power_fault.py`: `--power-fault vpp:slow|vpp:stuck|vdd:low` → `VPP_FAULT`/`VDD_FAULT` ≤ 20 ms after the change, `RESULT.v_rail/v_set_mV/v_meas_mV` filled in, the IC model with no write at all
+- [X] T077 [P] [US2] Contract test `software/client/tests/contract/test_verify_final.py`: `VERIFY` of a calibrated IC with a serial number → `OK` with the actual `k` and number; unfinished calibration → `VERIFY_FAILED`; a model with a "weak" write of a stub word or the fuse → `VERIFY_FAILED` at `FINAL_VERIFY`; `--corrupt-flash-during-write` → `STORE_CORRUPTED` before the fuse
+- [X] T078 [P] [US2] Contract test `software/client/tests/contract/test_patch.py` on a programmed OTP model PMS150C: a compatible patch with `--expect-package` → only the given words are changed and verified; a batch of three models with different IHRC offsets and serial numbers passes with one normalized sum; an IC with different firmware → `PATCH_IMAGE_MISMATCH`, the model unchanged; a 0→1 conflict → `PATCH_CONFLICT`, the model unchanged; `--check` shows both sums and writes nothing
 
-- [X] T131 [P] [US2] Модульні тести перевірки активної вставки (FR-055) у `software/firmware/tests/test_calib_site_check.c` з фейковим рушієм: дві вставки IHRC + ILRC, мікросхема «застрягла» у вищій за адресою → `CALIB_WRONG_SITE` на першому вимірі (частота ×100 від очікуваної), нічого не записано; модель без відгуку на «+1» або з хаотичною частотою → `CALIB_WRONG_SITE`; BG із PA0, що «висить», → `CALIB_WRONG_SITE`; `CALIB_FINALIZE_ON_FAIL` не застосовується; правильний порядок — `OK`
-- [X] T132 [P] [US2] Контрактний тест `software/client/tests/contract/test_calib_wrong_site.py`: модель мікросхеми з режимом «виконує вставки не за порядком адрес» (`--chip PFS154:order=reverse`) → `PROGRAM` завершується `CALIB_WRONG_SITE`, вміст моделі після вимірювальних циклів не змінено
+- [X] T131 [P] [US2] Unit tests of the active-stub check (FR-055) in `software/firmware/tests/test_calib_site_check.c` with a fake engine: two stubs IHRC + ILRC, the IC "stuck" in the one with the higher address → `CALIB_WRONG_SITE` at the first measurement (a frequency ×100 off the expected one), nothing written; a model with no response to "+1" or with a chaotic frequency → `CALIB_WRONG_SITE`; BG with a "floating" PA0 → `CALIB_WRONG_SITE`; `CALIB_FINALIZE_ON_FAIL` does not apply; the correct order — `OK`
+- [X] T132 [P] [US2] Contract test `software/client/tests/contract/test_calib_wrong_site.py`: an IC model with the mode "executes stubs out of address order" (`--chip PFS154:order=reverse`) → `PROGRAM` ends with `CALIB_WRONG_SITE`, the model's contents after the measurement loops are unchanged
 
 ### Implementation for User Story 2
 
-- [X] T079 [US2] Реалізувати модель мікросхеми для симулятора (залежить від T050 — опкоди вимірювального циклу) (`chip_engine` на пам'яті: ID за `--chip`, FLASH/OTP-семантика 1→0, стирання, лічильник стирань; модель IHRC/ILRC: частота = f(регістр) × (1 + зсув `offset=±N%`), розпізнавання записаного вимірювального циклу й «генерація» частоти на PA3 з урахуванням імпульсів PA4; модель BG-компаратора; режими `osc=broken`, `weak=ADDR`; збереження стану `--chip-state`; `safe_state`) у `software/firmware/platform/host/chip_model.c`
-- [X] T080 [US2] Реалізувати детектор слідів калібрування й вимірювальних циклів та відновлення вставок у `software/firmware/core/chips/calib_footprint.c` і `calib_footprint.h` (залежить від T050, T023)
-- [X] T081 [US2] Реалізувати ефективний образ (`EffectiveImagePlan`: слово за адресою, стани вставок, підстановка фактичних `k` і серійного номера, fuse) у `software/firmware/core/package/effective_image.c` і `effective_image.h` (залежить від T050, T051, T052)
-- [X] T082 [US2] Реалізувати суми вмісту `image_crc_raw/norm` (потоковий нормалізатор зі спільним детектором T080 і вставок серійного номера — 8 `RET #imm`; обчислення з ефективного образу пакета) у `software/firmware/core/package/image_crc.c` і `image_crc.h` (залежить від T080, T081)
-- [X] T083 [P] [US2] Реалізувати генератор серійних номерів (≥ 256 сирих біт з `hal_entropy` + UID + `rec_seq` + лічильник RAM → BLAKE2s, 64 біти; спрощені тести повторів/пропорцій) у `software/firmware/core/package/serial_rng.c` і `serial_rng.h`
-- [X] T084 [US2] Реалізувати менеджер операцій (IDLE/RUNNING/DONE, `op_id`, етапи й відсотки, `poll` для рушія з обробкою дозволених команд, скасування, обрив сесії не перериває операцію, `RESULT`) у `software/firmware/core/ops/op_manager.c` і `op_manager.h` (залежить від T025, T020)
-- [X] T085 [US2] Реалізувати конвеєр `PROGRAM` за data-model `ProgramJob` (PKG_CHECK; ID; ERASE для FLASH; BLANK_CHECK із перевіркою сумісності OTP і повторною спробою; WRITE з потоковим CRC; VERIFY; CALIBRATE кожної вставки з політикою FR-043 і `CALIB_FINALIZE_ON_FAIL`; PKG_CHECK; FUSE; FINAL_VERIFY із сумами вмісту; випадковий серійний номер; `op_flags.SKIP_BLANK_CHECK` для OTP → `PKG_OTP_BLANK_CHECK_REQUIRED`) у `software/firmware/core/ops/op_program.c` (залежить від T081, T082, T083, T084, T055)
-- [X] T086 [US2] Реалізувати конвеєри `VERIFY` (з урахуванням вставок, FR-047), `PROBE`, `ERASE`, `BLANK_CHECK` у `software/firmware/core/ops/op_simple.c` (залежить від T081, T082, T084)
-- [X] T087 [US2] Реалізувати операцію `PATCH` (розбір `ext`, `ID` → читання всієї пам'яті → перевірка суми за `expect_mode` і сумісності всіх слів до будь-якого запису → запис лише змінених слів блоками з одиницями → повна перевірка; `CHECK_ONLY`; заборони службових областей і захисного fuse) у `software/firmware/core/ops/op_patch.c` (залежить від T082, T084)
-- [X] T088 [US2] Реалізувати команди `OP_START`, `OP_CANCEL`, `OP_RESULT`, `GET_STATUS` (структури `STATUS`, `RESULT` з усіма полями contracts §4) і події `EVT_OP_STARTED`, `EVT_PROGRESS`, `EVT_OP_DONE` у `software/firmware/core/ops/op_cmds.c` (залежить від T085, T086, T087)
-- [X] T089 [US2] Під'єднати модель мікросхеми в `pdk-sim` (`--chip NAME[:offset=..,osc=..,weak=..]|none|blank|written`) у `software/firmware/platform/host/sim_main.c` (залежить від T079, T088)
-- [X] T090 [US2] Додати в `Programmer` методи `start_op()`, `cancel_op()`, `op_result()`, `get_status()`, `patch()`, ітератор подій із розбором `EVT_PROGRESS`/`RESULT` у `software/client/padauk_prog/protocol.py` (залежить від T060)
-- [X] T091 [US2] Додати CLI-підкоманди `write FILE -n NAME [опції upload]` (= upload + `PROGRAM`), `program`, `verify`, `probe`, `erase -n NAME`, `blankcheck -n NAME`, `status`; прогрес-рядок; підсумок з калібруванням, серійним номером, сумами, адресою розбіжності, `RESUMED`/`CALIB_FORCED`; Ctrl+C → `OP_CANCEL`; `--finalize-on-calib-fail` у `software/client/padauk_prog/cli.py` (залежить від T090)
-- [X] T133 [US2] Реалізувати перевірки FR-055 у примітиві `calibrate` (правдоподібність першого виміру 1/4…4 від `target_hz / 7`, монотонність відгуку на крок, PA0 ведеться для BG) у рушії мікросхем і моделі мікросхеми (`order=reverse`, «без відгуку») у `software/firmware/platform/host/chip_model.c`; клієнт показує `CALIB_WRONG_SITE` з поясненням «вставки виконуються не в порядку адрес» (залежить від T079, T085)
-- [X] T092 [US2] Додати CLI-підкоманду `patch -n NAME ADDR=VALUE … (--expect-crc CRC [--normalized] | --expect-package) [--check] [--allowsecfuse]` (без очікуваної суми — лише `--check`; конфлікт у двійковому вигляді) у `software/client/padauk_prog/cli.py` (залежить від T090)
+- [X] T079 [US2] Implement the IC model for the simulator (depends on T050 — the measurement loop opcodes) (an in-memory `chip_engine`: the ID from `--chip`, FLASH/OTP 1→0 semantics, erase, an erase counter; an IHRC/ILRC model: frequency = f(register) × (1 + the offset `offset=±N%`), recognizing a written measurement loop and "generating" a frequency on PA3 taking the PA4 pulses into account; a BG comparator model; the modes `osc=broken`, `weak=ADDR`; saving state `--chip-state`; `safe_state`) in `software/firmware/platform/host/chip_model.c`
+- [X] T080 [US2] Implement the detector of calibration traces and measurement loops and the restoring of stubs in `software/firmware/core/chips/calib_footprint.c` and `calib_footprint.h` (depends on T050, T023)
+- [X] T081 [US2] Implement the effective image (`EffectiveImagePlan`: the word by address, stub states, substituting the actual `k` and serial number, the fuse) in `software/firmware/core/package/effective_image.c` and `effective_image.h` (depends on T050, T051, T052)
+- [X] T082 [US2] Implement the content sums `image_crc_raw/norm` (a streaming normalizer with the shared detector from T080 and serial-number stubs — 8 `RET #imm`; computing from the package's effective image) in `software/firmware/core/package/image_crc.c` and `image_crc.h` (depends on T080, T081)
+- [X] T083 [P] [US2] Implement the serial-number generator (≥ 256 raw bits from `hal_entropy` + UID + `rec_seq` + a RAM counter → BLAKE2s, 64 bits; simplified repetition/proportion tests) in `software/firmware/core/package/serial_rng.c` and `serial_rng.h`
+- [X] T084 [US2] Implement the operation manager (IDLE/RUNNING/DONE, `op_id`, stages and percents, `poll` for the engine with handling of the allowed commands, cancellation, a dropped session does not interrupt the operation, `RESULT`) in `software/firmware/core/ops/op_manager.c` and `op_manager.h` (depends on T025, T020)
+- [X] T085 [US2] Implement the `PROGRAM` pipeline per the data-model `ProgramJob` (PKG_CHECK; ID; ERASE for FLASH; BLANK_CHECK with an OTP compatibility check and a retry; WRITE with a streaming CRC; VERIFY; CALIBRATE of each stub with the FR-043 policy and `CALIB_FINALIZE_ON_FAIL`; PKG_CHECK; FUSE; FINAL_VERIFY with content sums; a random serial number; `op_flags.SKIP_BLANK_CHECK` for OTP → `PKG_OTP_BLANK_CHECK_REQUIRED`) in `software/firmware/core/ops/op_program.c` (depends on T081, T082, T083, T084, T055)
+- [X] T086 [US2] Implement the `VERIFY` (taking stubs into account, FR-047), `PROBE`, `ERASE`, `BLANK_CHECK` pipelines in `software/firmware/core/ops/op_simple.c` (depends on T081, T082, T084)
+- [X] T087 [US2] Implement the `PATCH` operation (parsing `ext`, `ID` → reading all memory → checking the sum by `expect_mode` and the compatibility of all words before any write → writing only the changed words in blocks with ones → a full check; `CHECK_ONLY`; the prohibitions on reserved areas and the protection fuse) in `software/firmware/core/ops/op_patch.c` (depends on T082, T084)
+- [X] T088 [US2] Implement the commands `OP_START`, `OP_CANCEL`, `OP_RESULT`, `GET_STATUS` (the `STATUS` and `RESULT` structures with all the fields of contracts §4) and the events `EVT_OP_STARTED`, `EVT_PROGRESS`, `EVT_OP_DONE` in `software/firmware/core/ops/op_cmds.c` (depends on T085, T086, T087)
+- [X] T089 [US2] Connect the IC model in `pdk-sim` (`--chip NAME[:offset=..,osc=..,weak=..]|none|blank|written`) in `software/firmware/platform/host/sim_main.c` (depends on T079, T088)
+- [X] T090 [US2] Add to `Programmer` the methods `start_op()`, `cancel_op()`, `op_result()`, `get_status()`, `patch()`, an event iterator that parses `EVT_PROGRESS`/`RESULT` in `software/client/padauk_prog/protocol.py` (depends on T060)
+- [X] T091 [US2] Add the CLI subcommands `write FILE -n NAME [upload options]` (= upload + `PROGRAM`), `program`, `verify`, `probe`, `erase -n NAME`, `blankcheck -n NAME`, `status`; a progress line; a summary with calibration, serial number, sums, the mismatch address, `RESUMED`/`CALIB_FORCED`; Ctrl+C → `OP_CANCEL`; `--finalize-on-calib-fail` in `software/client/padauk_prog/cli.py` (depends on T090)
+- [X] T133 [US2] Implement the FR-055 checks in the `calibrate` primitive (plausibility of the first measurement 1/4…4 of `target_hz / 7`, monotonicity of the response to a step, PA0 driven for BG) in the IC engine and the IC model (`order=reverse`, "no response") in `software/firmware/platform/host/chip_model.c`; the client shows `CALIB_WRONG_SITE` with the explanation "stubs are executed out of address order" (depends on T079, T085)
+- [X] T092 [US2] Add the CLI subcommand `patch -n NAME ADDR=VALUE … (--expect-crc CRC [--normalized] | --expect-package) [--check] [--allowsecfuse]` (without an expected sum — only `--check`; a conflict in binary form) in `software/client/padauk_prog/cli.py` (depends on T090)
 
-**Checkpoint**: US1 + US2 працюють на `pdk-sim`; T062–T078 зелені
+**Checkpoint**: US1 + US2 work on `pdk-sim`; T062–T078 are green
 
 ---
 
-## Phase 5: User Story 4 — Інформація про програматор, мікросхеми й самоперевірка (Priority: P2)
+## Phase 5: User Story 4 — Information about the programmer, ICs, and the self-test (Priority: P2)
 
-**Goal**: клієнт показує версії, можливості, таблицю мікросхем із програматора; несумісна версія блокує операції; `SELF_TEST` без мікросхеми (автоматично при старті й з PC)
+**Goal**: the client shows versions, capabilities, and the IC table from the programmer; an incompatible version blocks operations; `SELF_TEST` without an IC (automatically at start and from a PC)
 
-**Independent Test**: незмінений клієнт бачить додаткову мікросхему зі збірки `pdk-sim-extra`; `pdkprog selftest` з порожньою «панелькою» показує всі рівні VDD/VPP, з мікросхемою — відмова без високих напруг
+**Independent Test**: the unchanged client sees an extra IC from the `pdk-sim-extra` build; `pdkprog selftest` with an empty "socket" shows all VDD/VPP levels, and with an IC — a refusal without high voltages
 
 ### Tests for User Story 4
 
-- [X] T093 [P] [US4] Модульні тести самоперевірки в `software/firmware/tests/test_selftest.c` з фейковими `hal_power` і рушієм: рівні = усі різні значення VDD/VPP з таблиці мікросхем у порядку зростання + 0 В після кожної шини; інша шина = 0; probe першим, відповідь мікросхеми → `SELFTEST_CHIP_PRESENT` без рівнів вище probe; перший недосягнутий рівень → `SELFTEST_FAILED`, `safe_state`; `RESULT.levels[]`; автозапуск при старті з `source = 1`; `STATUS.selftest_state`
-- [X] T094 [P] [US4] Контрактний тест `software/client/tests/contract/test_info.py`: `INFO` (версія 1.0, `max_payload`, `max_package_size`, `max_read_words`, біти можливостей), `LIST_CHIPS` з пагінацією, мажорна версія 2 → `PROTO_VERSION`, `OP_START`/`PKG_BEGIN` → `NO_SESSION`; SC-006 з `pdk-sim-extra`
-- [X] T095 [P] [US4] Контрактний тест `software/client/tests/contract/test_selftest.py`: `--chip none` → `OK` з усіма рівнями; `--chip PFS154` → `SELFTEST_CHIP_PRESENT`; `--power-fault vpp:stuck` → `SELFTEST_FAILED` з рівнем; після старту симулятора `STATUS.selftest_state` = 2/3/4 відповідно
+- [X] T093 [P] [US4] Self-test unit tests in `software/firmware/tests/test_selftest.c` with a fake `hal_power` and engine: the levels = all distinct VDD/VPP values from the IC table in ascending order + 0 V after each rail; the other rail = 0; probe first, an IC response → `SELFTEST_CHIP_PRESENT` with no levels above probe; the first level not reached → `SELFTEST_FAILED`, `safe_state`; `RESULT.levels[]`; autostart at power-up with `source = 1`; `STATUS.selftest_state`
+- [X] T094 [P] [US4] Contract test `software/client/tests/contract/test_info.py`: `INFO` (version 1.0, `max_payload`, `max_package_size`, `max_read_words`, the capability bits), `LIST_CHIPS` with pagination, major version 2 → `PROTO_VERSION`, `OP_START`/`PKG_BEGIN` → `NO_SESSION`; SC-006 with `pdk-sim-extra`
+- [X] T095 [P] [US4] Contract test `software/client/tests/contract/test_selftest.py`: `--chip none` → `OK` with all levels; `--chip PFS154` → `SELFTEST_CHIP_PRESENT`; `--power-fault vpp:stuck` → `SELFTEST_FAILED` with a level; after the simulator starts `STATUS.selftest_state` = 2/3/4 respectively
 
 ### Implementation for User Story 4
 
-- [X] T096 [US4] Реалізувати операцію `SELF_TEST` (contracts §4 `SELF_TEST`, research R15) і автозапуск при старті ядра у `software/firmware/core/ops/op_selftest.c` та `software/firmware/core/pdk_core.c` (залежить від T020, T084, T023)
-- [X] T097 [US4] Додати тестовий запис мікросхеми під `#ifdef PDK_TEST_EXTRA_CHIP` у `software/firmware/core/chips/chip_table.c` і ціль `pdk-sim-extra` у `software/firmware/CMakeLists.txt`
-- [X] T098 [US4] Додати CLI-підкоманди `info` (версії, платформа, можливості, стан пакета, `selftest_state`), `list` (як `easypdkprog list`: назва, ID, FLASH/OTP, слова, розрядність, RAM, `(RO)`), `selftest` (підтвердження «панелька порожня», таблиця рівнів задано/виміряно/час) у `software/client/padauk_prog/cli.py` (залежить від T090)
+- [X] T096 [US4] Implement the `SELF_TEST` operation (contracts §4 `SELF_TEST`, research R15) and the autostart at core start in `software/firmware/core/ops/op_selftest.c` and `software/firmware/core/pdk_core.c` (depends on T020, T084, T023)
+- [X] T097 [US4] Add a test IC entry under `#ifdef PDK_TEST_EXTRA_CHIP` in `software/firmware/core/chips/chip_table.c` and the target `pdk-sim-extra` in `software/firmware/CMakeLists.txt`
+- [X] T098 [US4] Add the CLI subcommands `info` (versions, platform, capabilities, package state, `selftest_state`), `list` (like `easypdkprog list`: name, ID, FLASH/OTP, words, word width, RAM, `(RO)`), `selftest` (the "socket is empty" confirmation, a table of levels set/measured/time) in `software/client/padauk_prog/cli.py` (depends on T090)
 
-**Checkpoint**: US4 перевірено; клієнт не містить таблиці мікросхем (`grep` назв мікросхем у `software/client/padauk_prog/` порожній)
+**Checkpoint**: US4 is verified; the client has no IC table (`grep` for IC names in `software/client/padauk_prog/` is empty)
 
 ---
 
-## Phase 6: User Story 3 — Автономний запис з перевіркою цілісності (Priority: P2)
+## Phase 6: User Story 3 — Standalone programming with an integrity check (Priority: P2)
 
-**Goal**: локальний запуск без PC; пошкоджений пакет не записується; локальний запис заблоковано до успішної самоперевірки; кожна мікросхема отримує випадковий серійний номер; статистика переживає вимкнення
+**Goal**: a local start without a PC; a corrupted package is not written; local programming is blocked until a successful self-test; each IC gets a random serial number; statistics survive power-off
 
-**Independent Test**: `pdk-sim` з пошкодженим flash → `local-start program` не записує, індикація помилки; з цілісним пакетом — три локальні запуски дають три різні серійні номери; при `--power-fault` після старту локальний запуск виконує `SELF_TEST`, а не `PROGRAM`
+**Independent Test**: `pdk-sim` with a corrupted flash → `local-start program` does not write, an error indication; with an intact package — three local starts give three different serial numbers; with `--power-fault` after start a local start runs `SELF_TEST`, not `PROGRAM`
 
 ### Tests for User Story 3
 
-- [X] T099 [P] [US3] Модульні тести локального запуску в `software/firmware/tests/test_local_start.c`: повний набір дій FR-054 (`PROGRAM`, `COPY`, `VERIFY`, `SELF_TEST`, `RESTORE_MASTER`, `local_cancel`); пріоритет (самоперевірку не пройдено → `SELF_TEST`; `MASTER_RESTORE_PENDING` → `RESTORE_MASTER`); `RESTORE_MASTER` без `PENDING` ігнорується; послідовність `ui_state` для кожного результату з правильним класом причини; під час операції запит ігнорується; `EMPTY`/`CORRUPTED` → без напруг, `ui_state` помилки цілісності; локальна операція не скасовується обривом сесії; `CALIB_FINALIZE_ON_FAIL` ігнорується
-- [X] T100 [P] [US3] Контрактний тест `software/client/tests/contract/test_autonomous.py`: три `local-start program` → три різні `serial_written`; перезапуск симулятора зберігає `ok/fail`; з підключеним клієнтом приходять `EVT_OP_STARTED(source=1)` і `EVT_OP_DONE`; пошкоджений пакет → жодного запису моделі; несправне живлення при старті → `LOCAL_START_BLOCKED`, `local-start` → `SELF_TEST`; `local-start verify` і `local-start selftest` дають відповідні `RESULT`; `local-cancel` посеред запису → `CANCELLED`, напруги зняті; вивід `ui_state` симулятора відповідає FR-054
+- [X] T099 [P] [US3] Local start unit tests in `software/firmware/tests/test_local_start.c`: the full FR-054 action set (`PROGRAM`, `COPY`, `VERIFY`, `SELF_TEST`, `RESTORE_MASTER`, `local_cancel`); priority (the self-test did not pass → `SELF_TEST`; `MASTER_RESTORE_PENDING` → `RESTORE_MASTER`); `RESTORE_MASTER` without `PENDING` is ignored; the `ui_state` sequence for each result with the right cause class; a request during an operation is ignored; `EMPTY`/`CORRUPTED` → no voltages, a `ui_state` integrity error; a local operation is not cancelled by a dropped session; `CALIB_FINALIZE_ON_FAIL` is ignored
+- [X] T100 [P] [US3] Contract test `software/client/tests/contract/test_autonomous.py`: three `local-start program` → three different `serial_written`; restarting the simulator keeps `ok/fail`; with a connected client `EVT_OP_STARTED(source=1)` and `EVT_OP_DONE` arrive; a corrupted package → no write to the model; a faulty supply at start → `LOCAL_START_BLOCKED`, `local-start` → `SELF_TEST`; `local-start verify` and `local-start selftest` give the corresponding `RESULT`; `local-cancel` in the middle of programming → `CANCELLED`, voltages removed; the simulator's `ui_state` output matches FR-054
 
 ### Implementation for User Story 3
 
-- [X] T101 [US3] Реалізувати локальні дії FR-054 (contracts/chip-engine.md §4: `local_start(request)` для всіх запитів, `local_cancel()`) з перетворенням за пріоритетом research R16, перевірку `PackageState` перед записом і `STATUS.flags.LOCAL_START_BLOCKED` у `software/firmware/core/ops/local_start.c` і `local_start.h` (залежить від T085, T096)
-- [X] T102 [P] [US3] Реалізувати стани індикації `ui_state(state, detail)` за contracts/chip-engine.md §4 (`READY`, `BUSY` з етапом і відсотком, `SUCCESS`, `FAIL` із класом причини й кодом, `BLOCKED`) у `software/firmware/core/ops/indication.c` і `indication.h` та відображення на 3 LED у `software/firmware/platform/stm32f072/hal_f072_misc.c`
-- [X] T103 [US3] Реалізувати `STATS_GET` і `STATS_RESET` (ok/fail у журналі) у `software/firmware/core/storage/stats_cmds.c` (залежить від T054)
-- [X] T104 [US3] Додати CLI-підкоманди `stats`, `stats reset` і `monitor` (показ локальних операцій і їхніх результатів) у `software/client/padauk_prog/cli.py` (залежить від T090)
+- [X] T101 [US3] Implement the FR-054 local actions (contracts/chip-engine.md §4: `local_start(request)` for all requests, `local_cancel()`) with conversion by the research R16 priority, a `PackageState` check before programming, and `STATUS.flags.LOCAL_START_BLOCKED` in `software/firmware/core/ops/local_start.c` and `local_start.h` (depends on T085, T096)
+- [X] T102 [P] [US3] Implement the indication states `ui_state(state, detail)` per contracts/chip-engine.md §4 (`READY`, `BUSY` with a stage and percent, `SUCCESS`, `FAIL` with a cause class and code, `BLOCKED`) in `software/firmware/core/ops/indication.c` and `indication.h` and the mapping to 3 LEDs in `software/firmware/platform/stm32f072/hal_f072_misc.c`
+- [X] T103 [US3] Implement `STATS_GET` and `STATS_RESET` (ok/fail in the log) in `software/firmware/core/storage/stats_cmds.c` (depends on T054)
+- [X] T104 [US3] Add the CLI subcommands `stats`, `stats reset`, and `monitor` (showing local operations and their results) in `software/client/padauk_prog/cli.py` (depends on T090)
 
-**Checkpoint**: автономний режим працює на `pdk-sim`; на F072 — з рушієм-заглушкою блокує запис при пошкодженому пакеті й невдалій самоперевірці
+**Checkpoint**: standalone mode works on `pdk-sim`; on F072 with the stub engine it blocks programming on a corrupted package and a failed self-test
 
 ---
 
-## Phase 7: User Story 5 — Читання та копіювання мікросхеми (Priority: P3)
+## Phase 7: User Story 5 — Reading and copying an IC (Priority: P3)
 
-**Goal**: читання в клієнт із CRC; копіювання в пакет із відновленням калібрувальних вставок окремо для IHRC/ILRC/BG (`KEEP_VALUE`, `TARGET_FROM_HOST`, `SNAP_STANDARD`, `MEASURE_MASTER`), захист еталона, обробка вимірювального циклу й чужих форматів, серійний номер не обробляється
+**Goal**: reading into the client with a CRC; copying into a package with restoring calibration stubs separately for IHRC/ILRC/BG (`KEEP_VALUE`, `TARGET_FROM_HOST`, `SNAP_STANDARD`, `MEASURE_MASTER`), reference protection, handling of a measurement loop and foreign formats, the serial number not processed
 
-**Independent Test**: `read` → файл = записаному образу; `copy --ihrc measure --allow-modify-master` з еталона 8 МГц (зсув +3 %) → копії зі зсувами −4/0/+5 % у межах 1 % від еталона, еталон побітово незмінний
+**Independent Test**: `read` → the file = the programmed image; `copy --ihrc measure --allow-modify-master` from an 8 MHz reference (offset +3 %) → copies with offsets −4/0/+5 % within 1 % of the reference, the reference bit-for-bit unchanged
 
 ### Tests for User Story 5
 
-- [X] T105 [P] [US5] Модульні тести формування пакета з дампу в `software/firmware/tests/test_copy.c`: fuse з останнього слова, `CREATED_BY_COPY`, `name` з `ext` або `copy <chip> <crc>`, вставки за режимами для кожного типу, `bg_restore`, `SNAP_STANDARD` лише IHRC (кодування `0xFF0000kk`), байти серійного номера як є + `SERIAL_DUPLICATED`, `CALIB_UNRECOGNIZED` з адресою, захищений fuse → `CHIP_PROTECTED`, мікросхема без запису → `OP_UNSUPPORTED`
-- [X] T106 [P] [US5] Модульні тести автомата `CopyJob` у `software/firmware/tests/test_copy_job.c` з фейковим рушієм: вимірювальний цикл у дампі без `ALLOW_MASTER_LOOP` → `COPY_MASTER_UNCALIBRATED` без запису в сховище, з дозволом і без `TARGET_FROM_HOST` → `BAD_PAYLOAD`; `MEASURE_MASTER`: комміт дампу й `PENDING = 1` до першого стирання, по одному перезапису на слід (n + 1 стирань), слід без сигналу 1 с → `COPIED` і продовження, `OP_CANCEL` у `MEASURE` → `RESTORE` → DONE, невдалий `RESTORE` → `PENDING` лишається; OTP → `MASTER_NOT_REWRITABLE`; без прапорця → `MASTER_MODIFY_NOT_ALLOWED`; `COPY`/`PKG_BEGIN`/`PKG_DELETE` при `PENDING` → `MASTER_RESTORE_PENDING`
-- [X] T107 [P] [US5] Контрактний тест `software/client/tests/contract/test_read_copy.py`: `READ` → `data_crc32` = CRC даних `RESULT_READ`; `COPY` (`KEEP_VALUE`, `TARGET_FROM_HOST`, `SNAP_STANDARD`, BG restore/keep) → новий пакет, `EVT_PKG_STATE`, `RESULT.calib[]` і `warnings`; захищена модель → `CHIP_PROTECTED`; `RESULT_READ` після `PKG_BEGIN` → `NOT_ALLOWED_NOW`
-- [X] T108 [P] [US5] Контрактний тест SC-009 `software/client/tests/contract/test_copy_measure.py`: еталон (зсув +3 %) зі вставкою IHRC 8 МГц; `COPY` `MEASURE_MASTER` → дамп до й після однаковий, стирань +2; `PROGRAM` трьох копій (−4 %, 0, +5 %) → у межах 1 % від еталона; `KEEP_VALUE` дає розбіжність > 5 %; варіант IHRC + ILRC + BG → стирань +3, обидві RC-цілі й BG відновлено; варіант зі слідом, до якого програма не доходить → `COPIED` з попередженням
-- [X] T109 [P] [US5] Контрактний тест SC-010 `software/client/tests/contract/test_copy_power_loss.py`: ≥ 100 обривів живлення в довільній точці `COPY(MEASURE_MASTER)`, зокрема між вимірами двох слідів; після перезапуску `PENDING = 0` і еталон цілий, або `PENDING = 1` і `RESTORE_MASTER` (з PC і локальним запуском) повертає еталон побітово
-- [X] T110 [P] [US5] Контрактний тест `software/client/tests/contract/test_copy_special.py`: еталон із вимірювальним циклом — локальне `COPY` і `COPY` з PC без дозволу → `COPY_MASTER_UNCALIBRATED`, `PKG_INFO` без змін; з `ALLOW_MASTER_LOOP` + `TARGET_FROM_HOST` → вставка з заданою ціллю (FR-051); еталон із записом константи в `IHRCR` без сліду і з серійним номером free-pdk → `OK`, код як є, `warnings` = `CALIB_UNRECOGNIZED` + `SERIAL_DUPLICATED` (FR-052, FR-053)
+- [X] T105 [P] [US5] Unit tests of forming a package from a dump in `software/firmware/tests/test_copy.c`: the fuse from the last word, `CREATED_BY_COPY`, `name` from `ext` or `copy <chip> <crc>`, stubs by mode for each type, `bg_restore`, `SNAP_STANDARD` for IHRC only (the `0xFF0000kk` encoding), serial-number bytes as is + `SERIAL_DUPLICATED`, `CALIB_UNRECOGNIZED` with an address, a protected fuse → `CHIP_PROTECTED`, an IC without writing → `OP_UNSUPPORTED`
+- [X] T106 [P] [US5] `CopyJob` state machine unit tests in `software/firmware/tests/test_copy_job.c` with a fake engine: a measurement loop in the dump without `ALLOW_MASTER_LOOP` → `COPY_MASTER_UNCALIBRATED` with nothing written to storage, with permission and without `TARGET_FROM_HOST` → `BAD_PAYLOAD`; `MEASURE_MASTER`: the dump commit and `PENDING = 1` before the first erase, one rewrite per trace (n + 1 erases), a trace with no signal for 1 s → `COPIED` and continuing, `OP_CANCEL` in `MEASURE` → `RESTORE` → DONE, a failed `RESTORE` → `PENDING` stays; OTP → `MASTER_NOT_REWRITABLE`; without the flag → `MASTER_MODIFY_NOT_ALLOWED`; `COPY`/`PKG_BEGIN`/`PKG_DELETE` with `PENDING` → `MASTER_RESTORE_PENDING`
+- [X] T107 [P] [US5] Contract test `software/client/tests/contract/test_read_copy.py`: `READ` → `data_crc32` = the CRC of the `RESULT_READ` data; `COPY` (`KEEP_VALUE`, `TARGET_FROM_HOST`, `SNAP_STANDARD`, BG restore/keep) → a new package, `EVT_PKG_STATE`, `RESULT.calib[]` and `warnings`; a protected model → `CHIP_PROTECTED`; `RESULT_READ` after `PKG_BEGIN` → `NOT_ALLOWED_NOW`
+- [X] T108 [P] [US5] Contract test SC-009 `software/client/tests/contract/test_copy_measure.py`: a reference (offset +3 %) with an IHRC 8 MHz stub; `COPY` `MEASURE_MASTER` → the dump before and after is identical, erases +2; `PROGRAM` of three copies (−4 %, 0, +5 %) → within 1 % of the reference; `KEEP_VALUE` gives a deviation > 5 %; a variant IHRC + ILRC + BG → erases +3, both RC targets and BG restored; a variant with a trace the program never reaches → `COPIED` with a warning
+- [X] T109 [P] [US5] Contract test SC-010 `software/client/tests/contract/test_copy_power_loss.py`: ≥ 100 power cuts at an arbitrary point of `COPY(MEASURE_MASTER)`, including between the measurements of two traces; after a restart `PENDING = 0` and the reference intact, or `PENDING = 1` and `RESTORE_MASTER` (from a PC and with a local start) restores the reference bit for bit
+- [X] T110 [P] [US5] Contract test `software/client/tests/contract/test_copy_special.py`: a reference with a measurement loop — a local `COPY` and a `COPY` from a PC without permission → `COPY_MASTER_UNCALIBRATED`, `PKG_INFO` unchanged; with `ALLOW_MASTER_LOOP` + `TARGET_FROM_HOST` → a stub with the given target (FR-051); a reference with a constant write to `IHRCR` without a trace and with a free-pdk serial number → `OK`, the code as is, `warnings` = `CALIB_UNRECOGNIZED` + `SERIAL_DUPLICATED` (FR-052, FR-053)
 
 ### Implementation for User Story 5
 
-- [X] T111 [US5] Реалізувати конвеєр `READ` (дані в неактивний слот, `ReadResult` у RAM, перевірка захисту за R10, `image_crc_raw/norm`) і команду `RESULT_READ` з інвалідизацією при `PKG_BEGIN`/`READ`/`COPY` у `software/firmware/core/ops/op_read.c` і `software/firmware/core/ops/op_cmds.c` (залежить від T082, T088, T056)
-- [X] T112 [US5] Розширити `software/firmware/hal/chip_engine.h` примітивом `measure_freq(site, start_value, vdd_mV)` і реалізувати його в `software/firmware/platform/host/chip_model.c` та `software/firmware/platform/stm32f072/chip_engine_stub.c` (`OP_UNSUPPORTED`) (залежить від T079, T033)
-- [X] T113 [US5] Реалізувати операцію `COPY` за автоматом `CopyJob` (розбір `ext` 14/46 байт, режими для IHRC/ILRC/BG, вимірювальний цикл і `ALLOW_MASTER_LOOP`, `MEASURE_MASTER` з n + 1 стираннями й тайм-аутом сліду 1 с, комміт дампу й `PENDING` до першого стирання, відновлення з верифікацією, фінальний пакет із `CREATED_BY_COPY` і `name`, `warnings` `SERIAL_DUPLICATED`/`CALIB_UNRECOGNIZED`/`MASTER_MODIFIED`) у `software/firmware/core/ops/op_copy.c` (залежить від T080, T111, T112)
-- [X] T114 [US5] Реалізувати `RESTORE_MASTER`, блокування `PKG_BEGIN`/`PKG_DELETE`/`COPY` при `MASTER_RESTORE_PENDING` і `STATUS.flags` у `software/firmware/core/ops/op_restore.c`, `software/firmware/core/package/upload.c`, `software/firmware/core/ops/op_cmds.c` (залежить від T113)
-- [X] T115 [US5] Реалізувати `SNAP_STANDARD` у `PROGRAM`: вставка з частотою `0xFF0000kk` → вимір копії при `kk`, округлення до {16, 8, 4, 2, 1 МГц, 500 кГц} при відхиленні ≤ 10 %, інакше `kk` з `CALIB_VALUE_COPIED` у `software/firmware/core/package/effective_image.c` і `software/firmware/core/ops/op_program.c` (залежить від T085, T080)
-- [X] T116 [US5] Реалізувати `CONFIG_GET`/`CONFIG_SET` (`cfg_copy_ihrc` 0/2, `cfg_copy_ilrc` 0, `cfg_copy_bg` 0/1; типово 0, 0, 1) і використання конфігурації локальним `COPY` у `software/firmware/core/storage/config_cmds.c` та `software/firmware/core/ops/local_start.c` (залежить від T101, T113)
-- [X] T117 [US5] Розширити модель мікросхеми: режим «захищена» (`:protected`), OTP-еталон, еталон із вимірювальним циклом, запис константи в `IHRCR` без сліду, команда stdin `swap-chip` у `software/firmware/platform/host/chip_model.c` і `software/firmware/platform/host/sim_main.c` (залежить від T079)
-- [X] T118 [US5] Додати CLI-підкоманди `read FILE -n NAME [-b]` (Intel HEX 8-біт / raw bin, перевірка `data_crc32`), `copy [-n NAME] [--ihrc keep|target|snap|measure] [--ilrc keep|target|measure] [--bg keep|restore] [--ihrc-freq HZ] [--ilrc-freq HZ] [--calib-mv MV] [--allow-modify-master] [--name NAME]` (для `measure` — підтвердження з попередженням про ресурс стирання; при `COPY_MASTER_UNCALIBRATED` — інтерактивний вибір «скасувати / задати ціль» і повтор з `ALLOW_MASTER_LOOP`; показ `SERIAL_DUPLICATED` і `CALIB_UNRECOGNIZED`), `restore-master`, `config copy [--ihrc keep|snap] [--bg keep|restore]` у `software/client/padauk_prog/cli.py` (залежить від T090)
+- [X] T111 [US5] Implement the `READ` pipeline (data into the inactive slot, a `ReadResult` in RAM, the protection check per R10, `image_crc_raw/norm`) and the `RESULT_READ` command with invalidation on `PKG_BEGIN`/`READ`/`COPY` in `software/firmware/core/ops/op_read.c` and `software/firmware/core/ops/op_cmds.c` (depends on T082, T088, T056)
+- [X] T112 [US5] Extend `software/firmware/hal/chip_engine.h` with the primitive `measure_freq(site, start_value, vdd_mV)` and implement it in `software/firmware/platform/host/chip_model.c` and `software/firmware/platform/stm32f072/chip_engine_stub.c` (`OP_UNSUPPORTED`) (depends on T079, T033)
+- [X] T113 [US5] Implement the `COPY` operation per the `CopyJob` state machine (parsing the 14/46-byte `ext`, modes for IHRC/ILRC/BG, a measurement loop and `ALLOW_MASTER_LOOP`, `MEASURE_MASTER` with n + 1 erases and a 1 s trace timeout, the dump commit and `PENDING` before the first erase, a restore with verification, the final package with `CREATED_BY_COPY` and `name`, the `warnings` `SERIAL_DUPLICATED`/`CALIB_UNRECOGNIZED`/`MASTER_MODIFIED`) in `software/firmware/core/ops/op_copy.c` (depends on T080, T111, T112)
+- [X] T114 [US5] Implement `RESTORE_MASTER`, blocking `PKG_BEGIN`/`PKG_DELETE`/`COPY` on `MASTER_RESTORE_PENDING`, and `STATUS.flags` in `software/firmware/core/ops/op_restore.c`, `software/firmware/core/package/upload.c`, `software/firmware/core/ops/op_cmds.c` (depends on T113)
+- [X] T115 [US5] Implement `SNAP_STANDARD` in `PROGRAM`: a stub with the frequency `0xFF0000kk` → measure the copy at `kk`, round to {16, 8, 4, 2, 1 MHz, 500 kHz} if the deviation is ≤ 10 %, otherwise `kk` with `CALIB_VALUE_COPIED` in `software/firmware/core/package/effective_image.c` and `software/firmware/core/ops/op_program.c` (depends on T085, T080)
+- [X] T116 [US5] Implement `CONFIG_GET`/`CONFIG_SET` (`cfg_copy_ihrc` 0/2, `cfg_copy_ilrc` 0, `cfg_copy_bg` 0/1; default 0, 0, 1) and the use of the configuration by the local `COPY` in `software/firmware/core/storage/config_cmds.c` and `software/firmware/core/ops/local_start.c` (depends on T101, T113)
+- [X] T117 [US5] Extend the IC model: a "protected" mode (`:protected`), an OTP reference, a reference with a measurement loop, a constant write to `IHRCR` without a trace, the stdin command `swap-chip` in `software/firmware/platform/host/chip_model.c` and `software/firmware/platform/host/sim_main.c` (depends on T079)
+- [X] T118 [US5] Add the CLI subcommands `read FILE -n NAME [-b]` (8-bit Intel HEX / raw bin, a `data_crc32` check), `copy [-n NAME] [--ihrc keep|target|snap|measure] [--ilrc keep|target|measure] [--bg keep|restore] [--ihrc-freq HZ] [--ilrc-freq HZ] [--calib-mv MV] [--allow-modify-master] [--name NAME]` (for `measure` — a confirmation with a warning about erase endurance; on `COPY_MASTER_UNCALIBRATED` — an interactive choice "cancel / set a target" and a retry with `ALLOW_MASTER_LOOP`; showing `SERIAL_DUPLICATED` and `CALIB_UNRECOGNIZED`), `restore-master`, `config copy [--ihrc keep|snap] [--bg keep|restore]` in `software/client/padauk_prog/cli.py` (depends on T090)
 
-**Checkpoint**: US5 перевірено на `pdk-sim`, зокрема SC-009 і SC-010
+**Checkpoint**: US5 is verified on `pdk-sim`, including SC-009 and SC-010
 
 ---
 
-## Phase 8: User Story 6 — Запуск мікросхеми з обміном даними (Priority: P3)
+## Phase 8: User Story 6 — Running an IC with data exchange (Priority: P3)
 
-**Goal**: `RUN` з напругою, міст UART в обидва боки, зупинка; обрив сесії зупиняє `RUN`
+**Goal**: `RUN` with a voltage, a UART bridge both ways, stop; a dropped session stops `RUN`
 
-**Independent Test**: модель у `pdk-sim` шле `"U"` + `"hello\n"` — клієнт показує `Connected @… baud` і текст; введені символи повертаються ехом
+**Independent Test**: the model in `pdk-sim` sends `"U"` + `"hello\n"` — the client shows `Connected @… baud` and the text; typed characters come back as an echo
 
 ### Tests for User Story 6
 
-- [X] T119 [P] [US6] Контрактний тест `software/client/tests/contract/test_run.py`: `OP_START(RUN, 5000)` → `EVT_UART_LINK`, `EVT_UART_RX`; `UART_TX` доходить до моделі; `UART_TX` поза `RUN` → `NOT_ALLOWED_NOW`; `OP_CANCEL` → напруга знята, `OK`; розрив сесії → `HOST_DISCONNECTED`, напруга знята
+- [X] T119 [P] [US6] Contract test `software/client/tests/contract/test_run.py`: `OP_START(RUN, 5000)` → `EVT_UART_LINK`, `EVT_UART_RX`; `UART_TX` reaches the model; `UART_TX` outside `RUN` → `NOT_ALLOWED_NOW`; `OP_CANCEL` → the voltage removed, `OK`; a session drop → `HOST_DISCONNECTED`, the voltage removed
 
 ### Implementation for User Story 6
 
-- [X] T120 [P] [US6] Додати інтерфейс UART-мосту `software/firmware/hal/hal_uart.h` (старт з автовизначенням швидкості, відправка, прийом у кільцевий буфер, подія «швидкість визначено») і хост-реалізацію «hello + ехо» у `software/firmware/platform/host/hal_host_uart.c`
-- [X] T121 [US6] Реалізувати конвеєр `RUN` (VDD через `power_apply` з `param`/`run_vdd_mV`/5000, VPP = 0, UART-міст, `EVT_UART_LINK`, `EVT_UART_RX`, зупинка `OP_CANCEL` і обривом сесії) і команду `UART_TX` у `software/firmware/core/ops/op_run.c` (залежить від T084, T120)
-- [X] T122 [P] [US6] Реалізувати UART-міст для F072 (USART1 PB6/PB7, автовизначення швидкості по старт-біту, DMA-прийом, пропуск першого `'U'`) у `software/firmware/platform/stm32f072/hal_f072_uart.c`
-- [X] T123 [US6] Додати CLI-підкоманду `start [-r VDD]` (вивід `EVT_UART_RX`, клавіатура → `UART_TX`, Esc → `OP_CANCEL`) у `software/client/padauk_prog/cli.py` (залежить від T090)
+- [X] T120 [P] [US6] Add the UART bridge interface `software/firmware/hal/hal_uart.h` (start with baud-rate auto-detection, send, receive into a ring buffer, a "baud rate detected" event) and a "hello + echo" host implementation in `software/firmware/platform/host/hal_host_uart.c`
+- [X] T121 [US6] Implement the `RUN` pipeline (VDD through `power_apply` with `param`/`run_vdd_mV`/5000, VPP = 0, the UART bridge, `EVT_UART_LINK`, `EVT_UART_RX`, stopping on `OP_CANCEL` and a dropped session) and the `UART_TX` command in `software/firmware/core/ops/op_run.c` (depends on T084, T120)
+- [X] T122 [P] [US6] Implement the UART bridge for F072 (USART1 PB6/PB7, baud-rate auto-detection from the start bit, DMA receive, skipping the first `'U'`) in `software/firmware/platform/stm32f072/hal_f072_uart.c`
+- [X] T123 [US6] Add the CLI subcommand `start [-r VDD]` (printing `EVT_UART_RX`, keyboard → `UART_TX`, Esc → `OP_CANCEL`) in `software/client/padauk_prog/cli.py` (depends on T090)
 
-**Checkpoint**: усі історії перевірено на `pdk-sim`
+**Checkpoint**: all stories are verified on `pdk-sim`
 
 ---
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [X] T124 [P] Опублікувати протокол: `docs/protocol.md` = `contracts/protocol.md` + `contracts/package-format.md` + `contracts/chip-engine.md` з розділами «Версіонування», «Коди статусу», «Відповідність easypdkprog»; посилання з кореневого `README.md` (FR-029)
-- [X] T125 [P] Додати перевірку розміру прошивки для кожної цілі в `software/firmware/CMakeLists.txt` (post-build `arm-none-eabi-size`; для F072 — помилка, якщо `.text + .data` > 44 КБ, і опції збірки `PDK_FEATURE_MEASURE_MASTER`, `PDK_FEATURE_PATCH` для вимкнення функцій з відображенням в `INFO.capabilities`)
-- [X] T126 [P] Додати GitHub Actions `.github/workflows/ci.yml`: збірка `PLATFORM=host` + `ctest` (Linux, Windows), збірка `PLATFORM=stm32f072` з перевіркою розміру, `pytest` unit + contract проти `pdk-sim` (зменшені ітерації ін'єкції помилок; повні — `workflow_dispatch`)
-- [X] T127 [P] Написати `software/client/README.md` (встановлення, приклади `pdkprog` для кожної підкоманди, відповідність `easypdkprog`, порада щодо макросів калібрування й серійного номера) і `software/firmware/README.md` (збірка, DFU, розмітка flash)
-- [X] T128 Пройти сценарії 1–4 з `quickstart.md` і виправити розбіжності в документації `specs/001-pc-programmer-protocol/quickstart.md`
-- [ ] T129 Перевірка на залізі цілі налагодження (F072 + заглушка рушія), результат у `specs/001-pc-programmer-protocol/hw-validation.md`: розмір прошивки і вимкнені функції; апаратна межа напруги — максимум VPP/VDD при ЦАП = максимум і при «зависанні» прошивки (принцип III); напруги зняті одразу після скидання/увімкнення; `pdkprog info/list/selftest` (точність ±2 % / ±30 мВ і встановлення < 20 мс на кожному рівні, з навантаженням-імітатором цільової плати); завантаження пакета і перевірка після вимкнення живлення; 20 ручних висмикувань USB/живлення під час завантаження (пакет завжди `VALID`); локальний запуск із пошкодженим пакетом і з несправним/відключеним VPP; якість ентропії (≥ 10⁵ згенерованих номерів без повторів, тест пропорцій); швидкість завантаження 8 КБ ≤ 3 с (SC-003)
-- [X] T130 Оновити `specs/001-pc-programmer-protocol/plan.md` і `research.md`, якщо реалізація відхилилась від рішень (розмір прошивки → STM32F072CB, BLAKE2s → інша хеш-функція тощо); зафіксувати, що SC-004 і SC-009 на реальних мікросхемах перевіряються у фічі `002-chip-engine`, а порт на основну МК, розмітка flash і кількість слотів — у специфікації вибору МК
+- [X] T124 [P] Publish the protocol: `docs/protocol.md` = `contracts/protocol.md` + `contracts/package-format.md` + `contracts/chip-engine.md` with the sections "Versioning", "Status codes", "Mapping to easypdkprog"; a link from the root `README.md` (FR-029)
+- [X] T125 [P] Add a firmware size check for each target in `software/firmware/CMakeLists.txt` (post-build `arm-none-eabi-size`; for F072 — an error if `.text + .data` > 44 KB, and the build options `PDK_FEATURE_MEASURE_MASTER`, `PDK_FEATURE_PATCH` to disable features, reflected in `INFO.capabilities`)
+- [X] T126 [P] Add GitHub Actions `.github/workflows/ci.yml`: a `PLATFORM=host` build + `ctest` (Linux, Windows), a `PLATFORM=stm32f072` build with a size check, `pytest` unit + contract against `pdk-sim` (reduced fault-injection iterations; the full ones — `workflow_dispatch`)
+- [X] T127 [P] Write `software/client/README.md` (installation, `pdkprog` examples for each subcommand, the mapping to `easypdkprog`, advice on the calibration and serial-number macros) and `software/firmware/README.md` (build, DFU, flash layout)
+- [X] T128 Run scenarios 1–4 from `quickstart.md` and fix discrepancies in the documentation `specs/001-pc-programmer-protocol/quickstart.md`
+- [ ] T129 Hardware validation of the debug target (F072 + the stub engine), the result in `specs/001-pc-programmer-protocol/hw-validation.md`: the firmware size and disabled features; the hardware voltage limit — the maximum VPP/VDD with the DAC at maximum and with a "hung" firmware (principle III); voltages removed right after reset/power-on; `pdkprog info/list/selftest` (accuracy ±2 % / ±30 mV and settling < 20 ms at every level, with a load simulating the target board); uploading a package and checking after power-off; 20 manual USB/power pulls during upload (the package is always `VALID`); a local start with a corrupted package and with a faulty/disconnected VPP; entropy quality (≥ 10⁵ generated numbers with no repeats, a proportion test); 8 KB upload speed ≤ 3 s (SC-003)
+- [X] T130 Update `specs/001-pc-programmer-protocol/plan.md` and `research.md` if the implementation deviated from the decisions (firmware size → STM32F072CB, BLAKE2s → another hash function, etc.); record that SC-004 and SC-009 are verified on real ICs in feature `002-chip-engine`, and that the port to the primary MCU, the flash layout, and the number of slots belong to the MCU selection specification
 
 ---
 
@@ -299,17 +299,17 @@ description: "Task list for 001-pc-programmer-protocol"
 
 ### Phase Dependencies
 
-- **Setup (Phase 1)** → без залежностей
-- **Foundational (Phase 2)** → після Setup; **блокує всі історії** (включно з політикою напруг `core/power` і `LIST_CHIPS`)
-- **US1 (Phase 3)** → після Foundational
-- **US2 (Phase 4)** → після US1 (збережений пакет, `validate`, `calib_sites`, `serial_sites`)
-- **US4 (Phase 5)** → після US2 (менеджер операцій для `SELF_TEST`); `info`/`list` — лише після Foundational
-- **US3 (Phase 6)** → після US2 і US4 (локальний запуск блокується до успішної самоперевірки)
-- **US5 (Phase 7)** → після US2 (детектор слідів, `PROGRAM`) і US3 (локальне копіювання, `local_start`)
-- **US6 (Phase 8)** → після US2 (менеджер операцій); незалежна від US3–US5
-- **Polish (Phase 9)** → після потрібних історій
+- **Setup (Phase 1)** → no dependencies
+- **Foundational (Phase 2)** → after Setup; **blocks all stories** (including the `core/power` voltage policy and `LIST_CHIPS`)
+- **US1 (Phase 3)** → after Foundational
+- **US2 (Phase 4)** → after US1 (the stored package, `validate`, `calib_sites`, `serial_sites`)
+- **US4 (Phase 5)** → after US2 (the operation manager for `SELF_TEST`); `info`/`list` — only after Foundational
+- **US3 (Phase 6)** → after US2 and US4 (a local start is blocked until a successful self-test)
+- **US5 (Phase 7)** → after US2 (the trace detector, `PROGRAM`) and US3 (local copying, `local_start`)
+- **US6 (Phase 8)** → after US2 (the operation manager); independent of US3–US5
+- **Polish (Phase 9)** → after the required stories
 
-### Граф історій
+### Story graph
 
 ```
 Setup → Foundational → US1 → US2 ─┬─► US4 ─► US3 ─► US5
@@ -318,34 +318,34 @@ Setup → Foundational → US1 → US2 ─┬─► US4 ─► US3 ─► US5
 
 ### Within Each User Story
 
-- Тести → падають → реалізація ядра → команди → клієнт/CLI
-- Спільні структури (`proto_defs.h`, `chip_table`, HAL, `core/power`) — у Foundational; задачі історій змінюють чужі файли лише для реєстрації команд у диспетчері та розширення інтерфейсів (T112, T114, T115, T116 — явно позначені)
+- Tests → fail → core implementation → commands → client/CLI
+- Shared structures (`proto_defs.h`, `chip_table`, the HAL, `core/power`) are in Foundational; story tasks change other people's files only to register commands in the dispatcher and to extend interfaces (T112, T114, T115, T116 — explicitly marked)
 
 ---
 
 ## Parallel Example: User Story 1
 
 ```text
-# Тести (різні файли):
-T038 вектори   T039 test_package_validate.c   T040 test_sites.c   T041 test_journal.c   T042 test_upload.c
-T043 test_ihex_package.py   T044–T048 контрактні тести
-# Незалежні модулі:
+# Tests (different files):
+T038 vectors   T039 test_package_validate.c   T040 test_sites.c   T041 test_journal.c   T042 test_upload.c
+T043 test_ihex_package.py   T044–T048 contract tests
+# Independent modules:
 T049 header.c   T050 calib_sites.c   T051 serial_sites.c   T053 slots.c   T054 journal.c   T058 ihex.py
-# Потім: T052 → T055 → T056 → T057;  T059 → T060 → T061
+# Then: T052 → T055 → T056 → T057;  T059 → T060 → T061
 ```
 
 ## Parallel Example: User Story 2
 
 ```text
-T062–T069 модульні тести   T070–T078 контрактні тести   T079 chip_model.c   T083 serial_rng.c
-# Потім: T080 → T081 → T082;  T084;  T085, T086, T087 → T088 → T089;  T090 → T091, T092
+T062–T069 unit tests   T070–T078 contract tests   T079 chip_model.c   T083 serial_rng.c
+# Then: T080 → T081 → T082;  T084;  T085, T086, T087 → T088 → T089;  T090 → T091, T092
 ```
 
-## Parallel Example: US4 і US6 після US2
+## Parallel Example: US4 and US6 after US2
 
 ```text
-Розробник A: T093–T095 → T096 → T097 → T098 (US4) → US3
-Розробник B: T119, T120, T122 → T121 → T123 (US6)
+Developer A: T093–T095 → T096 → T097 → T098 (US4) → US3
+Developer B: T119, T120, T122 → T121 → T123 (US6)
 ```
 
 ---
@@ -354,22 +354,22 @@ T062–T069 модульні тести   T070–T078 контрактні те�
 
 ### MVP First (User Story 1)
 
-1. Phase 1 Setup → Phase 2 Foundational (з тестами, зокрема політика напруг)
-2. Phase 3 US1 → **STOP and VALIDATE**: T044–T048 на `pdk-sim`, потім завантаження на F072
-3. Результат: надійне завантаження й збереження пакета — фундамент автономності
+1. Phase 1 Setup → Phase 2 Foundational (with tests, including the voltage policy)
+2. Phase 3 US1 → **STOP and VALIDATE**: T044–T048 on `pdk-sim`, then uploading to F072
+3. Result: reliable uploading and storing of a package — the foundation of standalone operation
 
 ### Incremental Delivery
 
-1. US1 → цілісне завантаження (MVP)
-2. US2 → запис, верифікація, `PATCH` на моделі (на залізі — разом з `002-chip-engine`)
+1. US1 → intact upload (MVP)
+2. US2 → programming, verification, `PATCH` on the model (on hardware — together with `002-chip-engine`)
 3. US4 → `info` / `list` / `selftest`
-4. US3 → автономний режим
-5. US5 → читання/копіювання
-6. US6 → запуск із UART
+4. US3 → standalone mode
+5. US5 → reading/copying
+6. US6 → running with UART
 
 ### Notes
 
-- [P] = інші файли, без залежностей від незавершених задач
-- Кожна історія завершується checkpoint-ом із зеленими тестами
-- Комітити після кожної задачі або логічної групи
-- Реальні алгоритми PADAUK (`chip_engine` для F072) — фіча `002-chip-engine`; тут — заглушка й модель
+- [P] = different files, no dependencies on unfinished tasks
+- Every story ends with a checkpoint with green tests
+- Commit after each task or logical group
+- The real PADAUK algorithms (the `chip_engine` for F072) are feature `002-chip-engine`; here — a stub and a model
