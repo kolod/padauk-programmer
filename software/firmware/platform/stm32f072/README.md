@@ -1,78 +1,78 @@
-# Платформа STM32F072 (плати Easy PDK)
+# STM32F072 platform (Easy PDK boards)
 
-Ціль налагодження: прошивка для плат Easy PDK programmer на STM32F072C8T6. Розводку взято з
-`easy-pdk-programmer-software/Firmware` (лише як референс). Рушій мікросхем тут — заглушка
-(`platform/common/chip_engine_stub.c`): усі операції з мікросхемою відповідають `OP_UNSUPPORTED`.
+Debug target: firmware for Easy PDK programmer boards based on the STM32F072C8T6. The wiring is taken from
+`easy-pdk-programmer-software/Firmware` (as a reference only). The IC engine here is a stub
+(`platform/common/chip_engine_stub.c`): all IC operations answer `OP_UNSUPPORTED`.
 
-## Піни
+## Pins
 
-| Пін | Функція | Призначення | Примітка |
+| Pin | Function | Purpose | Note |
 |---|---|---|---|
-| PA4 | DAC_OUT1 | опорна напруга регулятора VPP | 0…4095 → 0…13,27 В |
-| PA5 | DAC_OUT2 | опорна напруга регулятора VDD | 0…4095 → 0…6,26 В |
-| PA2 | GPIO, вихід | увімкнення підвищувального перетворювача 15 В (для VPP) | 1 = увімкнено |
-| PA3 | TIM15_CH2 (AF0) | ШІМ ≈ 45 кГц, 50 % → накачка −4,8 В для ОП | |
-| PB0 | ADC_IN8 | вимір VPP через дільник /6 | плата Easy PDK / Lite |
-| PB1 | ADC_IN9 | вимір VDD через дільник /6 | плата Easy PDK / Lite |
-| PA0 | ADC_IN0 | вимір VPP через дільник /6 | лише варіант mini pill |
-| PA1 | ADC_IN1 | вимір VDD через дільник /6 | лише варіант mini pill |
-| PB8 | GPIO, вхід з підтяжкою | визначення варіанта плати | на землі → Lite |
-| PB9 | GPIO, вхід з підтяжкою | визначення варіанта плати | на землі → mini pill |
-| PB3 | — | лінія мікросхеми PA3 / CLK | поки лише Hi-Z |
-| PB4 | — | лінія мікросхеми PA4 | поки лише Hi-Z |
-| PB5 | — | лінія мікросхеми PA6 / DAT | поки лише Hi-Z |
-| PB6 | USART1_TX (AF0) у `RUN` | лінія мікросхеми PA0: UART програматор → мікросхема | Hi-Z поза `RUN` |
-| PB7 | USART1_RX (AF0) у `RUN` | лінія мікросхеми PA7: UART мікросхема → програматор | Hi-Z поза `RUN`; швидкість — автовизначення по старт-біту першого `'U'` |
-| PC13 | GPIO, вихід | LED1 | активний нуль |
-| PC14 | GPIO, вихід | LED2 | активний нуль |
-| PC15 | GPIO, вихід | LED3 | активний нуль |
-| PA15 | GPIO, вхід з підтяжкою до землі | кнопка → локальний запис (`PROGRAM`) | натиснута = 1 |
+| PA4 | DAC_OUT1 | reference voltage of the VPP regulator | 0…4095 → 0…13.27 V |
+| PA5 | DAC_OUT2 | reference voltage of the VDD regulator | 0…4095 → 0…6.26 V |
+| PA2 | GPIO, output | enable of the 15 V boost converter (for VPP) | 1 = enabled |
+| PA3 | TIM15_CH2 (AF0) | PWM ≈ 45 kHz, 50 % → −4.8 V charge pump for the op-amp | |
+| PB0 | ADC_IN8 | VPP measurement via a /6 divider | Easy PDK / Lite board |
+| PB1 | ADC_IN9 | VDD measurement via a /6 divider | Easy PDK / Lite board |
+| PA0 | ADC_IN0 | VPP measurement via a /6 divider | mini pill variant only |
+| PA1 | ADC_IN1 | VDD measurement via a /6 divider | mini pill variant only |
+| PB8 | GPIO, input with pull-up | board variant detection | to ground → Lite |
+| PB9 | GPIO, input with pull-up | board variant detection | to ground → mini pill |
+| PB3 | — | IC line PA3 / CLK | Hi-Z only for now |
+| PB4 | — | IC line PA4 | Hi-Z only for now |
+| PB5 | — | IC line PA6 / DAT | Hi-Z only for now |
+| PB6 | USART1_TX (AF0) in `RUN` | IC line PA0: UART programmer → IC | Hi-Z outside `RUN` |
+| PB7 | USART1_RX (AF0) in `RUN` | IC line PA7: UART IC → programmer | Hi-Z outside `RUN`; baud rate auto-detected from the start bit of the first `'U'` |
+| PC13 | GPIO, output | LED1 | active low |
+| PC14 | GPIO, output | LED2 | active low |
+| PC15 | GPIO, output | LED3 | active low |
+| PA15 | GPIO, input with pull-down | button → local programming (`PROGRAM`) | pressed = 1 |
 | PA11 / PA12 | USB DM / DP | USB CDC, VID/PID `1209:0001` | |
-| PA13 / PA14 | SWDIO / SWCLK | налагодження | |
-| PF0 / PF1 | OSC_IN / OSC_OUT | кварц 8 МГц | без кварцу — HSI |
+| PA13 / PA14 | SWDIO / SWCLK | debug | |
+| PF0 / PF1 | OSC_IN / OSC_OUT | 8 MHz crystal | HSI without a crystal |
 
-Внутрішні ресурси: VREFINT (ADC_IN17) для обчислення VDDA, датчик температури (ADC_IN16) і VREFINT —
-джерело ентропії, CRC — апаратний блок, TIM2 — мікросекундний таймер, SysTick — мілісекунди.
+Internal resources: VREFINT (ADC_IN17) for computing VDDA, the temperature sensor (ADC_IN16) and VREFINT are
+the entropy source, CRC is the hardware unit, TIM2 is the microsecond timer, SysTick gives milliseconds.
 
-Після скидання першим кроком (`Reset_Handler`, ще до ініціалізації RAM) ЦАП виставляється в 0 В,
-а лінії мікросхеми PB3…PB7 стають входами.
+After reset, the first step (`Reset_Handler`, even before RAM initialization) sets the DAC to 0 V,
+and the IC lines PB3…PB7 become inputs.
 
-## Індикація
+## Indication
 
-| Стан | LED1 | LED2 | LED3 |
+| State | LED1 | LED2 | LED3 |
 |---|---|---|---|
-| готовий (`READY`) | ● | | |
-| операція (`BUSY`) | | ● | |
-| успіх (`SUCCESS`) | ● | ● | |
-| помилка (`FAIL`) | | | ● |
-| локальний запуск заблоковано (`BLOCKED`) | ● | | ● |
+| ready (`READY`) | ● | | |
+| operation (`BUSY`) | | ● | |
+| success (`SUCCESS`) | ● | ● | |
+| error (`FAIL`) | | | ● |
+| local start blocked (`BLOCKED`) | ● | | ● |
 
-Тимчасове відображення; остаточна індикація — задача T102.
+Temporary display; the final indication is task T102.
 
-## Тактування
+## Clocking
 
-SYSCLK 48 МГц: HSE 8 МГц × 6 (або HSI / 2 × 12, якщо кварц не запустився). USB — від HSI48 з
-підстроюванням CRS за кадрами SOF. АЦП — від HSI14.
+SYSCLK 48 MHz: HSE 8 MHz × 6 (or HSI / 2 × 12 if the crystal did not start). USB runs from HSI48 with
+CRS trimming from SOF frames. The ADC runs from HSI14.
 
-## Пам'ять
+## Memory
 
-| Адреса | Розмір | Вміст |
+| Address | Size | Contents |
 |---|---|---|
-| `0x08000000` | 44 КБ | прошивка |
-| `0x0800B000` | 8 КБ | слот пакета 0 |
-| `0x0800D000` | 8 КБ | слот пакета 1 |
-| `0x0800F000` | 2 КБ | журнал стану, сторінка A |
-| `0x0800F800` | 2 КБ | журнал стану, сторінка B |
+| `0x08000000` | 44 KB | firmware |
+| `0x0800B000` | 8 KB | package slot 0 |
+| `0x0800D000` | 8 KB | package slot 1 |
+| `0x0800F000` | 2 KB | state log, page A |
+| `0x0800F800` | 2 KB | state log, page B |
 
-Сторінка flash — 2 КБ, запис півсловами (одиниця запису 2 байти). Стирання синхронне: воно
-виконується у фоні між командами, але на час стирання сторінки (≈ 20–40 мс) процесор зупиняється.
+A flash page is 2 KB, written in half-words (the write unit is 2 bytes). Erase is synchronous: it
+runs in the background between commands, but the CPU stalls for the duration of a page erase (≈ 20–40 ms).
 
-## Збірка
+## Build
 
 ```
 cmake -B build/f072 -G Ninja -DPLATFORM=stm32f072 \
-      -DCMAKE_TOOLCHAIN_FILE=<абсолютний шлях>/software/firmware/cmake/arm-none-eabi.cmake software/firmware
+      -DCMAKE_TOOLCHAIN_FILE=<absolute path>/software/firmware/cmake/arm-none-eabi.cmake software/firmware
 cmake --build build/f072
 ```
 
-Результат — `build/f072/pdkprog.elf` і `pdkprog.bin`.
+The output is `build/f072/pdkprog.elf` and `pdkprog.bin`.

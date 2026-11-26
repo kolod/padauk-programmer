@@ -1,284 +1,284 @@
-# Платформа STM32G474 (WeAct STM32G474 core board)
+# STM32G474 platform (WeAct STM32G474 core board)
 
-Прошивка для плати [WeAct Studio STM32G474 core board](https://github.com/WeActStudio/WeActStudio.STM32G474CoreBoard)
-з STM32G474CEU6 (512 КБ flash, 128 КБ RAM), без зовнішньої flash. Розводку плати взято з прикладів
-WeAct. Рушій мікросхем тут — заглушка (`platform/common/chip_engine_stub.c`): усі операції з
-мікросхемою відповідають `OP_UNSUPPORTED`.
+Firmware for the [WeAct Studio STM32G474 core board](https://github.com/WeActStudio/WeActStudio.STM32G474CoreBoard)
+with an STM32G474CEU6 (512 KB flash, 128 KB RAM) and no external flash. The board wiring is taken from the
+WeAct examples. The IC engine here is a stub (`platform/common/chip_engine_stub.c`): all IC
+operations answer `OP_UNSUPPORTED`.
 
-Драйвер живлення плати `hardware/stm32g474-board` вмикає опція збірки `PDK_G474_SUPPLIES` (типово
-`ON`). Для голої плати WeAct без аналогової частини її треба вимкнути (`-DPDK_G474_SUPPLIES=OFF`), бо
-інакше входи АЦП висять у повітрі й можуть пройти перевірки живлення. З `OFF` програматор повідомляє
-межі напруг 0 В, не виставляє `MEASURE_POWER` в `INFO`, і будь-яка ненульова напруга завершується
+The power driver for the `hardware/stm32g474-board` board is enabled by the build option `PDK_G474_SUPPLIES` (default
+`ON`). For a bare WeAct board without the analog part it must be turned off (`-DPDK_G474_SUPPLIES=OFF`), because
+otherwise the ADC inputs float and may pass the supply checks. With `OFF` the programmer reports
+voltage limits of 0 V, does not set `MEASURE_POWER` in `INFO`, and any nonzero voltage ends with
 `VDD_FAULT`/`VPP_FAULT`.
 
-## Піни
+## Pins
 
-| Пін | Функція | Призначення | Примітка |
+| Pin | Function | Purpose | Note |
 |---|---|---|---|
-| PA4 | DAC1_OUT1, без буфера | опорна напруга регулятора VPP | лише з `PDK_G474_SUPPLIES`; 0…4095 → 0…13,27 В |
-| PA5 | DAC1_OUT2, без буфера | опорна напруга регулятора VDD | лише з `PDK_G474_SUPPLIES`; 0…4095 → 0…6,26 В |
-| PA0 | ADC1_IN1 | вимір VDD через дільник /6 | лише з `PDK_G474_SUPPLIES` |
-| PA1 | ADC1_IN2 | вимір VPP через дільник /6 | лише з `PDK_G474_SUPPLIES` |
-| PA8 | TIM1_CH1 (AF6) | затвор ключа підвищувального перетворювача +15 В | лише з `PDK_G474_SUPPLIES`; 400 кГц, ≤ 75 % |
-| PB0 | COMP4_INP0 | +15 В через дільник /6 — регулювання | лише з `PDK_G474_SUPPLIES` |
-| PB1 | COMP1_INP1 | +15 В через окремий дільник /14 — захист від перенапруги | лише з `PDK_G474_SUPPLIES` |
-| PB4 | TIM16_CH1 (AF1) | ШІМ 100 кГц, 50 % → діодна накачка −2,5 В | лише з `PDK_G474_SUPPLIES`; низька швидкість виходу |
-| PC6 | GPIO, вихід | LED | активна одиниця |
-| PC13 | GPIO, вхід з підтяжкою до землі | кнопка KEY → локальний запис (`PROGRAM`) | натиснута = 1 |
+| PA4 | DAC1_OUT1, unbuffered | reference voltage of the VPP regulator | only with `PDK_G474_SUPPLIES`; 0…4095 → 0…13.27 V |
+| PA5 | DAC1_OUT2, unbuffered | reference voltage of the VDD regulator | only with `PDK_G474_SUPPLIES`; 0…4095 → 0…6.26 V |
+| PA0 | ADC1_IN1 | VDD measurement via a /6 divider | only with `PDK_G474_SUPPLIES` |
+| PA1 | ADC1_IN2 | VPP measurement via a /6 divider | only with `PDK_G474_SUPPLIES` |
+| PA8 | TIM1_CH1 (AF6) | gate of the +15 V boost converter switch | only with `PDK_G474_SUPPLIES`; 400 kHz, ≤ 75 % |
+| PB0 | COMP4_INP0 | +15 V via a /6 divider — regulation | only with `PDK_G474_SUPPLIES` |
+| PB1 | COMP1_INP1 | +15 V via a separate /14 divider — overvoltage protection | only with `PDK_G474_SUPPLIES` |
+| PB4 | TIM16_CH1 (AF1) | PWM 100 kHz, 50 % → diode charge pump for −2.5 V | only with `PDK_G474_SUPPLIES`; low output speed |
+| PC6 | GPIO, output | LED | active high |
+| PC13 | GPIO, input with pull-down | KEY button → local programming (`PROGRAM`) | pressed = 1 |
 | PA11 / PA12 | USB DM / DP | USB CDC, VID/PID `1209:0001` | |
-| PA13 / PA14 | SWDIO / SWCLK | налагодження | |
-| PF0 / PF1 | OSC_IN / OSC_OUT | кварц 8 МГц | без кварцу — HSI16 |
-| PB3 | GPIO / SPI3_SCK (AF6) | лінія мікросхеми PA3 (ICPCK): такт при програмуванні, такт SPI-slave при калібруванні | FT; див. «Роз'єм ICP»; у прошивці ще не задіяно |
-| PA15 | TIM2_CH1 (AF1), лише вхід | та сама лінія PA3: захоплення фронтів для виміру частоти | FT_f; ніколи не вихід; у прошивці ще не задіяно |
-| PC11 | GPIO / SPI3_MISO (AF6) | лінія мікросхеми PA4: дані в OTP-мікросхему, синхронні імпульси «+1» при калібруванні | FT_f; у прошивці ще не задіяно |
-| PB5 | GPIO | лінія мікросхеми PA6 (ICPDA) | FT_f; у прошивці ще не задіяно |
-| PB6 | GPIO / USART1_TX (AF7) | лінія мікросхеми PA0: UART у режимі RUN, вихід компаратора при калібруванні BG | **FT_c — лише до 5,0 В**, див. «Допустимі напруги»; прошивка знімає з PB4/PB6 підтяжки UCPD dead battery |
-| PB7 | GPIO / USART1_RX (AF7) | лінія мікросхеми PA7: UART у режимі RUN | FT_f; USART1 лише в `RUN` (`platform/common/usart_bridge.c`), `RUN` обмежує VDD до 5,0 В через PB6 |
+| PA13 / PA14 | SWDIO / SWCLK | debug | |
+| PF0 / PF1 | OSC_IN / OSC_OUT | 8 MHz crystal | HSI16 without a crystal |
+| PB3 | GPIO / SPI3_SCK (AF6) | IC line PA3 (ICPCK): clock during programming, SPI-slave clock during calibration | FT; see "ICP connector"; not yet used by the firmware |
+| PA15 | TIM2_CH1 (AF1), input only | the same PA3 line: edge capture for frequency measurement | FT_f; never an output; not yet used by the firmware |
+| PC11 | GPIO / SPI3_MISO (AF6) | IC line PA4: data into the OTP IC, synchronous "+1" pulses during calibration | FT_f; not yet used by the firmware |
+| PB5 | GPIO | IC line PA6 (ICPDA) | FT_f; not yet used by the firmware |
+| PB6 | GPIO / USART1_TX (AF7) | IC line PA0: UART in RUN mode, comparator output during BG calibration | **FT_c — up to 5.0 V only**, see "Permissible voltages"; the firmware removes the UCPD dead-battery pull-downs from PB4/PB6 |
+| PB7 | GPIO / USART1_RX (AF7) | IC line PA7: UART in RUN mode | FT_f; USART1 only in `RUN` (`platform/common/usart_bridge.c`), `RUN` limits VDD to 5.0 V because of PB6 |
 
-Вихідні буфери ЦАП вимкнено: навантаження — вхід ОП зі стяжкою 240 кОм, а дійти до 0 В може лише
-ЦАП без буфера (з буфером гарантовано ~0,2 В … VDDA − 0,2 В, що на VPP після підсилення дало б
-до ~0,85 В замість нуля). Вихідний опір ЦАП без буфера (~10–15 кОм) разом із конденсатором 10 нФ на
-піні утворює RC-фільтр від завад, окремий резистор не потрібен. Стяжка 240 кОм з цим опором дає
-похибку масштабу кількох відсотків. Її, як і розкид дільників АЦП, компенсує калібрування живлення
-зовнішнім вольтметром: `pdkprog calibrate` (від'єднати цільову плату; коефіцієнти зберігаються в
-журналі стану, див. contracts/protocol.md, «Калібрування живлення»).
+The DAC output buffers are off: the load is an op-amp input with a 240 kΩ pull-down, and only an
+unbuffered DAC can reach 0 V (a buffered one guarantees ~0.2 V … VDDA − 0.2 V, which on VPP after amplification
+would give up to ~0.85 V instead of zero). The unbuffered DAC output resistance (~10–15 kΩ) together with the 10 nF
+capacitor on the pin forms an RC noise filter, and no separate resistor is needed. The 240 kΩ pull-down with this resistance gives
+an error of a few percent. It, like the spread of the ADC dividers, is compensated by supply calibration
+against an external voltmeter: `pdkprog calibrate` (disconnect the target board; the coefficients are stored in
+the state log, see contracts/protocol.md, "Supply calibration").
 
-Піни й масштаби відповідають схемі `hardware/stm32g474-board.dchxml`: підсилення ОП (LM358) ×2 для VDD
-(R3/R2 = 20k/20k) і ×4,23 для VPP (R8/R7 = 20k/6,2k), дільники АЦП 100k/20k, дільники +15 В 100k/20k
-(PB0) і 130k/10k (PB1). Перевірено на зібраній платі: +15 В і −2,5 В піднімаються, `pdkprog calibrate`
-дав поправки VDD/VPP у межах ±0,6 %.
-Довільні напруги для перевірки вольтметром (після калібрування, нічого не під'єднано): `pdkprog supply`
-питає VDD [VPP] інтерактивно, `pdkprog supply 3.3 12.5 --hold 30` тримає їх 30 с і щосекунди показує
-виміри (середнє, відхилення від заданої й розкид min..max). `--no-check` лишає напругу поданою, навіть
-якщо вона не влазить у допуск ±2 %, — щоб звірити її з вольтметром.
-Лінії до мікросхеми PADAUK описано нижче («Роз'єм ICP»); прошивка їх поки не використовує — рушій
-мікросхем є заглушкою.
+The pins and scales match the schematic `hardware/stm32g474-board.dchxml`: op-amp (LM358) gain ×2 for VDD
+(R3/R2 = 20k/20k) and ×4.23 for VPP (R8/R7 = 20k/6.2k), ADC dividers 100k/20k, +15 V dividers 100k/20k
+(PB0) and 130k/10k (PB1). Verified on an assembled board: +15 V and −2.5 V come up, and `pdkprog calibrate`
+produced VDD/VPP corrections within ±0.6 %.
+Arbitrary voltages for checking with a voltmeter (after calibration, nothing connected): `pdkprog supply`
+asks for VDD [VPP] interactively, and `pdkprog supply 3.3 12.5 --hold 30` holds them for 30 s and shows the
+measurements every second (mean, deviation from the set value, and min..max spread). `--no-check` leaves the voltage applied even
+if it does not fit the ±2 % tolerance, so that it can be compared with a voltmeter.
+The lines to the PADAUK IC are described below ("ICP connector"); the firmware does not use them yet — the IC
+engine is a stub.
 
-## Роз'єм ICP
+## ICP connector
 
-Два роз'єми на цільову плату (схема `hardware/stm32g474-board.dchxml`): J1 «PDK ICP» — п'ять ліній
-внутрішньосхемного програмування PADAUK (ICPCK, ICPDA, VDD, GND, ICVPP) плюс PA4; J2 «PDK UART» —
-PA0 і PA7 для режиму RUN і калібрування BandGap.
+Two connectors to the target board (schematic `hardware/stm32g474-board.dchxml`): J1 "PDK ICP" — the five
+PADAUK in-circuit programming lines (ICPCK, ICPDA, VDD, GND, ICVPP) plus PA4; J2 "PDK UART" —
+PA0 and PA7 for RUN mode and BandGap calibration.
 
-| Контакт | Вивід мікросхеми | Програматор | Резистор |
+| Contact | IC pin | Programmer | Resistor |
 |---|---|---|---|
-| J1.1, J2.1 | VDD | `Vdd` — вихід ОП після R18 | — |
-| J1.2 | PA3 / ICPCK | PB3 і PA15 | R19 (PB3), R24 (PA15) |
+| J1.1, J2.1 | VDD | `Vdd` — op-amp output after R18 | — |
+| J1.2 | PA3 / ICPCK | PB3 and PA15 | R19 (PB3), R24 (PA15) |
 | J1.3 | PA4 | PC11 | R21 |
 | J1.4 | PA6 / ICPDA | PB5 | R20 |
-| J1.5 | PA5 / PRSTB (VPP) | `Vpp` — вихід ОП після R17 | — |
+| J1.5 | PA5 / PRSTB (VPP) | `Vpp` — op-amp output after R17 | — |
 | J1.6, J2.4 | GND | GND | — |
 | J2.2 | PA0 | PB6 | R22 |
 | J2.3 | PA7 | PB7 | R23 |
 
-Що на якій лінії (за сімействами, `docs/easy-pdk-programmer-protocol.md`):
+What is on each line (by family, `docs/easy-pdk-programmer-protocol.md`):
 
-- PA3 — такт від програматора; у калібруванні — вихід частоти мікросхеми.
-- PA6 — дані: для FLASH (PFS154, PFS172, PFS173) в обидва боки, для OTP — лише з мікросхеми.
-- PA4 — для OTP (PMS150C, PMS152, PMS171B…) **дані в мікросхему**; у калібруванні — імпульси «+1».
-- PA0 — вихід компаратора при калібруванні BandGap; UART програматор → мікросхема в режимі RUN;
-  CLK2 для OTP3_1.
-- PA7 — UART мікросхема → програматор у режимі RUN; «commit» для OTP3_1.
+- PA3 — clock from the programmer; during calibration, the IC's frequency output.
+- PA6 — data: for FLASH (PFS154, PFS172, PFS173) in both directions, for OTP — only from the IC.
+- PA4 — for OTP (PMS150C, PMS152, PMS171B…) **data into the IC**; during calibration, "+1" pulses.
+- PA0 — comparator output during BandGap calibration; UART programmer → IC in RUN mode;
+  CLK2 for OTP3_1.
+- PA7 — UART IC → programmer in RUN mode; "commit" for OTP3_1.
 
-Лінія PA3 заведена на два піни: PB3 — такт при програмуванні й такт SPI3 при калібруванні, PA15 —
-вхід захоплення TIM2. Один пін не може одночасно бути тактом SPI3 і входом TIM2, а так вимір частоти
-й імпульси «+1» йдуть паралельно. PA15 MUST лишатися входом: якби він вів лінію разом із PB3, струм
-обмежили б лише R19 + R24 (≈ 16 мА).
+The PA3 line goes to two pins: PB3 is the clock during programming and the SPI3 clock during calibration, PA15 is the
+TIM2 capture input. One pin cannot be both the SPI3 clock and a TIM2 input at once, and frequency measurement
+and "+1" pulses run in parallel. PA15 MUST stay an input: if it drove the line together with PB3, the current
+would be limited only by R19 + R24 (≈ 16 mA).
 
-Усі сигнальні лінії мають послідовний резистор 100 Ом біля роз'єму (як в Easy PDK): він обмежує
-струм, коли мікросхема й програматор одночасно ведуть лінію. Від перенапруги він не захищає — у
-5-вольт-толерантних пінів G474 немає діода на VDD (див. нижче).
+All signal lines have a 100 Ω series resistor near the connector (as in Easy PDK): it limits the
+current when the IC and the programmer drive the line at the same time. It does not protect against overvoltage — the
+5 V-tolerant pins of the G474 have no diode to VDD (see below).
 
-Мікросхема при VDD 5,8 В має поріг високого рівня 0,7·VDD ≈ 4 В, а програматор видає 3,3 В. Easy PDK
-працює так само (режим програмування PADAUK це приймає), але це варто перевірити на залізі.
+At VDD 5.8 V the IC has a high-level threshold of 0.7·VDD ≈ 4 V, while the programmer outputs 3.3 V. Easy PDK
+works the same way (PADAUK programming mode accepts this), but it is worth verifying on hardware.
 
-## Допустимі напруги на пінах
+## Permissible voltages on the pins
 
-За даташитом STM32G474 (DS12288 Rev 6, табл. 12 «pin definition», табл. 14 «Voltage
-characteristics», «General operating conditions»):
+According to the STM32G474 datasheet (DS12288 Rev 6, table 12 "pin definition", table 14 "Voltage
+characteristics", "General operating conditions"):
 
-| Тип піна | Робочий діапазон VIN | Абсолютний максимум |
+| Pin type | Operating VIN range | Absolute maximum |
 |---|---|---|
-| FT, FT_f, FT_fa (5-вольт-толерантні) | −0,3 … min(min(VDD, VDDA) + 3,6 В; 5,5 В) = **5,5 В** | min(VDD, VDDA) + 4,0 В ≈ 7,3 В |
-| FT_c (лінії UCPD CC: PB4, PB6) | −0,3 … **5,0 В** | 5,5 В |
-| TT, TT_a | −0,3 … VDD + 0,3 В = 3,6 В | 4,0 В |
+| FT, FT_f, FT_fa (5 V-tolerant) | −0.3 … min(min(VDD, VDDA) + 3.6 V; 5.5 V) = **5.5 V** | min(VDD, VDDA) + 4.0 V ≈ 7.3 V |
+| FT_c (UCPD CC lines: PB4, PB6) | −0.3 … **5.0 V** | 5.5 V |
+| TT, TT_a | −0.3 … VDD + 0.3 V = 3.6 V | 4.0 V |
 
-Толерантність FT діє лише в цифровому режимі: увімкнена аналогова функція на піні _a знімає її.
-Позитивної інжекції (VIN > VDD) для FT-пінів немає, тож послідовний резистор вхідну напругу не
-обмежує — межу треба тримати напругою живлення мікросхеми.
+FT tolerance applies only in digital mode: an enabled analog function on an _a pin removes it.
+FT pins have no positive injection (VIN > VDD), so a series resistor does not limit the input voltage —
+the limit must be kept by the IC's supply voltage.
 
-Піни, з'єднані з мікросхемою:
+Pins connected to the IC:
 
-| Пін | Тип | Лінія | Найбільша напруга від мікросхеми | Висновок |
+| Pin | Type | Line | Highest voltage from the IC | Conclusion |
 |---|---|---|---|---|
-| PB3 | FT | PA3 | VDD мікросхеми | гаразд до 5,5 В |
-| PA15 | FT_f | PA3 | VDD мікросхеми | гаразд до 5,5 В |
-| PC11 | FT_f | PA4 | VDD мікросхеми | гаразд до 5,5 В |
-| PB5 | FT_f | PA6 | VDD мікросхеми | гаразд до 5,5 В |
-| PB7 | FT_f | PA7 | VDD мікросхеми (RUN) | гаразд до 5,5 В |
-| PB6 | **FT_c** | PA0 | VDD мікросхеми (RUN, BG) | гаразд лише до **5,0 В** |
+| PB3 | FT | PA3 | IC VDD | fine up to 5.5 V |
+| PA15 | FT_f | PA3 | IC VDD | fine up to 5.5 V |
+| PC11 | FT_f | PA4 | IC VDD | fine up to 5.5 V |
+| PB5 | FT_f | PA6 | IC VDD | fine up to 5.5 V |
+| PB7 | FT_f | PA7 | IC VDD (RUN) | fine up to 5.5 V |
+| PB6 | **FT_c** | PA0 | IC VDD (RUN, BG) | fine only up to **5.0 V** |
 
-Решта сигнальних пінів отримує лише поділені напруги (входи АЦП і компараторів — TT_a, ≤ 2,7 В навіть
-при 16 В на шині +15 В) або самі є виходами (PA4/PA5 — ЦАП, PA8 — затвор, PB4 — накачка).
+The remaining signal pins receive only divided voltages (ADC and comparator inputs — TT_a, ≤ 2.7 V even
+with 16 V on the +15 V rail) or are outputs themselves (PA4/PA5 — DAC, PA8 — gate, PB4 — charge pump).
 
-Звідси обмеження для прошивки й плати:
+This gives the following constraints for the firmware and the board:
 
-- Мікросхема віддає сигнали на піни програматора лише при напругах команд і читання (2,5–3 В), при
-  калібруванні (VDD з вставки: зазвичай 3–5 В, для BG — 3,95 В) і в режимі RUN. Ці напруги MUST NOT
-  перевищувати 5,5 В — прошивка має обмежувати VDD у `RUN` і при калібруванні до 5,5 В (а з PB6 на
-  лінії PA0 — до 5,0 В, поки її не перенесено). Напруги запису (до 5,8 В) і VPP (до 11 В, лише на
-  J1.5 → дільник АЦП) на сигнальні піни не потрапляють.
-- **Рекомендація для схеми:** перенести лінію PA0 (R22) з PB6 (FT_c) на **PA9** (FT_fda, USART1_TX,
-  AF7, вільний, «цифровий» бік корпусу). USART1 лишається той самий (RX — PB7), а межа стає 5,5 В.
-  Високий рівень на PA9 вмикає підтяжку 5,1 кОм UCPD на PB6 (dead battery), але прошивка вимикає її
-  (`PWR_CR3.UCPD1_DBDIS`) одразу після старту.
-- Після скидання PA15 має внутрішню підтяжку вгору (JTDI), а PB4 — вгору (NJTRST): до ініціалізації
-  через R24 на лінію PA3 потрапляє ~3,3 В через ~40 кОм. Прошивка має якомога раніше перевести PA15 у
-  вхід без підтяжки.
+- The IC sends signals to the programmer pins only at command and read voltages (2.5–3 V), during
+  calibration (VDD from the stub: usually 3–5 V, 3.95 V for BG), and in RUN mode. These voltages MUST NOT
+  exceed 5.5 V — the firmware must limit VDD in `RUN` and during calibration to 5.5 V (and to 5.0 V with PB6 on
+  the PA0 line, until it is moved). The write voltages (up to 5.8 V) and VPP (up to 11 V, only on
+  J1.5 → ADC divider) do not reach the signal pins.
+- **Schematic recommendation:** move the PA0 line (R22) from PB6 (FT_c) to **PA9** (FT_fda, USART1_TX,
+  AF7, free, on the "digital" side of the package). USART1 stays the same (RX is PB7), and the limit becomes 5.5 V.
+  A high level on PA9 turns on the 5.1 kΩ UCPD pull-down on PB6 (dead battery), but the firmware disables it
+  (`PWR_CR3.UCPD1_DBDIS`) right after start.
+- After reset, PA15 has an internal pull-up (JTDI) and PB4 a pull-up (NJTRST): before initialization,
+  ~3.3 V reaches the PA3 line through R24 via ~40 kΩ. The firmware must switch PA15 to an input
+  without a pull-up as early as possible.
 
-## Вимір частоти при калібруванні
+## Frequency measurement during calibration
 
-Повний опис — `docs/padauk-calibration.md` (розділи 3–6 і 8). Коротко: мікросхема виконує
-вимірювальний цикл, PA3 — меандр рівно 7 тактів мікросхеми (`f_SYSCLK = 7 · f(PA3)`), а PA4
-опитується раз за прохід — 1 збільшує калібрувальне значення на одиницю. Імпульс «+1» мусить накрити
-рівно один прохід (875 нс при 8 МГц), тому його видає апаратура, синхронізована з PA3:
+The full description is in `docs/padauk-calibration.md` (sections 3–6 and 8). In short: the IC runs a
+measurement loop, PA3 is a square wave of exactly 7 IC clocks (`f_SYSCLK = 7 · f(PA3)`), and PA4 is
+polled once per pass — a 1 increases the calibration value by one. The "+1" pulse must cover
+exactly one pass (875 ns at 8 MHz), so it is generated by hardware synchronized with PA3:
 
-- **SPI3 у режимі slave**: SCK — PB3 (такт від PA3 мікросхеми, AF6), MISO — PC11 (до PA4, AF6),
-  `CPOL = 0, CPHA = 0`. У буфер передавання пишеться `(1 << n) − 1` — n одиниць поспіль дають рівно n
-  кроків (як в Easy PDK).
-- **Частота** — взаємним виміром (reciprocal counting) на PA15: TIM2 (32 біт) від 170 МГц, CH1
-  захоплює фронти з подільником ÷8; з N = 64 захоплень
-  `f(PA3) = 8 · (N − 1) · 170 МГц / (t_останнє − t_перше)`. При SYSCLK 8 МГц (PA3 ≈ 1,14 МГц) це
-  ~0,44 мс і роздільність ~0,001 %. Альтернатива без PA15 — рахувати біти SPI3 і час за TIM2, як
+- **SPI3 in slave mode**: SCK is PB3 (clock from the IC's PA3, AF6), MISO is PC11 (to PA4, AF6),
+  `CPOL = 0, CPHA = 0`. `(1 << n) − 1` is written to the transmit buffer — n ones in a row give exactly n
+  steps (as in Easy PDK).
+- **Frequency** by reciprocal counting on PA15: TIM2 (32-bit) from 170 MHz, CH1
+  captures edges with a ÷8 prescaler; with N = 64 captures,
+  `f(PA3) = 8 · (N − 1) · 170 MHz / (t_last − t_first)`. At SYSCLK 8 MHz (PA3 ≈ 1.14 MHz) this takes
+  ~0.44 ms and gives a resolution of ~0.001 %. An alternative without PA15 is to count SPI3 bits and time with TIM2, like
   Easy PDK.
-- Немає фронтів 1 с — вимір невдалий; прапорець перезахоплення (`CC1OF`) — сигнал швидший, ніж
-  встигає прошивка (збільшити подільник).
-- Опорна частота — кварц HSE 8 МГц (±20 ppm). Якщо прошивка працює від HSI16 (±1 %), калібрування
-  частоти треба заборонити або явно попередити.
-- BandGap: результат компаратора мікросхема видає на PA0 → PB6 як GPIO-вхід.
-- Перевірки, що мікросхема виконує саме ту вставку (FR-055), — `docs/padauk-calibration.md` §8.
+- No edges for 1 s — the measurement failed; the overcapture flag (`CC1OF`) means the signal is faster than the
+  firmware can keep up with (increase the prescaler).
+- The reference frequency is the HSE 8 MHz crystal (±20 ppm). If the firmware runs from HSI16 (±1 %), frequency
+  calibration must be forbidden or an explicit warning given.
+- BandGap: the IC outputs the comparator result on PA0 → PB6 as a GPIO input.
+- Checks that the IC runs exactly that stub (FR-055) are in `docs/padauk-calibration.md` §8.
 
-У прошивці цього ще немає: примітиви `calibrate`/`measure_freq` рушія мікросхем — задачі T085, T112,
+The firmware does not have this yet: the IC engine primitives `calibrate`/`measure_freq` are tasks T085, T112,
 T133.
 
-## Шини +15 В і −2,5 В
+## +15 V and −2.5 V rails
 
-Шини для вихідного каскаду (ОП, що формує VDD і VPP) робляться без спеціалізованих мікросхем.
+The rails for the output stage (the op-amp that forms VDD and VPP) are built without dedicated ICs.
 
-**+15 В — підвищувальний перетворювач від USB 5 В.** Ключ (N-MOSFET із логічним рівнем затвора,
-наприклад AO3400 або SI2302), дросель 33–47 мкГн із струмом насичення ≥ 0,5 А, діод Шотткі (SS14),
-конденсатор 10–22 мкФ / 25 В. Розрахунковий струм — до ~25 мА (VDD мікросхеми під час запису до
-20 мА, VPP, дільники, ОП), закладено 30–50 мА.
+**+15 V — a boost converter from USB 5 V.** A switch (a logic-level N-MOSFET,
+for example AO3400 or SI2302), a 33–47 µH inductor with saturation current ≥ 0.5 A, a Schottky diode (SS14),
+and a 10–22 µF / 25 V capacitor. The estimated current is up to ~25 mA (IC VDD during programming up to
+20 mA, VPP, dividers, op-amp); 30–50 mA is provided for.
 
-- Регулювання апаратне, гістерезисне: COMP4 порівнює вихід (PB0, /6) з порогом від внутрішнього
-  DAC3_CH2 і, поки вихід вищий, гасить імпульси TIM1_CH1 через OCREF_CLR. Прошивка лише задає поріг
-  (плавний пуск за 20 мс) і перевіряє, що шина піднялась за 50 мс.
-- Захист від перенапруги: COMP1 порівнює окремий дільник (PB1, /14, наприклад 130 кОм / 10 кОм) з
-  VREFINT (1,21 В) — поріг ≈ 17 В. Спрацювання вимикає ШІМ через аварійний вхід TIM1 апаратно,
-  без участі програми, і ШІМ не вмикається до скидання. Конфігурацію COMP1 заблоковано бітом LOCK.
-- Якщо шина не піднялась або спрацював захист, драйвер тримає ЦАП VDD/VPP на 0 В, а `INFO` не
-  виставляє `MEASURE_POWER`.
-- Обов'язково на платі: резистор 10 кОм із затвора на землю (ключ закритий після скидання й поки
-  PA8 у Hi-Z) і стабілітрон або TVS на 16–18 В на шині +15 В (пасивне обмеження, якщо зупиниться
-  весь МК або обірветься дільник).
+- Regulation is in hardware, with hysteresis: COMP4 compares the output (PB0, /6) with a threshold from the internal
+  DAC3_CH2 and, while the output is higher, blanks the TIM1_CH1 pulses through OCREF_CLR. The firmware only sets the threshold
+  (soft start over 20 ms) and checks that the rail came up within 50 ms.
+- Overvoltage protection: COMP1 compares a separate divider (PB1, /14, for example 130 kΩ / 10 kΩ) with
+  VREFINT (1.21 V) — a threshold of ≈ 17 V. When it trips, it shuts down the PWM through the TIM1 break input in hardware,
+  without the program, and the PWM is not re-enabled until reset. The COMP1 configuration is locked with the LOCK bit.
+- If the rail did not come up or the protection tripped, the driver keeps the VDD/VPP DAC at 0 V, and `INFO` does not
+  set `MEASURE_POWER`.
+- Mandatory on the board: a 10 kΩ resistor from the gate to ground (the switch is off after reset and while
+  PA8 is Hi-Z) and a 16–18 V Zener diode or TVS on the +15 V rail (passive limiting if the
+  whole MCU stops or the divider breaks).
 
-**Коло затвора.** Між PA8 і затвором — послідовний резистор 22–47 Ом (наприклад, 33 Ом), фізично біля
-ключа. Він гасить дзвін, який ємність затвора (~0,6–1 нФ у AO3400) утворює з індуктивністю доріжки,
-зрізає короткий пік струму піна при перезаряді затвора і зменшує завади, зокрема на АЦП. Перемикання
-при цьому триває ~30–50 нс; при 400 кГц (період 2,5 мкс) втрати на перемикання ≈ 0,05–0,1 Вт при
-струмі дроселя ~0,3 А. Прошивка виставляє PA8 середню швидкість виходу (medium), тож фронти задає
-саме цей резистор, а не пін. Якщо ключ гріється, частоту можна знизити до 200–300 кГц (`BOOST_PWM_HZ` у
-`hal_g474_power.c`), але тоді потрібен дросель більшої індуктивності.
+**Gate circuit.** Between PA8 and the gate there is a 22–47 Ω series resistor (for example 33 Ω), placed physically next to
+the switch. It damps the ringing that the gate capacitance (~0.6–1 nF for the AO3400) forms with the trace inductance,
+cuts the short pin current spike when the gate is charged, and reduces noise, including on the ADC. Switching
+then takes ~30–50 ns; at 400 kHz (a 2.5 µs period) the switching loss is ≈ 0.05–0.1 W at an
+inductor current of ~0.3 A. The firmware sets PA8 to medium output speed, so the edges are set
+by this resistor, not by the pin. If the switch gets hot, the frequency can be lowered to 200–300 kHz (`BOOST_PWM_HZ` in
+`hal_g474_power.c`), but then an inductor with higher inductance is needed.
 
-Резистор 10 кОм на землю ставиться безпосередньо між затвором і витоком ключа, тобто після
-послідовного резистора: тоді ключ закритий навіть при обриві послідовного резистора.
+The 10 kΩ resistor to ground goes directly between the gate and the source of the switch, that is, after the
+series resistor: then the switch is off even if the series resistor breaks.
 
 ```
-PA8 ──[33 Ом]──┬── затвор ключа
-               │
-            [10 кОм]
-               │
-GND ───────────┴── витік ключа
+PA8 ──[33 Ω]──┬── switch gate
+              │
+           [10 kΩ]
+              │
+GND ──────────┴── switch source
 ```
 
-**−2,5 В — діодна накачка.** ШІМ із PB4 через конденсатор і два діоди Шотткі (BAT54S або RB521),
-конденсатори 1–10 мкФ. Напруга ≈ −(3,3 В − 2·Uпр), струм кілька міліампер — досить для власного
-споживання ОП (~1 мА) і коротких імпульсів розряду виходу.
+**−2.5 V — a diode charge pump.** PWM from PB4 through a capacitor and two Schottky diodes (BAT54S or RB521),
+with 1–10 µF capacitors. The voltage is ≈ −(3.3 V − 2·Uf), the current a few milliamps — enough for the op-amp's own
+consumption (~1 mA) and short output discharge pulses.
 
-Пін накачки винесено на протилежний від аналогових пінів бік корпусу. У UFQFPN48 PA0…PB2 (піни 8–19),
-VREF+ і VDDA (20, 21) стоять поруч: ШІМ на будь-якому з них (наприклад, PA6 — пін 14, сусід PA5 з
-опорою VDD) потрапляв би через ємність між пінами й доріжками на опори VDD/VPP (а вихідний каскад
-ще й підсилює їх), на входи компараторів +15 В і на VDDA. PB4 — пін 42; низька швидкість виходу
-додатково згладжує фронти. На платі варто також поставити RC-фільтри на виходах ЦАП перед ОП,
-окремий фільтр (ферит або LC) на VDDA і вести доріжки накачки й підвищувального перетворювача
-подалі від аналогових, з окремим поверненням на землю.
+The charge pump pin is placed on the side of the package opposite the analog pins. In the UFQFPN48, PA0…PB2 (pins 8–19),
+VREF+ and VDDA (20, 21) are next to each other: PWM on any of them (for example PA6 — pin 14, a neighbor of PA5 with the
+VDD reference) would couple through pin and trace capacitance into the VDD/VPP references (and the output stage
+amplifies them), the +15 V comparator inputs, and VDDA. PB4 is pin 42; the low output speed
+further smooths the edges. On the board it is also worth adding RC filters on the DAC outputs before the op-amp,
+a separate filter (ferrite or LC) on VDDA, and routing the charge pump and boost converter traces
+away from the analog ones, with a separate ground return.
 
-Після скидання (і в обробнику збою) прошивка першим кроком переводить PA8 у низький рівень, зупиняє
-TIM1 і ставить ЦАП VDD/VPP на 0 В.
+After reset (and in the fault handler) the firmware's first step is to drive PA8 low, stop
+TIM1, and set the VDD/VPP DAC to 0 V.
 
-Внутрішні ресурси: VREFINT (ADC1_IN18, калібрування при VDDA = 3,0 В) для обчислення VDDA,
-апаратний генератор випадкових чисел — джерело серійних номерів, CRC — апаратний блок, TIM2 —
-мікросекундний таймер, SysTick — мілісекунди.
+Internal resources: VREFINT (ADC1_IN18, calibrated at VDDA = 3.0 V) for computing VDDA,
+the hardware random number generator is the source of serial numbers, CRC is the hardware unit, TIM2 is the
+microsecond timer, SysTick gives milliseconds.
 
 
-## Індикація
+## Indication
 
-Один LED, стан показується режимом блимання:
+A single LED; the state is shown by the blink pattern:
 
-| Стан | LED |
+| State | LED |
 |---|---|
-| готовий (`READY`) | світиться постійно |
-| операція (`BUSY`) | 4 Гц |
-| успіх (`SUCCESS`) | 1 Гц |
-| помилка (`FAIL`) | 10 Гц |
-| локальний запуск заблоковано (`BLOCKED`) | не світиться |
+| ready (`READY`) | steady on |
+| operation (`BUSY`) | 4 Hz |
+| success (`SUCCESS`) | 1 Hz |
+| error (`FAIL`) | 10 Hz |
+| local start blocked (`BLOCKED`) | off |
 
-Тимчасове відображення; остаточна індикація — задача T102.
+Temporary display; the final indication is task T102.
 
-## Тактування
+## Clocking
 
-SYSCLK 170 МГц (діапазон 1, режим boost): HSE 8 МГц / 2 × 85 / 2 (або HSI16 / 4 × 85 / 2, якщо кварц не
-запустився). APB1 і APB2 — 170 МГц. USB і RNG — від HSI48 з підстроюванням CRS за кадрами SOF.
-АЦП — HCLK / 4.
+SYSCLK 170 MHz (range 1, boost mode): HSE 8 MHz / 2 × 85 / 2 (or HSI16 / 4 × 85 / 2 if the crystal did not
+start). APB1 and APB2 are 170 MHz. USB and RNG run from HSI48 with CRS trimming from SOF frames.
+The ADC runs from HCLK / 4.
 
-## Пам'ять
+## Memory
 
-| Адреса | Розмір | Вміст |
+| Address | Size | Contents |
 |---|---|---|
-| `0x08000000` | 256 КБ (банк 1) | прошивка |
-| `0x08040000` | 4 × 16 КБ | слоти пакетів 0…3 (банк 2) |
-| `0x08050000` | 1 сторінка | журнал стану, сторінка A |
-| `0x08051000` | 1 сторінка | журнал стану, сторінка B |
+| `0x08000000` | 256 KB (bank 1) | firmware |
+| `0x08040000` | 4 × 16 KB | package slots 0…3 (bank 2) |
+| `0x08050000` | 1 page | state log, page A |
+| `0x08051000` | 1 page | state log, page B |
 
-Прошивка виконується з банку 1, а пакети й журнал лежать у банку 2. Тому стирання банку 2 не
-зупиняє процесор, і фонове стирання справді асинхронне. Це працює в режимі двох банків
-(`DBANK = 1`, заводське налаштування), сторінка 2 КБ; з `DBANK = 0` прошивка працює зі сторінками
-4 КБ, але стирання зупиняє процесор.
+The firmware runs from bank 1, while the packages and the log are in bank 2. So erasing bank 2 does not
+stall the CPU, and background erase is truly asynchronous. This works in dual-bank mode
+(`DBANK = 1`, the factory setting) with a 2 KB page; with `DBANK = 0` the firmware works with 4 KB pages,
+but erase stalls the CPU.
 
-Запис — подвійними словами по 8 байт, кожне пишеться один раз (ECC). Подвійна помилка ECC у слові,
-недописаному через обрив живлення, викликає NMI: обробник скидає прапорець, а такий пакет відкидає
-перевірка CRC.
+Writes are in 8-byte double words, each written once (ECC). A double ECC error in a word
+left incomplete by a power loss causes an NMI: the handler clears the flag, and such a package is rejected by
+the CRC check.
 
-## Збірка
+## Build
 
 ```
 cmake -B build/g474 -G Ninja -DPLATFORM=stm32g474 [-DPDK_G474_SUPPLIES=OFF] \
-      -DCMAKE_TOOLCHAIN_FILE=<абсолютний шлях>/software/firmware/cmake/arm-cortex-m4f.cmake software/firmware
+      -DCMAKE_TOOLCHAIN_FILE=<absolute path>/software/firmware/cmake/arm-cortex-m4f.cmake software/firmware
 cmake --build build/g474
 ```
 
-Результат — `build/g474/pdkprog-g474.elf` і `pdkprog-g474.bin`.
+The output is `build/g474/pdkprog-g474.elf` and `pdkprog-g474.bin`.
 
-## Прошивка через DFU
+## Flashing via DFU
 
-Вбудований завантажувач STM32: утримати BOOT0, натиснути й відпустити NRST, відпустити BOOT0 —
-з'явиться «STM32 BOOTLOADER». Далі:
+The STM32 built-in bootloader: hold BOOT0, press and release NRST, release BOOT0 —
+"STM32 BOOTLOADER" appears. Then:
 
 ```
 dfu-util -a 0 -s 0x08000000:leave -D pdkprog-g474.bin
 ```
 
-На Windows 7 завантажувачу потрібен драйвер WinUSB (Zadig), а COM-порту програматора —
-`software/drivers/windows/padauk-programmer.inf` (прив'язує вбудований `usbser.sys` до `1209:0001`;
-INF непідписаний, Windows попередить один раз). Windows 10 і новіші обходяться без драйверів.
-Клієнт `pdkprog` працює з Python 3.8, останнім для Windows 7.
+On Windows 7 the bootloader needs the WinUSB driver (Zadig), and the programmer's COM port needs
+`software/drivers/windows/padauk-programmer.inf` (it binds the built-in `usbser.sys` to `1209:0001`;
+the INF is unsigned, and Windows warns once). Windows 10 and later need no drivers.
+The `pdkprog` client works with Python 3.8, the last one for Windows 7.

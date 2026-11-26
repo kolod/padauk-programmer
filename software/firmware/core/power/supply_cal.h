@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* Supply calibration with an external meter (contracts/protocol.md, "Калібрування живлення"):
+/* Supply calibration with an external meter (contracts/protocol.md, "Supply calibration"):
  * CAL_START raises VDD/VPP to the calibration points, CAL_SET takes the voltages the user measured,
  * derives the measurement and output scale of each rail and applies exact 6 V / 12 V for checking,
  * CAL_CONFIRM stores or discards the result. */

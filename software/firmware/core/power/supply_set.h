@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Arbitrary VDD/VPP for checking the supply front end with a meter (contracts/protocol.md,
- * "Ручне керування живленням"): SUPPLY_SET applies the voltages with the FR-040 settling rule and
+ * "Manual supply control"): SUPPLY_SET applies the voltages with the FR-040 settling rule and
  * stored calibration (or, for diagnostics, without the tolerance check), SUPPLY_GET reports set points
  * and measurements with their spread. Nothing may be connected. */
 #ifndef PDK_SUPPLY_SET_H

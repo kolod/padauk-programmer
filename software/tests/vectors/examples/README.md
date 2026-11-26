@@ -1,9 +1,9 @@
-# Приклади free-pdk
+# free-pdk examples
 
-Файли `*.ihx` скопійовано без змін з `easy-pdk-programmer-software/Examples/`
+The `*.ihx` files are copied unchanged from `easy-pdk-programmer-software/Examples/`
 (Copyright (C) 2019-2020 freepdk, https://free-pdk.github.io, GPL-3.0-or-later).
-Копія потрібна для того, щоб тести не залежали від субмодуля, який у цьому проєкті є лише референсом.
+The copy is needed so that the tests do not depend on the submodule, which in this project is only a reference.
 
-`gen_packages.py` будує з них пакети `ex_*` (одна вставка IHRC у кожному, крім `adctest_pfs173`). Ці
-пакети використовують тести прошивки (немає хибних збігів вставок) і клієнта (побітово такий самий
-пакет з HEX).
+`gen_packages.py` builds `ex_*` packages from them (one IHRC stub in each, except `adctest_pfs173`). These
+packages are used by the firmware tests (no false stub matches) and the client tests (a package
+bit-identical to the one built from the HEX).
