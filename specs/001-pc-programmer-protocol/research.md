@@ -1,404 +1,404 @@
-# Research: Протокол обміну PC ⇄ програматор
+# Research: PC ⇄ programmer exchange protocol
 
 **Feature**: [spec.md](spec.md) · **Plan**: [plan.md](plan.md) · **Date**: 2026-10-09
 
-Кожне рішення: **Decision** — що обрано, **Rationale** — чому, **Alternatives** — що відкинуто.
+Each decision: **Decision** — what was chosen, **Rationale** — why, **Alternatives** — what was rejected.
 
 ---
 
-## R1. Кадрування потоку байтів USB CDC
+## R1. Framing the USB CDC byte stream
 
-- **Decision**: кадр кодується **COBS** (Consistent Overhead Byte Stuffing), роздільник кадрів — байт `0x00`.
-- **Rationale**: CDC — це потік байтів без меж повідомлень. COBS гарантує, що `0x00` трапляється лише як
-  роздільник, тож після будь-якого пошкодження приймач ресинхронізується на наступному `0x00`. Накладні
-  витрати детерміновані (≤ 1 байт на 254), а кодер і декодер займають ~60 рядків C і доступні в Python.
-- **Alternatives**: SLIP — змінні накладні витрати (до 2×), гірше для бінарних образів;
-  sync-байт + довжина — після пошкодження довжини втрачається синхронізація до тайм-ауту;
-  HDLC bit-stuffing — надмірно для USB.
+- **Decision**: a frame is encoded with **COBS** (Consistent Overhead Byte Stuffing), and the frame delimiter is the byte `0x00`.
+- **Rationale**: CDC is a byte stream with no message boundaries. COBS guarantees that `0x00` appears only as a
+  delimiter, so after any corruption the receiver resynchronizes on the next `0x00`. The overhead
+  is deterministic (≤ 1 byte per 254), and the encoder and decoder take ~60 lines of C and are available in Python.
+- **Alternatives**: SLIP — variable overhead (up to 2×), worse for binary images;
+  a sync byte + length — after the length is corrupted, synchronization is lost until a timeout;
+  HDLC bit-stuffing — excessive for USB.
 
-## R2. Контроль цілісності кадру та пакета
+## R2. Integrity checking of frames and the package
 
-- **Decision**: **CRC-32/ISO-HDLC** (поліном 0x04C11DB7, reflected, init 0xFFFFFFFF, xorout 0xFFFFFFFF —
-  те саме, що `zlib.crc32`) як для кадрів, так і для пакета прошивки. CRC пакета обчислює клієнт над усім
-  пакетом до передачі; це окремий, наскрізний контроль поверх CRC кадрів.
-- **Rationale**: для повідомлень до ~11 КБ CRC-32 має відстань Хеммінга 4 — виявляє всі 1-, 2-, 3-бітові
-  помилки та всі пакети помилок до 32 біт (FR-008). Кадри (≤ ~0.5 КБ) і пакет (≤ 8 КБ) у цих межах.
-  STM32F072 має апаратний CRC-блок із програмованим поліномом і реверсом вхідних/вихідних бітів;
-  програмний табличний варіант (1 КБ або 64 Б для півбайтової таблиці) — для інших платформ і хост-збірки.
-  Python-клієнт використовує `zlib.crc32` без залежностей.
-- **Alternatives**: CRC-32C — краща HD на коротких повідомленнях, але немає в апаратному блоці F0 у
-  «рідному» вигляді й відсутня в стандартній бібліотеці Python; SHA-256 для пакета — захист від
-  навмисної підробки не потрібен (загроза — випадкові помилки), коштує коду й часу на Cortex-M0;
-  CRC-16 — недостатньо для 8 КБ.
+- **Decision**: **CRC-32/ISO-HDLC** (polynomial 0x04C11DB7, reflected, init 0xFFFFFFFF, xorout 0xFFFFFFFF —
+  the same as `zlib.crc32`) for both frames and the firmware package. The package CRC is computed by the client over the whole
+  package before sending; it is a separate, end-to-end check on top of the frame CRC.
+- **Rationale**: for messages up to ~11 KB CRC-32 has a Hamming distance of 4 — it detects all 1-, 2-, and 3-bit
+  errors and all burst errors up to 32 bits (FR-008). Frames (≤ ~0.5 KB) and the package (≤ 8 KB) fall within these limits.
+  The STM32F072 has a hardware CRC block with a programmable polynomial and reversal of input/output bits;
+  a software table variant (1 KB, or 64 B for a nibble table) serves other platforms and the host build.
+  The Python client uses `zlib.crc32` with no dependencies.
+- **Alternatives**: CRC-32C — a better HD on short messages, but it is not in the F0 hardware block in
+  its "native" form and is absent from the Python standard library; SHA-256 for the package — protection against
+  deliberate forgery is not needed (the threat is random errors), and it costs code and time on a Cortex-M0;
+  CRC-16 — insufficient for 8 KB.
 
-## R3. Надійність доставки
+## R3. Delivery reliability
 
-- **Decision**: **stop-and-wait** (вікно 1). Клієнт має не більше одного незавершеного запиту; кожен новий
-  запит отримує наступний `seq` (u16). Програматор кешує останню відповідь: запит із тим самим `seq`
-  отримує ту саму відповідь без повторного виконання (FR-009). Пошкоджений кадр → `NAK` (без `seq`),
-  клієнт повторює поточний запит. Тайм-аут відповіді на клієнті — 300 мс, до 5 повторів.
-- **Rationale**: USB FS дає ~1 МБ/с; пакет 8 КБ — це ~16 кадрів по 512 Б, тож навіть з затримкою 2–3 мс
-  на кадр завантаження займає < 0.1 с (SC-003 ≤ 3 с). Ковзне вікно не дає виграшу, але ускладнює кеш.
-- **Alternatives**: ковзне вікно / селективний повтор — непотрібна складність; покладатися на те, що
-  USB «не губить даних», — суперечить FR-008 і не захищає від помилок прошивки/драйвера, обриву.
+- **Decision**: **stop-and-wait** (window 1). The client has at most one outstanding request; every new
+  request gets the next `seq` (u16). The programmer caches the last response: a request with the same `seq`
+  gets the same response without being executed again (FR-009). A corrupted frame → `NAK` (without `seq`),
+  and the client repeats the current request. The client's response timeout is 300 ms, with up to 5 retries.
+- **Rationale**: USB FS gives ~1 MB/s; an 8 KB package is ~16 frames of 512 B, so even with a 2–3 ms delay
+  per frame the upload takes < 0.1 s (SC-003 ≤ 3 s). A sliding window gives no gain but complicates the cache.
+- **Alternatives**: a sliding window / selective repeat — needless complexity; relying on
+  USB "not losing data" — contradicts FR-008 and does not protect against firmware/driver errors or a drop.
 
-## R4. Довгі операції, прогрес і скасування
+## R4. Long operations, progress, and cancellation
 
-- **Decision**: `OP_START` одразу відповідає `OK` з `op_id` (≤ 100 мс, FR-024). Далі програматор шле події
-  `EVT_PROGRESS` (при зміні етапу і не рідше ніж раз на 500 мс) та `EVT_OP_DONE` з підсумком. Події не
-  підтверджуються; підсумок останньої операції завжди можна отримати через `OP_RESULT`, тож втрата
-  події не є проблемою. Рушій операцій викликає `poll()` протокольного шару між атомарними кроками
-  (блок запису, слово читання, імпульс стирання), обслуговуючи дозволені під час операції команди:
+- **Decision**: `OP_START` answers `OK` at once with an `op_id` (≤ 100 ms, FR-024). After that the programmer sends
+  `EVT_PROGRESS` events (on a stage change and at least once every 500 ms) and `EVT_OP_DONE` with the summary. Events are not
+  acknowledged; the summary of the last operation can always be obtained through `OP_RESULT`, so losing
+  an event is not a problem. The operation engine calls the protocol layer's `poll()` between atomic steps
+  (a write block, a read word, an erase pulse), serving the commands allowed during an operation:
   `HELLO`, `GET_INFO`, `GET_STATUS`, `PKG_INFO`, `STATS_GET`, `CONFIG_GET`, `OP_RESULT`, `OP_CANCEL`,
-  `UART_TX` (стовпець «Під час операції» в contracts/protocol.md §4 — головний); решта → `BUSY` (FR-021).
-- **Rationale**: bit-bang із мікросхемою блокуючий і чутливий до таймингів, тому протокол не можна
-  обробляти в довільний момент; найдовший атомарний крок — імпульс стирання FLASH_2 (40 мс) — менший
-  за 100 мс, отже вимога відповіді виконується. RTOS не потрібна.
-- **Alternatives**: RTOS із окремою задачею протоколу — більше RAM/flash, ризик джитера bit-bang;
-  обробка команд у перериванні USB — небезпечно змінювати стан під час операції.
+  `UART_TX` (the "During an operation" column in contracts/protocol.md §4 is authoritative); the rest → `BUSY` (FR-021).
+- **Rationale**: bit-bang with the IC is blocking and timing-sensitive, so the protocol cannot be
+  handled at an arbitrary moment; the longest atomic step — the FLASH_2 erase pulse (40 ms) — is less
+  than 100 ms, so the response requirement is met. No RTOS is needed.
+- **Alternatives**: an RTOS with a separate protocol task — more RAM/flash, a risk of bit-bang jitter;
+  handling commands in the USB interrupt — unsafe to change state during an operation.
 
-## R5. Розміщення сховища у flash і атомарність
+## R5. Storage layout in flash and atomicity
 
-- **Decision**: два однакові **слоти** під пакет і окремий **журнал стану** з двох сторінок. Активний
-  слот, його покоління й CRC пакета, налаштування й статистика записуються як записи
-  журналу з власним CRC. Завантаження пишеться в неактивний слот; комміт = перевірка CRC пакета у flash +
-  дописування нового запису журналу. Розмітку й кількість слотів задає платформа (`GET_INFO`); для
-  основної МК вони визначаються після її вибору (наступна специфікація). Ціль налагодження F072 (64 КБ,
-  сторінка 2 КБ):
+- **Decision**: two identical **slots** for the package and a separate **state log** of two pages. The active
+  slot, its generation and the package CRC, the settings, and the statistics are written as log records
+  with their own CRC. An upload is written to the inactive slot; commit = a check of the package CRC in flash +
+  appending a new log record. The layout and the number of slots are set by the platform (`GET_INFO`); for
+  the primary MCU they are determined after it is chosen (the next specification). The F072 debug target (64 KB,
+  2 KB page):
 
-  | Область | Адреси | Розмір |
+  | Area | Addresses | Size |
   |---|---|---|
-  | Прошивка | `0x0800_0000–0x0800_AFFF` | 44 КБ |
-  | Слот 0 | `0x0800_B000–0x0800_CFFF` | 8 КБ |
-  | Слот 1 | `0x0800_D000–0x0800_EFFF` | 8 КБ |
-  | Журнал стану (2 сторінки) | `0x0800_F000–0x0800_FFFF` | 4 КБ |
+  | Firmware | `0x0800_0000–0x0800_AFFF` | 44 KB |
+  | Slot 0 | `0x0800_B000–0x0800_CFFF` | 8 KB |
+  | Slot 1 | `0x0800_D000–0x0800_EFFF` | 8 KB |
+  | State log (2 pages) | `0x0800_F000–0x0800_FFFF` | 4 KB |
 
-- **Rationale**: обрив живлення до запису журналу залишає попередній вказівник — активним лишається
-  старий пакет (FR-011, SC-007); недописаний запис журналу має невалідний CRC і ігнорується. Вміст
-  неактивного слота ніколи не інтерпретується як пакет, тому його можна використовувати як буфер
-  результату читання мікросхеми (до 8192 байт сирих слів — вистачає на PMS133 з 4096 словами) без RAM-буфера.
-  Слоти, що не містять активного пакета, і запасна сторінка журналу стираються **у фоні**
-  (`core/storage/housekeeping`, по одній сторінці за прохід головного циклу) одразу після `PKG_COMMIT`,
-  `PKG_DELETE`, обірваного завантаження чи старту з «брудним» слотом. Завантаження пише в уже чистий
-  слот і нічого не стирає всередині команди; лише якщо фонове стирання ще не встигло, сторінка
-  дочищається при першому зверненні `PKG_DATA` (≤ 1 сторінка на команду). На флешах, що стирають
-  асинхронно (W25Q), фонове стирання призупиняється (erase suspend) для читання й запису інших сторінок;
-  на внутрішній flash F072 воно синхронне, але відбувається в простої. Платформа задає кількість слотів
-  (2 … 4): з 3+ слотами навіть завантаження одне за одним завжди потрапляють у чистий слот. Побічний
-  ефект — видалений або замінений пакет фізично стирається, а не лише перестає бути активним.
-  Платформа також задає одиницю запису flash (2 Б на STM32F0, 8 Б на STM32G4 з ECC, де кожне
-  подвійне слово пишеться один раз): ядро притримує байти, що не заповнюють одиницю, до наступного
-  `PKG_DATA`, а останню одиницю доповнює `0xFF` перед `PKG_COMMIT`. Буфер
-  результату `READ` у вільному слоті MUST резервуватися від фонового стирання так само, як слот
-  поточного завантаження (`slots_set_upload`). Не потрібна перезапис-без-стирання (0x0000 поверх
-  даних), яку підтримують не всі МК, — краще для переносимості (принцип IV).
-- **Alternatives**: один слот + RAM-буфер 8 КБ — не атомарно при обриві під час запису flash; заголовок
-  із «поколінням» у самому слоті — сирі дані читання можуть випадково виглядати як заголовок, а
-  пошкодження нового слота «воскрешає» старий пакет; зовнішня EEPROM/SPI-flash — додаткова деталь,
-  можлива на інших платформах через HAL.
-- **Risk / рішення**: обсяг фічі не вміщується впевнено в 44 КБ F072, тому основною платформою буде
-  потужніша STM32 (вибір — наступна специфікація). На F072 як цілі налагодження частину функцій
-  (наприклад, `MEASURE_MASTER`, `PATCH`) MAY вимикати конфігурацією збірки; `INFO.capabilities` це
-  відображає.
+- **Rationale**: a power cut before the log is written leaves the previous pointer — the old package stays
+  active (FR-011, SC-007); an incompletely written log record has an invalid CRC and is ignored. The contents of
+  an inactive slot are never interpreted as a package, so it can be used as a buffer for the
+  IC read result (up to 8192 bytes of raw words — enough for the PMS133 with 4096 words) with no RAM buffer.
+  Slots that do not contain the active package, and the spare log page, are erased **in the background**
+  (`core/storage/housekeeping`, one page per pass of the main loop) right after `PKG_COMMIT`,
+  `PKG_DELETE`, an interrupted upload, or a start with a "dirty" slot. An upload writes to an already clean
+  slot and erases nothing inside the command; only if the background erase has not caught up yet, the page
+  is finished on the first `PKG_DATA` access (≤ 1 page per command). On flashes that erase
+  asynchronously (W25Q), the background erase is suspended (erase suspend) for reading and writing other pages;
+  on the internal F072 flash it is synchronous, but happens in idle time. The platform sets the number of slots
+  (2 … 4): with 3+ slots even back-to-back uploads always land in a clean slot. A side
+  effect is that a deleted or replaced package is physically erased, not merely no longer active.
+  The platform also sets the flash write unit (2 B on STM32F0, 8 B on STM32G4 with ECC, where each
+  double word is written once): the core holds back bytes that do not fill a unit until the next
+  `PKG_DATA`, and pads the last unit with `0xFF` before `PKG_COMMIT`. The `READ` result
+  buffer in a free slot MUST be reserved from the background erase the same way as the slot of the
+  current upload (`slots_set_upload`). No overwrite-without-erase (0x0000 over
+  data) is needed, which not all MCUs support — better for portability (principle IV).
+- **Alternatives**: one slot + an 8 KB RAM buffer — not atomic on a drop during a flash write; a header
+  with a "generation" in the slot itself — raw read data may accidentally look like a header, and
+  corruption of the new slot "resurrects" the old package; an external EEPROM/SPI flash — an extra part,
+  possible on other platforms through the HAL.
+- **Risk / decision**: the scope of the feature does not fit confidently into the F072's 44 KB, so the primary platform will be
+  a more powerful STM32 (the choice is the next specification). On the F072 as a debug target some features
+  (for example, `MEASURE_MASTER`, `PATCH`) MAY be disabled by build configuration; `INFO.capabilities` reflects
+  this.
 
-## R6. Зношування flash журналом
+## R6. Flash wear from the log
 
-- **Decision**: запис журналу — **40 байт** (36 байт полів + CRC-32, data-model `StateRecord`); кожен
-  успішний/невдалий запис мікросхеми дописує один запис; коли сторінка заповнена, наступний запис іде
-  на другу сторінку. Друга (запасна) сторінка стирається у фоні, щойно чинний запис лежить на поточній
-  сторінці, тож перемикання сторінок не стирає нічого всередині команди; сторінку з чинним записом
-  (наприклад, якщо перший запис на новій сторінці не вдався) не стирають ніколи.
-- **Rationale**: 51 запис на сторінку × 10 000 циклів стирання ≈ 510 000 мікросхем на сторінку —
-  більше, ніж ресурс панельки. Обрив під час стирання другої сторінки не втрачає даних: повна сторінка
-  лишається. Лічильник серійних номерів переживає вимкнення (US3).
-- **Alternatives**: запис лише при зміні пакета + RAM-лічильник — серійні номери повторюються після
-  вимкнення; емуляція EEPROM ST — прив'язка до бібліотеки ST.
+- **Decision**: a log record is **40 bytes** (36 bytes of fields + CRC-32, data-model `StateRecord`); every
+  successful/failed IC write appends one record; when a page is full, the next record goes
+  to the second page. The second (spare) page is erased in the background as soon as the current record is on the current
+  page, so a page switch erases nothing inside a command; the page with the current record
+  (for example, if the first record on a new page failed) is never erased.
+- **Rationale**: 51 records per page × 10,000 erase cycles ≈ 510,000 ICs per page —
+  more than the lifetime of the socket. A drop during the erase of the second page loses no data: the full page
+  remains. The serial-number counter survives power-off (US3).
+- **Alternatives**: writing only when the package changes + a RAM counter — serial numbers repeat after
+  power-off; ST EEPROM emulation — tied to an ST library.
 
-## R7. Формат пакета прошивки
+## R7. The firmware package format
 
-- **Decision**: бінарний little-endian формат: фіксований заголовок 128 Б із власним CRC, далі слова образу
-  (`u16 × N`), бітова маска заданих слів (кратна 16 бітам) і CRC-32 усього пакета. Деталі —
+- **Decision**: a binary little-endian format: a fixed 128 B header with its own CRC, then the image words
+  (`u16 × N`), a bit mask of defined words (a multiple of 16 bits), and a CRC-32 of the whole package. Details are in
   [contracts/package-format.md](contracts/package-format.md).
-- **Rationale**: заголовок перевіряється в `PKG_BEGIN` ще до прийому даних (непідтримувана мікросхема,
-  завеликий образ, заборонений захисний fuse) — помилка видна відразу. Маска відрізняє «не задано» від
-  будь-якого значення, тож не потрібні сентинели на кшталт 0xFFFF (FR-004). Максимальний пакет для
-  мікросхем із записом (PFS173, 3072 слова) = 128 + 6144 + 384 + 4 = 6660 Б < 8 КБ слота.
-  **Межі різні для читання й запису**: `max_package_size` (з `INFO`) обмежує пакет для запису — на F072
-  8192 Б, тобто до ~4000 слів; `max_read_words` обмежує читання — 4096 слів (сирі дані займають рівно
-  слот). Пакет на 4096 слів (8836 Б) не потрібен: мікросхема з 4096 словами (PMS133) лише для читання.
-- **Alternatives**: передавати Intel HEX і розбирати в програматорі — суперечить принципу I (формати
-  файлів — на PC) і витрачає flash; TLV-метадані — гнучкіше, але складніша валідація; версія формату
-  в заголовку дає розширюваність.
+- **Rationale**: the header is checked in `PKG_BEGIN` before any data is received (an unsupported IC,
+  an oversized image, a forbidden protection fuse) — the error is visible at once. The mask distinguishes "not defined" from
+  any value, so sentinels like 0xFFFF are not needed (FR-004). The maximum package for
+  ICs with writing (PFS173, 3072 words) = 128 + 6144 + 384 + 4 = 6660 B < the 8 KB slot.
+  **The limits differ for reading and writing**: `max_package_size` (from `INFO`) limits the write package — on F072
+  8192 B, that is, up to ~4000 words; `max_read_words` limits reading — 4096 words (the raw data takes exactly
+  a slot). A 4096-word package (8836 B) is not needed: an IC with 4096 words (PMS133) is read-only.
+- **Alternatives**: sending Intel HEX and parsing it in the programmer — contradicts principle I (file formats
+  live on the PC) and wastes flash; TLV metadata — more flexible, but validation is more complex; a format version
+  in the header provides extensibility.
 
-## R8. Хто знає про fuse, калібрування, серійний номер
+## R8. Who knows about the fuse, calibration, and serial number
 
-- **Decision**: усе визначає програматор (принцип I):
-  - **fuse**: якщо образ задає останнє слово пам'яті програм, воно трактується як fuse; якщо в заголовку
-    також є `FUSE_PRESENT` з іншим значенням — помилка `PKG_FUSE_CONFLICT`;
-  - **калібрування**: програматор шукає вставки free-pdk для розрядності ядра мікросхеми (див. нижче),
-    відхиляє пакет із невідомою вставкою, виконує калібрування сам;
-  - **серійний номер**: пошук 8 інструкцій `RET 'F','P','S','E','R','I','A','L'`; кожна знайдена вставка
-    отримує випадковий 64-бітний номер (R18), параметрів у пакеті немає.
-  Під час запису образ читається з flash і трансформується «на льоту» (вставки калібрування, серійний номер,
-  заповнення NOP, виключення fuse) за невеликою таблицею позицій, обчисленою при валідації пакета.
-  **Пошук калібрувальних вставок.** Адреси ніхто не передає: при `PKG_COMMIT` програматор проходить усю
-  пам'ять програм і шукає шаблон — послідовність `AND A,#imm` (опкод за розрядністю ядра: `0x14xx` —
-  13 біт, `0x2Cxx` — 14, `0x54xx` — 15):
-  - IHRC/ILRC, 10 слів: `'R'`, `'C'`, тип (1/2), частота (4 байти), напруга (2 байти), адреса регістра;
-  - BandGap, 14 слів: `'B'`, `'G'`, 3, напруга (2 байти), `BGTR`, `GPCC`, `GPCS`, `0` × 6;
-  - ≥ 6 послідовних `AND A,#…`, що не збігаються з відомим шаблоном → `PKG_CALIB_UNKNOWN` з адресою
-    (найімовірніше, вставка з новішого SDK — мовчки записати її як код небезпечно);
-  - до 16 вставок; знайдені позиції, тип, частота, напруга й регістри зберігаються в плані ефективного
-    образу. Єдиний `GOTO` вимірювального циклу виправляється під знайдену позицію, тож вставка працює
-    будь-де. Так само знаходяться вставки серійного номера й (при `COPY`) сліди калібрування.
-  Хибний збіг зі звичайним кодом практично неможливий (10 `AND A` поспіль із `'R','C'` не мають сенсу);
-  досяжність вставки при старті статично не перевіряється — її відсутність виявляється як «немає сигналу»
-  під час калібрування (`CALIB_FAILED`).
-- **Rationale**: клієнт стає тонким, а додавання нової мікросхеми не вимагає змін клієнта (SC-006).
-  Трансформація на льоту не потребує RAM-копії образу; той самий детектор вставок використовують
-  валідація, ефективний образ, верифікація з урахуванням вставок (FR-047), фінальна перевірка (FR-048),
-  повторна спроба (FR-044) і нормалізована сума.
-- **Alternatives**: клієнт патчить образ (як `easypdkprog`) — порушує принцип I.
+- **Decision**: the programmer determines everything (principle I):
+  - **fuse**: if the image defines the last program memory word, it is treated as the fuse; if the header
+    also has `FUSE_PRESENT` with a different value — the error `PKG_FUSE_CONFLICT`;
+  - **calibration**: the programmer looks for free-pdk stubs for the IC's core width (see below),
+    rejects a package with an unknown stub, and performs the calibration itself;
+  - **serial number**: a search for 8 instructions `RET 'F','P','S','E','R','I','A','L'`; each stub found
+    gets a random 64-bit number (R18), and there are no parameters in the package.
+  During programming the image is read from flash and transformed "on the fly" (calibration stubs, serial number,
+  NOP fill, fuse exclusion) using a small table of positions computed when the package is validated.
+  **Searching for calibration stubs.** No one passes the addresses: at `PKG_COMMIT` the programmer walks all
+  program memory and looks for the pattern — a sequence of `AND A,#imm` (the opcode by core width: `0x14xx` —
+  13 bit, `0x2Cxx` — 14, `0x54xx` — 15):
+  - IHRC/ILRC, 10 words: `'R'`, `'C'`, type (1/2), frequency (4 bytes), voltage (2 bytes), register address;
+  - BandGap, 14 words: `'B'`, `'G'`, 3, voltage (2 bytes), `BGTR`, `GPCC`, `GPCS`, `0` × 6;
+  - ≥ 6 consecutive `AND A,#…` that do not match a known pattern → `PKG_CALIB_UNKNOWN` with the address
+    (most likely a stub from a newer SDK — silently writing it as code is dangerous);
+  - up to 16 stubs; the positions found, the type, frequency, voltage, and registers are stored in the effective
+    image plan. The single `GOTO` of the measurement loop is fixed up for the position found, so the stub works
+    anywhere. Serial-number stubs and (during `COPY`) calibration traces are found the same way.
+  A false match with ordinary code is practically impossible (10 `AND A` in a row starting with `'R','C'` make no sense);
+  the reachability of a stub at start is not checked statically — its absence shows up as "no signal"
+  during calibration (`CALIB_FAILED`).
+- **Rationale**: the client becomes thin, and adding a new IC requires no client changes (SC-006).
+  On-the-fly transformation needs no RAM copy of the image; the same stub detector is used by
+  validation, the effective image, verification taking stubs into account (FR-047), the final check (FR-048),
+  the retry (FR-044), and the normalized sum.
+- **Alternatives**: the client patches the image (like `easypdkprog`) — violates principle I.
 
-## R9. Копіювання та калібровані мікросхеми
+## R9. Copying and calibrated ICs
 
-- **Decision**: `COPY` розпізнає в дампі **сліди калібрування** і відновлює в пакеті калібрувальні
-  вставки free-pdk, щоб кожна копія калібрувалася при `PROGRAM`. Режим задається **окремо для кожного
-  типу** (`mode_ihrc`, `mode_ilrc`, `bg_restore` в `ext` команди `COPY`; FR-042):
+- **Decision**: `COPY` recognizes **calibration traces** in the dump and restores free-pdk calibration
+  stubs in the package so that each copy is calibrated at `PROGRAM`. The mode is set **separately for each
+  type** (`mode_ihrc`, `mode_ilrc`, `bg_restore` in the `ext` of the `COPY` command; FR-042):
 
-  | Режим (IHRC / ILRC) | Ціль | IHRC | ILRC | Коли можливий |
+  | Mode (IHRC / ILRC) | Target | IHRC | ILRC | When possible |
   |---|---|---|---|---|
-  | `KEEP_VALUE` (0) | вставка не відновлюється, `k` еталона | ✓ | ✓ | завжди |
-  | `TARGET_FROM_HOST` (1) | ціль з клієнта (`target_ihrc_hz` / `target_ilrc_hz`) | ✓ | ✓ | лише з PC |
-  | `SNAP_STANDARD` (2) | при `PROGRAM` кожної копії: виміряти копію при `k` еталона → найближча SYSCLK з {16 М, 8 М, 4 М, 2 М, 1 М, 500 к}, якщо відхилення ≤ 10 %; інакше `k` еталона з попередженням | ✓ | ✗ (розкид ILRC між екземплярами завеликий) | завжди |
-  | `MEASURE_MASTER` (3) | фактична частота еталона при його `k` | ✓ | ✓ | FLASH-еталон + `ALLOW_MODIFY_MASTER`, лише з PC |
+  | `KEEP_VALUE` (0) | the stub is not restored, the reference's `k` | ✓ | ✓ | always |
+  | `TARGET_FROM_HOST` (1) | the target from the client (`target_ihrc_hz` / `target_ilrc_hz`) | ✓ | ✓ | from a PC only |
+  | `SNAP_STANDARD` (2) | at `PROGRAM` of each copy: measure the copy at the reference's `k` → the nearest SYSCLK from {16 M, 8 M, 4 M, 2 M, 1 M, 500 k} if the deviation is ≤ 10 %; otherwise the reference's `k` with a warning | ✓ | ✗ (the ILRC spread between samples is too large) | always |
+  | `MEASURE_MASTER` (3) | the reference's actual frequency at its `k` | ✓ | ✓ | a FLASH reference + `ALLOW_MODIFY_MASTER`, from a PC only |
 
-  BandGap: `bg_restore = 1` — вставка з фіксованою ціллю (3950 мВ, як у макросі free-pdk), `0` — `k`
-  еталона. Адреси `BGTR`/`GPCC`/`GPCS` і `IHRCR`/`ILRCR` — з таблиці мікросхем. Для локального копіювання
-  (`CONFIG_SET`) дозволено IHRC 0 або 2, ILRC 0, BG 0/1; типово `0, 0, 1` (= колишній
-  `KEEP_RC_RESTORE_BG`). `COPY` мікросхеми без операції запису в таблиці (напр. PMS133) →
-  `OP_UNSUPPORTED`: створений пакет неможливо записати.
+  BandGap: `bg_restore = 1` — a stub with a fixed target (3950 mV, as in the free-pdk macro), `0` — the reference's
+  `k`. The addresses of `BGTR`/`GPCC`/`GPCS` and `IHRCR`/`ILRCR` come from the IC table. For local copying
+  (`CONFIG_SET`) IHRC 0 or 2, ILRC 0, and BG 0/1 are allowed; the default is `0, 0, 1` (= the former
+  `KEEP_RC_RESTORE_BG`). `COPY` of an IC with no write operation in the table (e.g. PMS133) →
+  `OP_UNSUPPORTED`: the package created cannot be written.
 
-  **Калібрування чужого формату** (FR-053): запис константи в регістр підстроювання поза розпізнаними
-  слідами (`MOV A,#k` → `MOV IO(IHRCR|ILRCR|BGTR),A`) — код копіюється як є, `warnings.CALIB_UNRECOGNIZED`
-  з адресою. Завантаження заводського значення (`EASY_PDK_USE_FACTORY_*`) читає його з пам'яті, а не
-  константу, тому попередження не викликає.
+  **Calibration in a foreign format** (FR-053): writing a constant to a trim register outside recognized
+  traces (`MOV A,#k` → `MOV IO(IHRCR|ILRCR|BGTR),A`) — the code is copied as is, `warnings.CALIB_UNRECOGNIZED`
+  with the address. Loading the factory value (`EASY_PDK_USE_FACTORY_*`) reads it from memory rather than a
+  constant, so it does not raise the warning.
 
-  **Вимірювальний цикл в еталоні** (FR-051): еталон не відкалібровано й він не працює; цілі в циклі
-  немає. Локально — відмова без запису в сховище; з PC — клієнт питає користувача й за згоди повторює
-  `COPY` з `ALLOW_MASTER_LOOP` і ціллю `TARGET_FROM_HOST`.
+  **A measurement loop in the reference** (FR-051): the reference is not calibrated and does not work; there is no
+  target in the loop. Locally — a refusal with nothing written to storage; from a PC — the client asks the user and, if they agree, repeats
+  `COPY` with `ALLOW_MASTER_LOOP` and the target `TARGET_FROM_HOST`.
 
-  **Кілька слідів у `MEASURE_MASTER`.** Вимірювальний цикл безкінечний, тому за один перезапис
-  еталона вимірюється один слід; сліди перед ним виконуються зі значеннями еталона — ті самі умови, що
-  й при початковому калібруванні free-pdk (послідовно за адресою). Стирань еталона = n + 1, де n —
-  кількість слідів у режимі 3. Слід без сигналу на PA3 протягом 1 с (програма до нього не доходить,
-  PA3/PA4 навантажені платою) → `k` еталона, `site_status = COPIED`, попередження; решта слідів далі.
-  *Можливе покращення (не в цій фічі):* «цикл із виходом» — імпульс на PA4 виводить процесор із циклу до
-  продовження сліду, тож усі сліди вимірюються за один перезапис (завжди 2 стирання). Потребує нового
-  циклу з точно відомою кількістю тактів (пропуск команди в PADAUK — 2 такти) і перевірки на моделі й
-  залізі; доцільне, якщо еталони з кількома RC-калібруваннями виявляться поширеними.
+  **Several traces in `MEASURE_MASTER`.** The measurement loop is endless, so one trace is measured per rewrite
+  of the reference; the traces before it run with the reference's values — the same conditions as
+  the initial free-pdk calibration (sequentially by address). Reference erases = n + 1, where n is the
+  number of traces in mode 3. A trace with no signal on PA3 for 1 s (the program never reaches it,
+  PA3/PA4 are loaded by the board) → the reference's `k`, `site_status = COPIED`, a warning; the remaining traces go on.
+  *A possible improvement (not in this feature):* a "loop with an exit" — a pulse on PA4 takes the CPU out of the loop before
+  the trace continues, so all traces are measured in one rewrite (always 2 erases). It needs a new
+  loop with an exactly known number of clocks (an instruction skip on PADAUK takes 2 clocks) and verification on a model and
+  hardware; worthwhile if references with several RC calibrations turn out to be common.
 
-  **Сліди калібрування** (позиції відносно початку; решта — `NOP`):
+  **Calibration traces** (positions relative to the start; the rest is `NOP`):
 
-  | Тип | Довжина | Ненульові слова |
+  | Type | Length | Nonzero words |
   |---|---|---|
   | IHRC / ILRC | 10 | [2] `MOV A,#k`, [5] `MOV IO(IHRCR\|ILRCR),A` |
   | BandGap | 14 | [7] `MOV A,#k`, [9] `MOV IO(BGTR),A` |
 
-  Збіг вимагає, щоб адреса регістра дорівнювала адресі з таблиці мікросхеми. Випадковий збіг у
-  звичайному коді малоймовірний і майже нешкідливий: змінюється лише константа, що пишеться в той самий
-  регістр підстроювання.
+  A match requires the register address to equal the address from the IC table. A random match in
+  ordinary code is unlikely and almost harmless: only a constant written to the same trim register
+  changes.
 
-  **Послідовність `MEASURE_MASTER`**:
-  1. `READ` еталона → дамп у неактивний слот → пакет `KEEP_VALUE` → **комміт** (дамп у безпеці);
-  2. запис журналу з прапорцем `MASTER_RESTORE_PENDING` і CRC дампу;
-  3. для кожного сліду IHRC/ILRC по черзі: стерти еталон; записати дамп, у якому цей слід замінено
-     вимірювальним циклом із початковим значенням `k` (`MOV A,#(k−1)`, бо цикл спочатку виконує `ADD A,1`),
-     а решта слідів не змінена; подати VDD (`mV` з клієнта або 5000) і виміряти частоту на PA3 **без
-     імпульсів на PA4** → `f_master(k)`;
-  4. стерти еталон, записати дамп (`PROGRAM` пакета `KEEP_VALUE` зі стиранням), **верифікувати**;
-  5. запис журналу без `MASTER_RESTORE_PENDING`;
-  6. сформувати фінальний пакет з відновленими вставками (ціль = `f_master(k)`) → комміт.
+  **The `MEASURE_MASTER` sequence**:
+  1. `READ` the reference → the dump into the inactive slot → a `KEEP_VALUE` package → **commit** (the dump is safe);
+  2. write a log record with the `MASTER_RESTORE_PENDING` flag and the dump CRC;
+  3. for each IHRC/ILRC trace in turn: erase the reference; write the dump in which this trace is replaced
+     by a measurement loop with the initial value `k` (`MOV A,#(k−1)`, because the loop first executes `ADD A,1`),
+     and the other traces are unchanged; apply VDD (`mV` from the client or 5000) and measure the frequency on PA3 **without
+     pulses on PA4** → `f_master(k)`;
+  4. erase the reference, write the dump (`PROGRAM` of the `KEEP_VALUE` package with an erase), **verify**;
+  5. write a log record without `MASTER_RESTORE_PENDING`;
+  6. build the final package with the stubs restored (target = `f_master(k)`) → commit.
 
-  Обрив між кроками 2 і 5: після увімкнення `STATUS.flags.MASTER_RESTORE_PENDING = 1`; операція
-  `RESTORE_MASTER` (з PC або локальним запуском) виконує крок 4 з активного пакета-дампу. Якщо замість еталона
-  вставлено чисту мікросхему того самого типу, `RESTORE_MASTER` просто запише в неї копію з `k` еталона —
-  це безпечно.
+  A drop between steps 2 and 5: after power-up `STATUS.flags.MASTER_RESTORE_PENDING = 1`; the
+  `RESTORE_MASTER` operation (from a PC or a local start) performs step 4 from the active dump package. If a blank IC of the
+  same type is inserted instead of the reference, `RESTORE_MASTER` simply writes the copy with the reference's `k` into it —
+  this is safe.
 
-  `SNAP_STANDARD` потребує `k` під час `PROGRAM`; програматор кодує його у відновленій вставці
-  внутрішнім значенням частоти `0xFF0000kk` (неможливе для реальної вставки, див. package-format).
+  `SNAP_STANDARD` needs `k` during `PROGRAM`; the programmer encodes it in the restored stub
+  with the internal frequency value `0xFF0000kk` (impossible for a real stub, see package-format).
 
-- **Rationale**: `f_master(k)` — це частота, на якій реально працює еталон, тобто саме те, що мають
-  повторювати копії; похибка — крок регістра підстроювання (частки відсотка) плюс відмінність напруги
-  вимірювання. Перехід «NOP → вимірювальний цикл» вимагає 0→1, тому без стирання еталона вимір
-  неможливий; для OTP-еталонів лишаються режими 0–2. Збереження дампу як закоміченого пакета до першого
-  стирання гарантує, що еталон завжди можна відновити (SC-010).
-- **Alternatives**: лише переносити `k` (попередня редакція) — копії мають розкид частоти між
-  екземплярами; вимірювати копію при `k` еталона як ціль — повторює розкид копії, а не еталона;
-  вимірювати еталон без перезапису — у відкаліброваному коді немає виходу частоти на пін.
-- **Risk**: ресурс стирання FLASH PADAUK (уточнити за даташитом PFS154) — `MEASURE_MASTER` додає
-  (кількість слідів + 1) циклів стирання еталона; тому лише з явного дозволу.
+- **Rationale**: `f_master(k)` is the frequency at which the reference actually runs, that is, exactly what the copies must
+  reproduce; the error is the trim register step (fractions of a percent) plus the difference in the measurement voltage.
+  The transition "NOP → measurement loop" requires 0→1, so without erasing the reference a measurement
+  is impossible; for OTP references modes 0–2 remain. Saving the dump as a committed package before the first
+  erase guarantees that the reference can always be restored (SC-010).
+- **Alternatives**: only carrying over `k` (the previous revision) — the copies have a frequency spread between
+  samples; measuring a copy at the reference's `k` as the target — reproduces the copy's spread, not the reference's;
+  measuring the reference without rewriting — a calibrated code has no frequency output on a pin.
+- **Risk**: the PADAUK FLASH erase endurance (to be confirmed from the PFS154 datasheet) — `MEASURE_MASTER` adds
+  (number of traces + 1) reference erase cycles; therefore only with explicit permission.
 
-## R10. Визначення захищеної мікросхеми
+## R10. Detecting a protected IC
 
-- **Decision**: після читання програматор перевіряє біт захисту в прочитаному fuse-слові; якщо захист
-  увімкнено — `CHIP_PROTECTED`, результат не віддається і пакет не створюється.
-- **Open risk**: як саме PADAUK віддає дані захищеної мікросхеми (нулі, сміття чи коректний fuse), у коді
-  free-pdk не описано. **Потрібна перевірка на реальній захищеній PFS154** (задача валідації на залізі).
-  Запасний критерій — образ складається з однакових слів.
+- **Decision**: after reading, the programmer checks the protection bit in the fuse word read; if protection
+  is enabled — `CHIP_PROTECTED`, the result is not returned and no package is created.
+- **Open risk**: how exactly PADAUK returns the data of a protected IC (zeros, garbage, or a correct fuse) is not described in
+  the free-pdk code. **Verification on a real protected PFS154 is needed** (a hardware validation task).
+  A fallback criterion — the image consists of identical words.
 
-## R11. USB-стек і ідентифікатори
+## R11. USB stack and identifiers
 
-- **Decision**: **TinyUSB** (MIT) для CDC ACM. VID/PID — із програми **pid.codes** (VID `0x1209`, власний
-  PID для відкритого заліза); до отримання — тестовий PID `0x1209:0x0001`.
-- **Rationale**: TinyUSB підтримує STM32F0/F4/G4, RP2040 тощо — заміна МК не змінює USB-коду (принцип IV);
-  MIT сумісна з GPL-3.0. Використання VID ST (`0x0483:0x5740`) у своєму продукті некоректне.
-- **Alternatives**: ST USB Device Library — прив'язка до ST і потреба в додатковому дозволі до GPL (як в
-  оригіналі); libopencm3 — LGPL, вужча підтримка МК.
+- **Decision**: **TinyUSB** (MIT) for CDC ACM. VID/PID — from the **pid.codes** program (VID `0x1209`, its own
+  PID for open hardware); until obtained — the test PID `0x1209:0x0001`.
+- **Rationale**: TinyUSB supports STM32F0/F4/G4, RP2040, and others — changing the MCU does not change the USB code (principle IV);
+  MIT is compatible with GPL-3.0. Using ST's VID (`0x0483:0x5740`) in your own product is not appropriate.
+- **Alternatives**: the ST USB Device Library — tied to ST and needs an extra permission with the GPL (as in
+  the original); libopencm3 — LGPL, narrower MCU support.
 
-## R12. Мова та тестування клієнта
+## R12. The client's language and testing
 
-- **Decision**: еталонний клієнт — **Python 3.8+** (Windows 7) з `pyserial`: бібліотека протоколу, формування пакета з
-  Intel HEX, CLI у стилі `easypdkprog` (FR-030). Тести — `pytest`.
-- **Rationale**: кросплатформеність без власних драйверів, `zlib.crc32` і `struct` «з коробки», швидко
-  писати й змінювати. Вимоги продуктивності клієнта мінімальні.
-- **Alternatives**: C — дублює ядро, повільніша розробка CLI; Rust — добре, але вищий поріг для внесків.
+- **Decision**: the reference client is **Python 3.8+** (Windows 7) with `pyserial`: a protocol library, building a package from
+  Intel HEX, a CLI in the style of `easypdkprog` (FR-030). Tests — `pytest`.
+- **Rationale**: cross-platform with no custom drivers, `zlib.crc32` and `struct` out of the box, quick
+  to write and change. The client's performance requirements are minimal.
+- **Alternatives**: C — duplicates the core, slower CLI development; Rust — good, but a higher barrier for contributors.
 
-## R13. Перевірка без заліза
+## R13. Verification without hardware
 
-- **Decision**: ядро прошивки збирається для PC разом із фіктивним HAL у **симулятор програматора** —
-  виконуваний файл, що говорить протоколом через stdin/stdout або TCP і емулює flash (з можливістю
-  «обірвати живлення» на довільній операції запису) та мікросхему (модель PFS154 у пам'яті). Клієнт і
-  контрактні тести запускаються проти симулятора; ін'єкція помилок у кадри — у проміжному шарі тесту.
-- **Rationale**: дає змогу автоматично перевірити SC-001, SC-002, SC-007 тисячі разів (принцип VI).
-- **Alternatives**: лише тести на залізі — повільно, не відтворює обриви живлення в довільній точці.
+- **Decision**: the firmware core is built for the PC together with a fake HAL into a **programmer simulator** —
+  an executable that speaks the protocol through stdin/stdout or TCP and emulates the flash (with the ability to
+  "cut the power" at an arbitrary write operation) and the IC (a PFS154 model in memory). The client and
+  contract tests run against the simulator; fault injection into frames is in the test's intermediate layer.
+- **Rationale**: it allows SC-001, SC-002, SC-007 to be checked automatically thousands of times (principle VI).
+- **Alternatives**: hardware-only tests — slow, and cannot reproduce power cuts at an arbitrary point.
 
-## R14. Межі фічі щодо рушія мікросхем
+## R14. The feature's boundaries regarding the IC engine
 
-- **Decision**: ця фіча реалізує протокол, формат пакета, сховище, диспетчер операцій і **інтерфейс**
-  рушія мікросхем (`chip_engine`), а також модель мікросхеми для симулятора. Bit-level алгоритми для
-  сімейств PADAUK (перенесення з free-pdk `fpdk.c`, калібрування) — окрема фіча **002-chip-engine**.
-  Критерій SC-004 (запис PFS154 за ≤ 10 с) перевіряється після 002.
-- **Rationale**: протокол можна повністю розробити й перевірити на симуляторі; алгоритми мікросхем
-  мають власні вимоги до таймингів і валідації на залізі.
+- **Decision**: this feature implements the protocol, the package format, storage, the operation dispatcher, and the **interface**
+  of the IC engine (`chip_engine`), as well as an IC model for the simulator. The bit-level algorithms for
+  the PADAUK families (ported from free-pdk `fpdk.c`, calibration) are a separate feature, **002-chip-engine**.
+  Criterion SC-004 (programming a PFS154 in ≤ 10 s) is verified after 002.
+- **Rationale**: the protocol can be fully developed and verified on the simulator; the IC algorithms
+  have their own timing and hardware-validation requirements.
 
-## R15. Встановлення напруг і самоперевірка
+## R15. Setting voltages and the self-test
 
-- **Decision**: керування VDD/VPP виноситься в окремий HAL `hal_power.h` (задати мВ, виміряти мВ,
-  увімкнути/вимкнути розряд), а **політику встановлення** (FR-040) реалізує платформонезалежне ядро
-  (`core/power/power.c`), яким користуються і рушій мікросхем, і самоперевірка:
-  1. задати напругу; запам'ятати момент зміни;
-  2. чекати, доки мине мінімальна пауза етапу (з таблиці: 100 мкс / 500 мкс / 1 мс / 10 мс) **і**
-     `N = 3` послідовні виміри з кроком ≥ 50 мкс лежать у межах ±2 % або ±30 мВ (більше з двох);
-  3. якщо за 20 мс від зміни умову не виконано → `safe_state`, `VDD_FAULT`/`VPP_FAULT`, у `RESULT`
-     — шина, задана й остання виміряна напруга.
-  Самоперевірка (`SELF_TEST`) використовує той самий механізм: спершу `PROBE` при VPP 4.5 В / VDD 2.0 В;
-  відповідь мікросхеми → `SELFTEST_CHIP_PRESENT` без подачі вищих напруг; далі по черзі (інша шина = 0)
-  рівні VDD і VPP — усі різні значення з таблиці мікросхем у порядку зростання — і після кожної шини 0 В;
-  результат кожного рівня (задано, виміряно, час встановлення, ok) — у `RESULT.levels[]`.
-  Виконується автоматично при старті (джерело — локальне) і на запит з PC; поки результату «пройдено»
-  немає, локальний запуск запису замінюється самоперевіркою.
-- **Rationale**: одна реалізація політики для всіх шляхів (запис, самоперевірка, симулятор із моделлю
-  несправного джерела) → FR-040 і SC-011 перевіряються автоматично; апаратна частина лише вимірює.
-  Мінімальна пауза лишається, бо може покривати внутрішні процеси мікросхеми, а не лише шину живлення.
-  Допуск ±2 % / ±30 мВ і тайм-аут 20 мс задають вимоги до нового джерела напруг (швидкість встановлення
-  < 20 мс, точність АЦП краща за ±1 %) — їх треба врахувати в схемі.
-- **Alternatives**: перевірка напруг усередині рушія `002` — дублювання й неможливість перевірити без
-  заліза; фіксовані паузи без вимірювання — порушують принцип III; самоперевірка лише на запит — рішення
-  сесії уточнення: автоматично при старті.
-- **Risk**: навантаження цільової плати при програмуванні в схемі (pogo) може сповільнити встановлення
-  VDD понад 20 мс — тоді або сильніше джерело, або параметр тайм-ауту в таблиці мікросхем (розширення
-  без зміни протоколу).
+- **Decision**: VDD/VPP control is moved into a separate HAL `hal_power.h` (set mV, measure mV,
+  enable/disable discharge), and the **settling policy** (FR-040) is implemented by the platform-independent core
+  (`core/power/power.c`), used by both the IC engine and the self-test:
+  1. set the voltage; remember the moment of the change;
+  2. wait until the stage's minimum pause has elapsed (from the table: 100 µs / 500 µs / 1 ms / 10 ms) **and**
+     `N = 3` consecutive measurements, spaced ≥ 50 µs apart, lie within ±2 % or ±30 mV (whichever is larger);
+  3. if the condition is not met within 20 ms of the change → `safe_state`, `VDD_FAULT`/`VPP_FAULT`, and in `RESULT`
+     — the rail, the set voltage, and the last measured voltage.
+  The self-test (`SELF_TEST`) uses the same mechanism: first `PROBE` at VPP 4.5 V / VDD 2.0 V;
+  an IC response → `SELFTEST_CHIP_PRESENT` without applying higher voltages; then in turn (the other rail = 0)
+  the VDD and VPP levels — all distinct values from the IC table in ascending order — and 0 V after each rail;
+  the result of each level (set, measured, settling time, ok) is in `RESULT.levels[]`.
+  It runs automatically at start (the source is local) and on request from a PC; until a "passed" result
+  exists, a local programming start is replaced by the self-test.
+- **Rationale**: one implementation of the policy for all paths (programming, self-test, the simulator with a faulty-source
+  model) → FR-040 and SC-011 are checked automatically; the hardware only measures.
+  The minimum pause stays, because it may cover the IC's internal processes, not just the supply rail.
+  The ±2 % / ±30 mV tolerance and the 20 ms timeout set the requirements for the new voltage source (settling speed
+  < 20 ms, ADC accuracy better than ±1 %) — they must be taken into account in the circuit.
+- **Alternatives**: checking voltages inside the `002` engine — duplication and impossible to verify without
+  hardware; fixed pauses without measurement — violate principle III; a self-test only on request — the decision
+  of the clarification session: automatically at start.
+- **Risk**: the load of the target board during in-circuit programming (pogo) may slow VDD settling
+  beyond 20 ms — then either a stronger source or a timeout parameter in the IC table (an extension
+  without changing the protocol).
 
-## R16. Локальний запуск замість «кнопки»
+## R16. A local start instead of a "button"
 
-- **Decision**: ядро приймає абстрактну подію `local_start(request)` від платформного шару органів
-  керування (кнопки, перемикачі, сигнали конвеєра — окрема фіча). Запит перетворюється на операцію за
-  пріоритетом: (1) самоперевірку не пройдено → `SELF_TEST`; (2) `MASTER_RESTORE_PENDING` → `RESTORE_MASTER`;
-  (3) інакше запитана операція (`PROGRAM`, `COPY` з режимом із `CONFIG`, `VERIFY`, `SELF_TEST`,
-  `RESTORE_MASTER`); плюс `local_cancel()`. У протоколі — `source = 1` («локальний»). Повний набір дій і
-  станів індикації зафіксовано (FR-054, contracts/chip-engine.md §4) — майбутній інтерфейс лише
-  відображає їх; до нього еталонна плата має одну кнопку → `PROGRAM`.
-- **Rationale**: протокол і ядро не залежать від того, скільки кнопок і перемикачів матиме програматор
-  (рішення сесії уточнення).
-- **Alternatives**: жести однієї кнопки (довге натискання тощо) у ядрі — прив'язує ядро до конкретного UI.
+- **Decision**: the core accepts an abstract event `local_start(request)` from the platform's controls layer
+  (buttons, switches, handler signals — a separate feature). The request is turned into an operation by
+  priority: (1) the self-test did not pass → `SELF_TEST`; (2) `MASTER_RESTORE_PENDING` → `RESTORE_MASTER`;
+  (3) otherwise the requested operation (`PROGRAM`, `COPY` with a mode from `CONFIG`, `VERIFY`, `SELF_TEST`,
+  `RESTORE_MASTER`); plus `local_cancel()`. In the protocol — `source = 1` ("local"). The full set of actions and
+  indication states is fixed (FR-054, contracts/chip-engine.md §4) — the future interface only
+  displays them; until then the reference board has one button → `PROGRAM`.
+- **Rationale**: the protocol and the core do not depend on how many buttons and switches the programmer will have
+  (a decision of the clarification session).
+- **Alternatives**: single-button gestures (a long press, etc.) in the core — ties the core to a specific UI.
 
-## R17. Невдале калібрування, повторна спроба запису OTP, незалежність від USB
+## R17. A failed calibration, an OTP write retry, independence from USB
 
 - **Decision**:
-  - **Невдале калібрування** (FR-043): після вимірювального циклу нічого не записується — вставка
-    лишається циклом, наступні калібрування й fuse пропускаються, серійний номер не витрачається;
-    `CALIB_FAILED` з найкращим `k` і частотою. З PC прапорець `CALIB_FINALIZE_ON_FAIL` дозволяє
-    завершити найкращим значенням (`warnings.CALIB_FORCED`); локальний запуск його ігнорує.
-  - **Повторна спроба** (FR-044) визначається лише вмістом мікросхеми й пакетом — може відбутися через
-    будь-який час і на іншому програматорі. FLASH/MTP — повний запис зі стиранням. OTP: етап `BLANK_CHECK`
-    приймає не лише чисту мікросхему, а й сумісну з ефективним образом — `(вміст AND ціль) == ціль` для
-    кожного слова, стани вставки «чиста / цикл / завершена з довільним `k`», вставка серійного номера
-    чиста (новий номер) або записана (номер з мікросхеми).
-  - **Серійні номери** (FR-046) витрачаються до запису (запис журналу перед записом слів вставки):
-    невдала мікросхема з уже записаним номером при дописуванні іншим програматором зберігає свій номер, а
-    перший програматор ніколи не видасть його вдруге. Ціна — пропуски в нумерації. Тоді дописується
-    решта (лише 1→0, з перевіркою до подачі HV — задокументоване дописування, дозволене принципом III),
-    незавершені вставки калібруються, усе верифікується; `warnings.RESUMED`. Повністю записана
-    мікросхема → `CHIP_ALREADY_PROGRAMMED` без зміни лічильників.
-  - **Обрив USB** (FR-023): операція не переривається — пакет і всі параметри вже в програматорі; лише
-    `RUN` зупиняється. Скасування — тільки явне `OP_CANCEL`.
-- **Rationale**: невдала OTP-мікросхема з незавершеним циклом лишається «рятівною»: та сама процедура
-  повторної спроби довершує калібрування, коли причину (PA3/PA4 на платі, контакт pogo) усунуто — окремої
-  команди «довершити калібрування» не потрібно. Завершення невдалої вставки «найкращим» значенням
-  непомітно дало б виріб із неправильною частотою, тому за замовчуванням заборонене. Незалежність від
-  USB потрібна для конвеєра й програмування в схемі: мікросхема не повинна страждати від збою кабелю чи
-  драйвера PC. Повторна спроба покриває й висмикування USB у програматора з живленням від USB.
-- **Alternatives**: окрема операція «довершити калібрування» — дублює логіку `PROGRAM`; скасування при
-  обриві USB (попередня редакція) — ризик зіпсувати OTP через збій кабелю; повторна спроба без перевірки
-  сумісності — суперечить принципу III.
-- **Limits**: перекалібрування OTP із уже завершеною вставкою неможливе (`k` → `k'` вимагає 0→1;
-  FR-045) — лише `PATCH` до сумісного значення. Сумісність перевіряється до подачі HV, тож несумісна
-  мікросхема не змінюється.
+  - **A failed calibration** (FR-043): after the measurement loop nothing is written — the stub
+    stays a loop, the following calibrations and the fuse are skipped, and the serial number is not spent;
+    `CALIB_FAILED` with the best `k` and the frequency. From a PC the `CALIB_FINALIZE_ON_FAIL` flag allows
+    finishing with the best value (`warnings.CALIB_FORCED`); a local start ignores it.
+  - **The retry** (FR-044) is determined only by the IC contents and the package — it may happen after
+    any amount of time and on a different programmer. FLASH/MTP — a full write with an erase. OTP: the `BLANK_CHECK` stage
+    accepts not only a blank IC but also one compatible with the effective image — `(content AND target) == target` for
+    each word, the stub states "blank / loop / finished with an arbitrary `k`", and a serial-number stub
+    blank (a new number) or written (the number from the IC).
+  - **Serial numbers** (FR-046) are spent before writing (a log record before the stub words are written):
+    a failed IC with a number already written keeps its number when completed by another programmer, and
+    the first programmer never issues it a second time. The price is gaps in the numbering. Then the rest is appended
+    (only 1→0, with a check before HV is applied — documented appending, allowed by principle III),
+    unfinished stubs are calibrated, everything is verified; `warnings.RESUMED`. A fully programmed
+    IC → `CHIP_ALREADY_PROGRAMMED` without changing the counters.
+  - **A USB drop** (FR-023): the operation is not interrupted — the package and all parameters are already in the programmer; only
+    `RUN` stops. Cancellation is only an explicit `OP_CANCEL`.
+- **Rationale**: a failed OTP IC with an unfinished loop stays "rescuable": the same retry
+  procedure finishes the calibration once the cause (PA3/PA4 on the board, a pogo contact) is eliminated — a separate
+  "finish calibration" command is not needed. Finishing a failed stub with the "best" value
+  would quietly produce a product with the wrong frequency, so it is forbidden by default. Independence from
+  USB is needed for a handler and in-circuit programming: the IC must not suffer from a cable or PC
+  driver glitch. The retry also covers pulling USB on a programmer powered from USB.
+- **Alternatives**: a separate "finish calibration" operation — duplicates the `PROGRAM` logic; cancellation on
+  a USB drop (the previous revision) — a risk of ruining an OTP through a cable glitch; a retry without a compatibility
+  check — contradicts principle III.
+- **Limits**: recalibrating an OTP with an already finished stub is impossible (`k` → `k'` requires 0→1;
+  FR-045) — only `PATCH` to a compatible value. Compatibility is checked before HV is applied, so an incompatible
+  IC is not changed.
 
-## R18. Серійні номери: випадкові 64 біти
+## R18. Serial numbers: random 64 bits
 
-- **Decision**: вставка серійного номера (макрос free-pdk) завжди отримує **випадкове 64-бітне число**,
-  окреме для кожної мікросхеми, в усіх режимах; лічильника, діапазонів і параметрів у пакеті немає.
-  Генерація — HAL `hal_entropy.h` (сирі біти з апаратного шуму) + ядро:
-  1. зібрати ≥ 256 сирих біт ентропії: на основній МК — апаратний RNG (вимога до вибору МК); на цілі
-     налагодження F072 — молодші біти АЦП на датчику температури/VREFINT і розбіжність HSI14 відносно HSE;
-  2. змішати разом з унікальним ID МК (96 біт UID STM32), номером запису журналу й лічильником у RAM
-     через криптографічну хеш-функцію (BLAKE2s або SHA-256 з малим кодом) і взяти 64 біти;
-  3. перевірка здоров'я джерела: сирі вибірки не постійні й не повторюються (тест повторів і пропорцій
-     за NIST SP 800-90B у спрощеному вигляді); відмова джерела → операція не починається
-     (`INTERNAL`), щоб не писати передбачуваний номер.
-- **Rationale**: PADAUK у фірмовому програматорі використовує rolling code з початковим значенням і
-  кроком, який скидається при кожному завантаженні файлу й не синхронізується між програматорами —
-  джерело дублікатів. Випадкові 64 біти не потребують координації: ймовірність хоч одного збігу серед
-  10⁶ мікросхем ≈ 3·10⁻⁸; підмішування UID гарантує різні послідовності на різних програматорах навіть
-  при слабкому джерелі шуму.
-- **Alternatives**: лічильник із діапазоном (попередні редакції, PADAUK rolling code) — потребує
-  координації, скидається при перезавантаженні пакета; лише UID + лічильник без ентропії — передбачувано;
-  послідовна нумерація для простежуваності — за потреби окремою фічею.
-- **Копіювання** (FR-052): серійний номер еталона не розпізнається — прошивка, зібрана не free-pdk, може
-  мати номер будь-де й будь-якої довжини. Локально — дублікат; з PC — пошук і заміна на користувачі
-  (прочитати → замінити на вставку free-pdk у файлі → завантажити як звичайний пакет).
+- **Decision**: a serial-number stub (a free-pdk macro) always gets a **random 64-bit number**,
+  separate for each IC, in all modes; there are no counters, ranges, or parameters in the package.
+  Generation — the HAL `hal_entropy.h` (raw bits from hardware noise) + the core:
+  1. collect ≥ 256 raw bits of entropy: on the primary MCU — a hardware RNG (a requirement for choosing the MCU); on the F072
+     debug target — the low ADC bits on the temperature sensor/VREFINT and the HSI14 drift relative to HSE;
+  2. mix it together with the MCU's unique ID (the 96-bit STM32 UID), the log record number, and a RAM counter
+     through a cryptographic hash function (BLAKE2s or SHA-256 with small code) and take 64 bits;
+  3. a source health check: raw samples are not constant and do not repeat (a repetition and proportion test
+     per NIST SP 800-90B in simplified form); a source failure → the operation does not start
+     (`INTERNAL`), so as not to write a predictable number.
+- **Rationale**: PADAUK in its own programmer uses a rolling code with an initial value and a
+  step that is reset on every file load and not synchronized between programmers —
+  a source of duplicates. Random 64 bits need no coordination: the probability of at least one collision among
+  10⁶ ICs is ≈ 3·10⁻⁸; mixing in the UID guarantees different sequences on different programmers
+  even with a weak noise source.
+- **Alternatives**: a counter with a range (the previous revisions, PADAUK rolling code) — needs
+  coordination, is reset on package reload; UID + a counter alone, without entropy — predictable;
+  sequential numbering for traceability — a separate feature if needed.
+- **Copying** (FR-052): the reference's serial number is not recognized — firmware built by something other than free-pdk may
+  have a number anywhere and of any length. Locally — a duplicate; from a PC — a search and replace on the
+  user's side (read → replace with a free-pdk stub in the file → upload as an ordinary package).
 
-## R19. Реалізація: відхилення від рішень і що перевіряється поза фічею (T130)
+## R19. Implementation: deviations from the decisions and what is verified outside the feature (T130)
 
-Підсумок після реалізації всіх історій (стан на 2026-11-26):
+A summary after implementing all the stories (as of 2026-11-26):
 
-- **Розмір прошивки F072** (ризик R5): усі функції вмістилися — `.text + .data` ≈ 28,6 КБ із 44 КБ, RAM
-  ≈ 84,6 % із 16 КБ. Опції `PDK_FEATURE_MEASURE_MASTER` і `PDK_FEATURE_PATCH` лишилися (без них ≈ 26,7 КБ);
-  збірка перевіряє межу сама (`cmake/check_size.cmake`). Для `MEASURE_MASTER` додано біт 9
-  `INFO.capabilities`, щоб клієнт знав про вимкнену функцію.
-- **Основна МК** (plan.md, «Target Platform»): реалізовано платформу-кандидата `stm32g474` (WeAct
-  STM32G474CEU6 + `hardware/stm32g474-board`): 4 слоти по 16 КБ і журнал у банку 2 внутрішньої flash
-  (read-while-write), одиниця запису 8 Б з ECC. Формальний вибір МК, остаточна розмітка flash і кількість
-  слотів — у специфікації вибору МК.
-- **Серійні номери** (R18): BLAKE2s-256, як заплановано; відхилень немає.
-- **UART-міст `RUN`**: прийом і передача на перериваннях USART через кільцеві буфери по 128 Б, а не DMA
-  (для ≤ 115200 бод досить, менше коду й RAM); клієнт шле `UART_TX` шматками по 64 Б. На G474 лінія PA0
-  мікросхеми йде на PB6 (FT_c, ≤ 5,0 В), тому `RUN` обмежує VDD до 5,0 В (`hal_uart_vdd_max_mV`).
-- **`MEASURE_MASTER`** (R9): фінальний пакет будується другим потоковим проходом по збереженому дампу (RAM
-  не вміщує копію образу); дамп комітиться пакетом `KEEP_VALUE` до першого стирання еталона.
-- **Хост-компілятор**: gcc/clang (на Windows — MinGW-w64); MSVC не підтримується (GNU-розширення в ядрі).
-- **Поза цією фічею**: на STM32 рушій мікросхем — заглушка, тож SC-004 (запис PFS154 ≤ 10 с) і SC-009
-  (копії в межах 1 % від еталона) на реальних мікросхемах перевіряються у фічі `002-chip-engine`; тут вони
-  доведені на моделі `pdk-sim`. Перевірка на залізі цілі налагодження — `hw-validation.md` (T129).
+- **F072 firmware size** (risk R5): all features fit — `.text + .data` ≈ 28.6 KB of 44 KB, RAM
+  ≈ 84.6 % of 16 KB. The options `PDK_FEATURE_MEASURE_MASTER` and `PDK_FEATURE_PATCH` remain (without them ≈ 26.7 KB);
+  the build checks the limit itself (`cmake/check_size.cmake`). For `MEASURE_MASTER`, bit 9 was added to
+  `INFO.capabilities` so that the client knows about a disabled feature.
+- **The primary MCU** (plan.md, "Target Platform"): the candidate platform `stm32g474` is implemented (WeAct
+  STM32G474CEU6 + `hardware/stm32g474-board`): 4 slots of 16 KB and the log in bank 2 of the internal flash
+  (read-while-write), an 8 B write unit with ECC. The formal MCU choice, the final flash layout, and the number of
+  slots are in the MCU selection specification.
+- **Serial numbers** (R18): BLAKE2s-256, as planned; no deviations.
+- **The `RUN` UART bridge**: receive and transmit on USART interrupts through 128 B ring buffers, not DMA
+  (enough for ≤ 115200 baud, less code and RAM); the client sends `UART_TX` in 64 B chunks. On the G474 the IC's PA0 line
+  goes to PB6 (FT_c, ≤ 5.0 V), so `RUN` limits VDD to 5.0 V (`hal_uart_vdd_max_mV`).
+- **`MEASURE_MASTER`** (R9): the final package is built by a second streaming pass over the saved dump (RAM
+  does not hold an image copy); the dump is committed as a `KEEP_VALUE` package before the first reference erase.
+- **Host compiler**: gcc/clang (MinGW-w64 on Windows); MSVC is not supported (GNU extensions in the core).
+- **Outside this feature**: on STM32 the IC engine is a stub, so SC-004 (programming a PFS154 ≤ 10 s) and SC-009
+  (copies within 1 % of the reference) are verified on real ICs in feature `002-chip-engine`; here they are
+  proven on the `pdk-sim` model. Hardware validation of the debug target is `hw-validation.md` (T129).

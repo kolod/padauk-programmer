@@ -1,59 +1,59 @@
-# Перевірка на залізі (T129)
+# Hardware validation (T129)
 
-Протокол приймальної перевірки на платі з рушієм-заглушкою: запис реальних мікросхем — фіча
-`002-chip-engine`, тут перевіряються протокол, сховище, живлення й автономна робота. Заповнюється вручну;
-порожня клітинка — пункт ще не перевірено.
+An acceptance-test protocol for a board with the stub engine: programming real ICs is feature
+`002-chip-engine`; here the protocol, storage, power, and standalone operation are verified. It is filled in by hand;
+an empty cell means the item has not been verified yet.
 
-**Плата:** ☐ Easy PDK (STM32F072) ☐ WeAct STM32G474 + `hardware/stm32g474-board`  
-**Прошивка:** коміт `________`, збірка `MinSizeRel`, опції `PDK_FEATURE_*` = `________`  
-**Дата / хто:** `________`
+**Board:** ☐ Easy PDK (STM32F072) ☐ WeAct STM32G474 + `hardware/stm32g474-board`  
+**Firmware:** commit `________`, `MinSizeRel` build, `PDK_FEATURE_*` options = `________`  
+**Date / who:** `________`
 
-## 1. Прошивка
+## 1. Firmware
 
-| Пункт | Очікування | Результат |
+| Item | Expectation | Result |
 |---|---|---|
-| Розмір `.text + .data` (вивід збірки) | F072 ≤ 44 КБ; G474 ≤ 256 КБ | |
-| `pdkprog info`: можливості | збігаються з опціями збірки (біти 6 `PATCH`, 9 `MEASURE_MASTER`) | |
+| `.text + .data` size (build output) | F072 ≤ 44 KB; G474 ≤ 256 KB | |
+| `pdkprog info`: capabilities | match the build options (bits 6 `PATCH`, 9 `MEASURE_MASTER`) | |
 
-## 2. Безпека живлення (принцип III)
+## 2. Power safety (principle III)
 
-| Пункт | Очікування | Результат |
+| Item | Expectation | Result |
 |---|---|---|
-| VPP / VDD при ЦАП = максимум (`pdkprog supply` з `--no-check`, мультиметр) | не вище апаратної межі схеми | |
-| VPP / VDD при «зависанні» прошивки (зупинка налагоджувачем або нескінченний цикл) | не вище апаратної межі | |
-| Напруги одразу після скидання й увімкнення живлення | 0 В (осцилограф), без імпульсів | |
-| `pdkprog selftest` з навантаженням-імітатором цільової плати | кожен рівень: похибка ≤ ±2 % або ±30 мВ, встановлення < 20 мс | |
-| `pdkprog info` / `list` | протокол 1.0, таблиця мікросхем | |
+| VPP / VDD with the DAC at maximum (`pdkprog supply` with `--no-check`, multimeter) | not above the circuit's hardware limit | |
+| VPP / VDD while the firmware "hangs" (stopped by a debugger or an infinite loop) | not above the hardware limit | |
+| Voltages right after reset and power-on | 0 V (oscilloscope), no pulses | |
+| `pdkprog selftest` with a load simulating the target board | every level: error ≤ ±2 % or ±30 mV, settling < 20 ms | |
+| `pdkprog info` / `list` | protocol 1.0, the IC table | |
 
-## 3. Сховище
+## 3. Storage
 
-| Пункт | Очікування | Результат |
+| Item | Expectation | Result |
 |---|---|---|
-| `pdkprog upload …`, вимкнути живлення, `pdkprog pkg check` | `VALID`, той самий CRC | |
-| 20 ручних висмикувань USB / живлення під час `upload` | після кожного пакет `VALID` (старий або новий) | |
-| Швидкість завантаження 8 КБ (`pdkprog upload`, час) | ≤ 3 с (SC-003) | |
+| `pdkprog upload …`, power off, `pdkprog pkg check` | `VALID`, the same CRC | |
+| 20 manual USB / power pulls during `upload` | after each, the package is `VALID` (old or new) | |
+| Upload speed for 8 KB (`pdkprog upload`, time) | ≤ 3 s (SC-003) | |
 
-## 4. Автономна робота
+## 4. Standalone operation
 
-| Пункт | Очікування | Результат |
+| Item | Expectation | Result |
 |---|---|---|
-| Локальний запуск із пошкодженим пакетом (`pdkprog pkg delete` або зіпсований слот) | відмова, індикація «немає пакета» / «сховище» | |
-| Локальний запуск із несправним / відключеним VPP | замість запису — самоперевірка, індикація збою живлення | |
+| Local start with a corrupted package (`pdkprog pkg delete` or a damaged slot) | refusal, indication "no package" / "storage" | |
+| Local start with a faulty / disconnected VPP | a self-test instead of programming, a power-fault indication | |
 
-## 5. Ентропія серійних номерів (R18)
+## 5. Serial-number entropy (R18)
 
-| Пункт | Очікування | Результат |
+| Item | Expectation | Result |
 |---|---|---|
-| ≥ 10⁵ згенерованих номерів (тестова збірка або скрипт) | жодного повтору | |
-| Тест пропорцій бітів | у межах NIST SP 800-90B (спрощено) | |
+| ≥ 10⁵ generated numbers (a test build or a script) | no repeats | |
+| Bit proportion test | within NIST SP 800-90B (simplified) | |
 
-## 6. UART-міст `RUN` (за наявності мікросхеми з програмою, що шле `'U'`)
+## 6. The `RUN` UART bridge (if an IC with a program that sends `'U'` is available)
 
-| Пункт | Очікування | Результат |
+| Item | Expectation | Result |
 |---|---|---|
-| `pdkprog start -r 3.3` | `Connected @… baud`, текст від мікросхеми; клавіатура доходить до неї | |
-| Esc / висмикнути USB | напруга знята одразу | |
+| `pdkprog start -r 3.3` | `Connected @… baud`, text from the IC; the keyboard reaches it | |
+| Esc / pull USB | the voltage is removed immediately | |
 
-## Висновок
+## Conclusion
 
 `________`

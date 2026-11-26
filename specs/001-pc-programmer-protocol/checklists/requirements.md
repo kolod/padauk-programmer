@@ -1,4 +1,4 @@
-# Specification Quality Checklist: Протокол обміну PC ⇄ програматор
+# Specification Quality Checklist: PC ⇄ programmer exchange protocol
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-10-09
@@ -31,9 +31,9 @@
 
 ## Notes
 
-- Уточнення закрито 2026-10-09: FR-016 — один активний пакет; FR-030 — без протоколу Easy PDK,
-  можливий CLI-клієнт у стилі `easypdkprog` поверх нового протоколу.
-- Транспорт USB CDC і вимоги до виявлення помилок (FR-008) згадано як обмеження, задане
-  користувачем і конституцією (принцип V); конкретні алгоритми й формат кадрів винесено в план.
-- Ітерація валідації 1: усі пункти, крім уточнень, пройдено.
-- Ітерація валідації 2: усі пункти пройдено; специфікація готова до `/speckit-plan`.
+- Clarifications closed 2026-10-09: FR-016 — a single active package; FR-030 — no Easy PDK protocol,
+  a CLI client in the style of `easypdkprog` is possible on top of the new protocol.
+- The USB CDC transport and the error-detection requirements (FR-008) are mentioned as a constraint set
+  by the user and the constitution (principle V); the concrete algorithms and the frame format are moved to the plan.
+- Validation iteration 1: all items passed except the clarifications.
+- Validation iteration 2: all items passed; the specification is ready for `/speckit-plan`.
