@@ -17,6 +17,8 @@ enum {
     TRACE_ACK = 5,          /* b8 family, w1 expected ID, w2 bits, d raw answer */
     TRACE_GETID = 6,        /* b8 family, w1 expected ID, w2 bits, d raw answer (last 32 bits) */
     TRACE_PROBE = 7,        /* b8 family, w2 bits, d raw answer */
+    TRACE_CALIB = 8,        /* b8 trim value, w1 counted edges, w2 the independent count (0 none), d SYSCLK Hz */
+    TRACE_CALIB_CHECK = 9,  /* b8 attempt, w1 trim value, w2 deviation from the search, 0.01 %, d SYSCLK Hz */
 };
 
 #define TRACE_RECORD_SIZE 14u   /* u32 t_us, u8 kind, u8 b8, u16 w1, u16 w2, u32 d */

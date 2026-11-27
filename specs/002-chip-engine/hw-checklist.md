@@ -19,6 +19,9 @@ follow [quickstart.md](quickstart.md); the test programs are in
 - [ ] `pdkprog -n PFS154 write build/target-fw/clockout_8mhz_pfs154.ihx`; note the reported "measured … Hz".
 - [ ] `pdkprog start -r 4.0`; counter on PA4 (J1-6): **1.000 MHz ± 1 %** (990…1010 kHz) = SYSCLK 8 MHz ± 1 %.
 - [ ] The counter agrees with the frequency `pdkprog` reported / 8 to within ~0.2 %.
+- [ ] Repeatability (the 2026-11-27 finding): 5 × `pdkprog --trace -n PFS154 write …` with the counter on PA4 after each.
+      Every run within 1 %; in the trace every `calib check` OK, and in the `calib k=…` lines the reference count within
+      ~1 % of the edges. A check that says MISMATCH or a reference far off: save the whole trace for the record.
 - [ ] Optional: `clockout_1mhz_pfs154.ihx` → 125.0 kHz ± 1 %.
 - [ ] If the reading is exactly ¾ or 1½ of the expected value: the loop cycle count is wrong (report it), not the
       calibration.

@@ -64,8 +64,10 @@ bool hal_icp_calib_begin(void);
  * them out within timeout_us (no loop running). */
 bool hal_icp_calib_pulses(uint16_t n, uint32_t timeout_us);
 
-/* Counts CLK rising edges for at least window_us (<= 100 ms); returns the count and the measured window. */
-uint32_t hal_icp_calib_count(uint32_t window_us, uint32_t *elapsed_us);
+/* Counts CLK rising edges for at least window_us (<= 100 ms); returns the count and the measured window. *ref_edges: the
+ * same edges counted by an independent path (on the G474 the bits the pulse output shifted, from its own pin), a
+ * cross-check for spurious edges in the diagnostic trace; 0 if the platform has none. */
+uint32_t hal_icp_calib_count(uint32_t window_us, uint32_t *elapsed_us, uint32_t *ref_edges);
 
 /* Stops the counter and the pulse output; lines back to idle. */
 void hal_icp_calib_end(void);

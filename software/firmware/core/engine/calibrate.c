@@ -11,7 +11,13 @@
  * The FR-055 checks of feature 001 make sure it is the loop of exactly this stub: the first reading within ¼…4 of the
  * target, a frequency that rises with the steps, PA0 driven by the IC (it does not follow the pull-up / pull-down).
  * SNAP_STANDARD (target 0xFF0000kk) sweeps to the master's value kk and calibrates to the nearest standard SYSCLK when it
- * is within 10 %; MEASURE_MASTER measures the loop as it runs, without pulses. */
+ * is within 10 %; MEASURE_MASTER measures the loop as it runs, without pulses.
+ *
+ * The programmer cannot read the trim register: it only knows how many "+1" pulses it sent. A pulse lost or added on the
+ * way shifts the whole curve, and the value found would give a different frequency in the finished program. So every
+ * IHRC/ILRC result is checked on a fresh run of the loop (VDD off and on, the trim back at 0) stepped straight to the
+ * value found: the frequency must match the search's reading within VERIFY_PERCENT, else the search is repeated, at
+ * most CALIB_TRIES times. The trace (TRACE_CALIB / TRACE_CALIB_CHECK) shows every reading. */
 #include <string.h>
 
 #include "engine_internal.h"
@@ -19,6 +25,7 @@
 #include "chips/calib_sites.h"
 #include "hal_time.h"
 #include "proto/proto_defs.h"
+#include "proto/trace.h"
 
 #define LOOP_CLOCKS 7u
 #define WINDOW_MIN_US 2000u
@@ -33,8 +40,15 @@
 #define BG_LAST 0xF0u
 #define REACH_PERCENT 2u             /* the best value must be within 2 % of the target */
 #define RISE_PERCENT 1u              /* over the sweep the frequency must rise by more than measurement noise */
+#define VERIFY_PERCENT 1u            /* the fresh run at the value found against the search's reading */
+#define CALIB_TRIES 3u
 
 static uint32_t sweep[256];          /* SYSCLK per trim value (SNAP needs the whole curve) */
+static uint32_t m_edges, m_ref;      /* the last measure(): counted edges and the independent count */
+
+static uint16_t sat16(uint32_t v) { return v > 0xFFFFu ? 0xFFFFu : (uint16_t)v; }
+
+static void trace_point(unsigned k, uint32_t hz) { trace_emit(TRACE_CALIB, (uint8_t)k, sat16(m_edges), sat16(m_ref), hz); }
 
 /* SYSCLK of the running loop: PA3 edges over a window long enough for EDGES_WANTED at `expected_hz`. 0 = no edges. */
 static uint16_t measure(uint32_t expected_hz, uint32_t *hz, chip_poll_fn poll)
@@ -45,15 +59,18 @@ static uint16_t measure(uint32_t expected_hz, uint32_t *hz, chip_poll_fn poll)
         want_us = WINDOW_MIN_US;
     if (want_us > WINDOW_TOTAL_MAX_US)
         want_us = WINDOW_TOTAL_MAX_US;
-    uint32_t edges = 0, elapsed = 0;
+    uint32_t edges = 0, ref = 0, elapsed = 0;
     while (elapsed < want_us) {
         if (!eng_poll(poll))
             return PDK_CANCELLED;
         uint32_t step = (uint32_t)(want_us - elapsed) > WINDOW_STEP_MAX_US ? WINDOW_STEP_MAX_US : (uint32_t)(want_us - elapsed);
-        uint32_t got_us = 0;
-        edges += hal_icp_calib_count(step, &got_us);
+        uint32_t got_us = 0, got_ref = 0;
+        edges += hal_icp_calib_count(step, &got_us, &got_ref);
+        ref += got_ref;
         elapsed += got_us ? got_us : step;
     }
+    m_edges = edges;
+    m_ref = ref;
     *hz = elapsed ? (uint32_t)((uint64_t)edges * LOOP_CLOCKS * 1000000u / elapsed) : 0;
     return PDK_OK;
 }
@@ -121,6 +138,7 @@ static uint16_t do_sweep(uint32_t target, uint32_t f0, unsigned last, unsigned s
             st = measure(sweep[k - step] ? sweep[k - step] : target, &sweep[k], poll);
         if (st != PDK_OK)
             return st;
+        trace_point(k, sweep[k]);
         *top = k;
         if (target && distance(sweep[k], target) < distance(sweep[*best], target))
             *best = k;
@@ -136,42 +154,73 @@ static bool rises(unsigned top)
     return top && (uint64_t)sweep[top] * 100u > (uint64_t)sweep[0] * (100u + RISE_PERCENT);
 }
 
+/* A fresh run of the loop (VDD off and on: the trim restarts at 0) stepped straight to `k`; *ok if its frequency matches
+ * the search's reading at k. The session is left open: the caller finishes it. */
+static uint16_t verify(const struct chip_info *chip, uint16_t mV, unsigned k, unsigned attempt, bool *ok, chip_poll_fn poll)
+{
+    uint32_t f0, hz = 0;
+    *ok = false;
+    hal_icp_calib_end();
+    uint16_t st = start(chip, mV, sweep[0], &f0, poll);
+    if (st == PDK_OK && k)
+        st = step_trim((uint16_t)k);
+    if (st == PDK_OK)
+        st = measure(sweep[k], &hz, poll);
+    if (st != PDK_OK)
+        return st;
+    uint64_t dev = sweep[k] ? (uint64_t)distance(hz, sweep[k]) * 10000u / sweep[k] : 10000u;
+    trace_emit(TRACE_CALIB_CHECK, (uint8_t)attempt, (uint16_t)k, sat16(dev > 0xFFFFu ? 0xFFFFu : (uint32_t)dev), hz);
+    *ok = dev <= VERIFY_PERCENT * 100u;
+    return PDK_OK;
+}
+
 static uint16_t calibrate_rc(const struct chip_info *chip, uint8_t kind, uint32_t target, uint16_t mV, uint8_t *value,
                              uint32_t *measured_hz, chip_poll_fn poll)
 {
     bool snap = calib_is_snap(target);
     unsigned kk = target & 0xFFu;
-    uint32_t f0;
-    uint16_t st = start(chip, mV, snap ? 8000000u : target, &f0, poll);
-    if (st != PDK_OK)
-        return st;
-    *measured_hz = f0;
-    if (!snap && (f0 < target / 4u || f0 > target * 4u))
-        return finish(PDK_CALIB_WRONG_SITE);   /* FR-055 (1): not the loop of this stub */
     unsigned step = kind == CALIB_KIND_ILRC ? RC_STEP_ILRC : 1u;
     unsigned last = kind == CALIB_KIND_ILRC ? 0xF0u : (snap && kk > IHRC_LAST ? kk : IHRC_LAST);
-    unsigned best, top;
-    if ((st = do_sweep(snap ? 0 : target, f0, last, step, snap, &best, &top, poll)) != PDK_OK)
-        return finish(st);
-    if (!rises(top))
-        return finish(PDK_CALIB_WRONG_SITE);   /* FR-055 (2): no response to the steps ("deaf", wrong loop) */
-    if (snap) {   /* the nearest standard SYSCLK if the copy at the master's value is within 10 % of it */
-        static const uint32_t standard[] = {16000000, 8000000, 4000000, 2000000, 1000000, 500000};
-        uint32_t f_kk = sweep[kk], std = standard[0];
-        for (unsigned i = 1; i < sizeof standard / sizeof standard[0]; i++)
-            if (distance(f_kk, standard[i]) < distance(f_kk, std))
-                std = standard[i];
-        best = kk;
-        if (distance(f_kk, std) <= std / 10u)
-            for (unsigned k = 0; k <= top; k++)
-                if (distance(sweep[k], std) < distance(sweep[best], std))
-                    best = k;
+    for (unsigned attempt = 1;; attempt++) {
+        uint32_t f0;
+        unsigned best, top;
+        bool ok;
+        if (attempt > 1)
+            hal_icp_calib_end();
+        uint16_t st = start(chip, mV, snap ? 8000000u : target, &f0, poll);
+        if (st != PDK_OK)
+            return st;
+        *measured_hz = f0;
+        trace_point(0, f0);
+        if (!snap && (f0 < target / 4u || f0 > target * 4u))
+            return finish(PDK_CALIB_WRONG_SITE);   /* FR-055 (1): not the loop of this stub */
+        if ((st = do_sweep(snap ? 0 : target, f0, last, step, snap, &best, &top, poll)) != PDK_OK)
+            return finish(st);
+        if (!rises(top))
+            return finish(PDK_CALIB_WRONG_SITE);   /* FR-055 (2): no response to the steps ("deaf", wrong loop) */
+        if (snap) {   /* the nearest standard SYSCLK if the copy at the master's value is within 10 % of it */
+            static const uint32_t standard[] = {16000000, 8000000, 4000000, 2000000, 1000000, 500000};
+            uint32_t f_kk = sweep[kk], std = standard[0];
+            for (unsigned i = 1; i < sizeof standard / sizeof standard[0]; i++)
+                if (distance(f_kk, standard[i]) < distance(f_kk, std))
+                    std = standard[i];
+            best = kk;
+            if (distance(f_kk, std) <= std / 10u)
+                for (unsigned k = 0; k <= top; k++)
+                    if (distance(sweep[k], std) < distance(sweep[best], std))
+                        best = k;
+        }
+        *value = (uint8_t)best;
+        *measured_hz = sweep[best];
+        if (!snap && (uint64_t)distance(sweep[best], target) * 100u > (uint64_t)target * REACH_PERCENT)
+            return finish(PDK_CALIB_FAILED);   /* the target cannot be reached: the best value is reported */
+        if ((st = verify(chip, mV, best, attempt, &ok, poll)) != PDK_OK)
+            return finish(st);
+        if (ok)
+            return finish(PDK_OK);
+        if (attempt >= CALIB_TRIES)
+            return finish(PDK_CALIB_FAILED);   /* the pulses do not arrive reliably: the board, not the IC */
     }
-    *value = (uint8_t)best;
-    *measured_hz = sweep[best];
-    if (!snap && (uint64_t)distance(sweep[best], target) * 100u > (uint64_t)target * REACH_PERCENT)
-        return finish(PDK_CALIB_FAILED);   /* the target cannot be reached: the best value is reported */
-    return finish(PDK_OK);
 }
 
 /* FR-055 (3): the IC drives PA0 (the comparator output) — it does not follow the programmer's pulls. */

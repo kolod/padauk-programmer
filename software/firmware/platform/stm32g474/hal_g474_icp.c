@@ -154,7 +154,9 @@ bool hal_icp_calib_begin(void)
     TIM2->CR1 = 0;
     TIM2->PSC = 0;
     TIM2->ARR = 0xFFFFFFFFu;
-    TIM2->CCMR1 = TIM_CCMR1_CC1S_0 | (2u << TIM_CCMR1_IC1F_Pos);   /* TI1 input, a short digital filter */
+    /* TI1 input, digital filter fDTS / 2, N = 8: a level must hold 94 ns to count, so ringing on a slow edge is not a
+     * second edge. The loop's shortest phase (3 clocks low) stays longer than that up to SYSCLK ≈ 30 MHz. */
+    TIM2->CCMR1 = TIM_CCMR1_CC1S_0 | (5u << TIM_CCMR1_IC1F_Pos);
     TIM2->CCER = 0;                                                  /* rising edge */
     TIM2->SMCR = TIM_SMCR_SMS_0 | TIM_SMCR_SMS_1 | TIM_SMCR_SMS_2 | TIM_SMCR_TS_0 | TIM_SMCR_TS_2;   /* ext. clock, TI1FP1 */
     TIM2->EGR = TIM_EGR_UG;
@@ -182,10 +184,22 @@ bool hal_icp_calib_pulses(uint16_t n, uint32_t timeout_us)
 {
     if (!calib_on || !n || n > 8u * PULSE_AHEAD)
         return false;
-    unsigned bytes = (n + 7u) / 8u, start = (dma_pos() + PULSE_AHEAD) % PULSE_BUF;
+    /* Placed PULSE_AHEAD bytes ahead of the DMA with interrupts off: an interrupt between reading the position and
+     * writing would let the DMA pass the place first (8 bytes are 28 µs at IHRC 16 MHz) and send part of the ones. */
+    unsigned bytes = (n + 7u) / 8u;
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    unsigned pos = dma_pos(), start = (pos + PULSE_AHEAD) % PULSE_BUF;
     for (unsigned i = 0; i < bytes; i++) {   /* MSB first: the last byte carries its ones in the top bits */
         unsigned left = n - 8u * i;
         pulse_buf[(start + i) % PULSE_BUF] = left >= 8u ? 0xFFu : (uint8_t)(0xFFu << (8u - left));
+    }
+    bool late = (dma_pos() + PULSE_BUF - pos) % PULSE_BUF >= PULSE_AHEAD;
+    __set_PRIMASK(primask);
+    if (late) {   /* the DMA reached them while they were written: how many went out is unknown */
+        for (unsigned i = 0; i < bytes; i++)
+            pulse_buf[(start + i) % PULSE_BUF] = 0;
+        return false;
     }
     /* wait until the DMA has fetched them: the position moves PULSE_AHEAD + bytes on */
     unsigned need = PULSE_AHEAD + bytes, moved = 0, last = dma_pos();
@@ -205,14 +219,21 @@ bool hal_icp_calib_pulses(uint16_t n, uint32_t timeout_us)
     return ok;
 }
 
-uint32_t hal_icp_calib_count(uint32_t window_us, uint32_t *elapsed_us)
+uint32_t hal_icp_calib_count(uint32_t window_us, uint32_t *elapsed_us, uint32_t *ref_edges)
 {
-    uint32_t cycles = window_us * (G474_HCLK_HZ / 1000000u);
+    /* The reference: SPI3 shifts one bit per PA3 period from its own pin (PB3, no filter); the DMA position moves one
+     * byte per 8. Polled in the wait (a buffer turn is ≥ 0.9 ms), ± a byte or two of the TX FIFO. */
+    uint32_t cycles = window_us * (G474_HCLK_HZ / 1000000u), bytes = 0;
+    unsigned last = dma_pos();
     uint32_t c0 = TIM2->CNT, t0 = DWT->CYCCNT;
     while (DWT->CYCCNT - t0 < cycles) {
+        unsigned now = dma_pos();
+        bytes += (now + PULSE_BUF - last) % PULSE_BUF;
+        last = now;
     }
     uint32_t c1 = TIM2->CNT, dt = DWT->CYCCNT - t0;
     *elapsed_us = dt / (G474_HCLK_HZ / 1000000u);
+    *ref_edges = bytes * 8u;
     return c1 - c0;
 }
 

@@ -389,7 +389,8 @@ class ChipDesc:
         return any(n.upper() == name.upper() for n in self.names)
 
 
-TRACE_KINDS = {1: "POWER_OK", 2: "POWER_FAULT", 3: "ENTER", 4: "LEAVE", 5: "ACK", 6: "GETID", 7: "PROBE"}
+TRACE_KINDS = {1: "POWER_OK", 2: "POWER_FAULT", 3: "ENTER", 4: "LEAVE", 5: "ACK", 6: "GETID", 7: "PROBE", 8: "CALIB",
+               9: "CALIB_CHECK"}
 FAMILY_CODES = {0x12: "OTP1_2", 0x21: "OTP2_1", 0x22: "OTP2_2", 0x31: "OTP3_1", 0xF1: "FLASH_1", 0xF2: "FLASH_2"}
 ENGINE_MODES = {0: "-", 1: "probe", 2: "GetID", 3: "read", 4: "write", 5: "erase", 6: "calibrate", 7: "run"}
 
@@ -426,6 +427,15 @@ class TraceRecord:
             return f"{what} {fam}: 0x{self.d:0{(self.w2 + 3) // 4}X} ({self.w2} bits) - {verdict}"
         if k == 7:
             return f"probe {fam}: 0x{self.d:08X} ({self.w2} bits)" + ("" if self.d else " - no answer")
+        if k == 8:
+            text = f"calib k=0x{self.b8:02X}: {self.d} Hz ({self.w1} edges"
+            if self.w2:
+                diff = (self.w2 - self.w1) * 100 / self.w1 if self.w1 else 0.0
+                text += f", reference {self.w2}, {diff:+.1f} %"
+            return text + ")"
+        if k == 9:
+            verdict = "OK" if self.w2 <= 100 else "MISMATCH - the trim pulses did not all arrive"
+            return f"calib check #{self.b8} k=0x{self.w1:02X}: {self.d} Hz, {self.w2 / 100:.2f} % from the search - {verdict}"
         return f"{TRACE_KINDS.get(k, k)} {self.b8} {self.w1} {self.w2} {self.d}"
 
 

@@ -2,7 +2,8 @@
 /* Calibration on the fake counter (T027): the IHRC search finds the closest trim value and stops past the target, ILRC
  * steps of 0x10, BandGap the first value where PA0 reads 0, SNAP_STANDARD to the nearest standard within 10 % (else the
  * master's value), MEASURE_MASTER without pulses, and the FR-055 refusals (first reading out of ¼…4, no response to the
- * steps, PA0 not driven), an unreachable target, no loop running, the VDD pin limit, cancel. */
+ * steps, PA0 not driven), an unreachable target, no loop running, the VDD pin limit, cancel; the check of the value
+ * found on a fresh run of the loop (extra "+1" pulses once → the search again; on every run → CALIB_FAILED). */
 #include "pdk_test.h"
 
 #include "chip_engine.h"
@@ -206,4 +207,53 @@ TEST(cancel_during_the_search)
     ASSERT_EQ(cal(CALIB_KIND_IHRC, 8000000, 4000, &v, &hz), PDK_CANCELLED);
     ASSERT_EQ(fake_power_set_value(PDK_RAIL_VDD), 0);
     ASSERT_TRUE(!fake_icp_driven(ICP_PA4, NULL));
+}
+
+TEST(the_value_found_is_checked_on_a_fresh_run)
+{
+    base = 8240000;
+    fake_icp_calib_curve(linear);
+    uint8_t v;
+    uint32_t hz;
+    ASSERT_EQ(cal(CALIB_KIND_IHRC, 8000000, 4000, &v, &hz), PDK_OK);
+    ASSERT_EQ(fake_icp_calib_runs(), 2);              /* the search, then the check */
+    ASSERT_EQ(fake_icp_calib_trim(), v);              /* the check stepped straight to the value */
+}
+
+TEST(an_extra_pulse_during_the_search_repeats_it)
+{
+    base = 8240000;
+    fake_icp_calib_curve(linear);
+    fake_icp_calib_extra_pulse(20, 8, true);          /* from the 20th step the IC is 8 steps (1.6 %) ahead of the count */
+    uint8_t v;
+    uint32_t hz;
+    ASSERT_EQ(cal(CALIB_KIND_IHRC, 8000000, 4000, &v, &hz), PDK_OK);
+    ASSERT_EQ(fake_icp_calib_runs(), 4);              /* search + failed check, search + check */
+    ASSERT_EQ(v, closest(8000000, 0x9F, 1));          /* the true value, not 8 steps short */
+    ASSERT_TRUE(hz > 7960000 && hz < 8040000);
+}
+
+TEST(pulses_that_never_arrive_reliably_fail_the_calibration)
+{
+    base = 8240000;
+    fake_icp_calib_curve(linear);
+    fake_icp_calib_extra_pulse(10, 4, false);         /* every 10th step: the curve shifts on every run */
+    uint8_t v;
+    uint32_t hz;
+    ASSERT_EQ(cal(CALIB_KIND_IHRC, 8000000, 4000, &v, &hz), PDK_CALIB_FAILED);
+    ASSERT_EQ(fake_icp_calib_runs(), 6);              /* three searches, three checks */
+    ASSERT_EQ(fake_power_set_value(PDK_RAIL_VDD), 0);
+    ASSERT_TRUE(!fake_icp_driven(ICP_PA4, NULL));
+}
+
+TEST(ilrc_is_checked_too)
+{
+    base = 66000;
+    fake_icp_calib_curve(linear);
+    fake_icp_calib_extra_pulse(3, 0x10, true);
+    uint8_t v;
+    uint32_t hz;
+    ASSERT_EQ(cal(CALIB_KIND_ILRC, 62500, 3300, &v, &hz), PDK_OK);
+    ASSERT_EQ(fake_icp_calib_runs(), 4);
+    ASSERT_EQ(v, closest(62500, 0xF0, 0x10));
 }

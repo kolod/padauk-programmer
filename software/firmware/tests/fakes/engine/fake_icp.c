@@ -16,6 +16,9 @@ static struct {
     int bg_flip;
     bool calib;
     uint8_t trim;
+    unsigned extra_every, pulse_calls, runs;
+    uint8_t extra_steps;
+    bool extra_once;
     uint16_t vdd_limit;
     uint32_t ns_frac;   /* sub-microsecond remainder of the delays */
 } f;
@@ -83,6 +86,13 @@ bool fake_icp_driven(icp_line_t line, bool *level)
 void fake_icp_calib_curve(uint32_t (*sysclk)(uint8_t k)) { f.curve = sysclk; }
 void fake_icp_calib_bandgap(int bg_flip) { f.bg_flip = bg_flip; }
 uint8_t fake_icp_calib_trim(void) { return f.trim; }
+void fake_icp_calib_extra_pulse(unsigned every, uint8_t steps, bool once)
+{
+    f.extra_every = every;
+    f.extra_steps = steps;
+    f.extra_once = once;
+}
+unsigned fake_icp_calib_runs(void) { return f.runs; }
 void fake_icp_vdd_limit(uint16_t mV) { f.vdd_limit = mV; }
 
 /* ---------------------------------------------------------------- hal_icp.h */
@@ -169,6 +179,7 @@ bool hal_icp_calib_begin(void)
     add(FEV_CAL_BEGIN);
     f.calib = true;
     f.trim = 0;
+    f.runs++;
     return true;
 }
 
@@ -183,18 +194,25 @@ bool hal_icp_calib_pulses(uint16_t n, uint32_t timeout_us)
     uint32_t turn_ns = (uint32_t)(7000000000ull / f.curve(f.trim));   /* one loop turn = 7 SYSCLK */
     advance_ns(turn_ns * n);
     f.trim = (uint8_t)(f.trim + n);
+    if (f.extra_every && ++f.pulse_calls % f.extra_every == 0) {
+        f.trim = (uint8_t)(f.trim + f.extra_steps);
+        if (f.extra_once)
+            f.extra_every = 0;
+    }
     return true;
 }
 
-uint32_t hal_icp_calib_count(uint32_t window_us, uint32_t *elapsed_us)
+uint32_t hal_icp_calib_count(uint32_t window_us, uint32_t *elapsed_us, uint32_t *ref_edges)
 {
+    *ref_edges = 0;
     fake_ev_t *e = add(FEV_CAL_COUNT);
     e->ns = window_us * 1000u;
     fake_advance_us(window_us);
     *elapsed_us = window_us;
     if (!f.calib || !f.curve)
         return 0;
-    return (uint32_t)((uint64_t)f.curve(f.trim) * window_us / 7000000u);
+    *ref_edges = (uint32_t)((uint64_t)f.curve(f.trim) * window_us / 7000000u);
+    return *ref_edges;
 }
 
 void hal_icp_calib_end(void)
