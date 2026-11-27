@@ -36,7 +36,7 @@ All durations are **minimums**: an implementation may make a level longer (an in
 |---|---|
 | `bool hal_icp_calib_begin(void)` | `ICP_CLK` becomes the IC's output into the counter/SPI slave clock, `ICP_PA4` the "+1" output (low), the counter is reset; false if the peripheral cannot start |
 | `bool hal_icp_calib_pulses(uint16_t n, uint32_t timeout_us)` | emit exactly `n` one-bits on `ICP_PA4`, one per IC loop turn (synchronous with `ICP_CLK` edges); returns false if the IC did not clock them out within `timeout_us` (no loop running) |
-| `uint32_t hal_icp_calib_count(uint32_t window_us, uint32_t *elapsed_us)` | count `ICP_CLK` rising edges for ≥ `window_us` (≤ 100 ms per call), return the count and the measured window |
+| `uint32_t hal_icp_calib_count(uint32_t window_us, uint32_t *elapsed_us, uint32_t *ref_edges)` | count `ICP_CLK` rising edges for ≥ `window_us` (≤ 100 ms per call), return the count and the measured window; `*ref_edges` — the same edges counted by an independent path (G474: the bits SPI3 shifted from PB3), only for the diagnostic trace; 0 if the platform has none |
 | `void hal_icp_calib_end(void)` | stop the counter and the pulse output; lines back to idle |
 
 ## Guarantees and rules

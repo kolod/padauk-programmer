@@ -35,7 +35,7 @@ Results of the hardware steps of [quickstart.md](quickstart.md) (constitution VI
 | Step | Result | Date |
 |---|---|---|
 | `pdkprog --trace -n PFS154 write firmware.bin` (beeper, one IHRC stub, 1 MHz) | **OK** — erase, blank check, write, verify, then CALIBRATE with VDD only (4000 mV set, VPP 0): IHRC value 0x80, measured 998 022 Hz for the 1 MHz target (−0.2 %), search ≈ 3.2 s; the result written into the stub, final verify passed; content CRC raw 0x39EA92C5 ≠ normalized 0x49EB88A3 (the finished stub is ignored by the normalized CRC, as specified). Total 4.6 s — SC-001 | 2026-11-26 |
-| SC-003: the IC clock against a frequency counter (1 MHz ± 1 %) | pending | |
+| SC-003: the IC clock against a frequency counter (1 MHz ± 1 %) | **not stable** — `clockout_8mhz_pfs154.ihx`, `start -r 4.0`, PA4 on a Fluke 124 (cursors): one run gave **806 kHz** (SYSCLK ≈ 6.45 MHz, −19 %); a later run with the same firmware on both sides gave value 0x81, programmer 8 004 500 Hz, Fluke **1.000 MHz**. To be repeated with the calibration check (see "Findings") | 2026-11-27 |
 | ILRC and BandGap stubs | pending | |
 | SC-002: `copy --ihrc measure`, three copies within 1 %, master bit-identical | pending (needs more PFS154) | |
 
@@ -47,6 +47,16 @@ programming pulses on PA4) and the GetID pass before every session are checked a
 (`test_engine_otp.c`). No OTP IC was available: **not confirmed on hardware.**
 
 ## Findings during bring-up
+
+- **IHRC calibration sometimes lands ≈ 19 % low (2026-11-27).** The code of `clockout` is exactly 8 clocks per period
+  (checked in the listing), so the error is in the calibration: the programmer believed it reached 8 MHz, the IC ran at
+  ≈ 6.45 MHz. The programmer cannot read the trim register, only counts the "+1" pulses it sent, so either the IC got
+  pulses the programmer did not count, or TIM2 counted spurious PA3 edges (the target board has a buzzer on PA3).
+  Changes: every IHRC/ILRC result is now checked on a fresh run of the loop stepped straight to the value found (± 1 %,
+  else the search is repeated, at most 3 times, then `CALIB_FAILED`); the pulses are placed with interrupts off; the
+  TIM2 input filter is 94 ns instead of 24 ns; `--trace` shows every reading (`calib k=…`) with an independent count of
+  the same edges from SPI3, and each check (`calib check #…`). Confirm on the bench: several `write --trace` runs, each
+  measured on PA4.
 
 - **Target board with its own VDD source.** The first attempts failed with `VPP_FAULT` at the ID stage (VPP 1.45 V measured),
   then the +15 V overvoltage protection latched (supply capabilities gone until reset). Removing the 16 µF capacitor did not

@@ -49,6 +49,11 @@ bool fake_icp_driven(icp_line_t line, bool *level);
 void fake_icp_calib_curve(uint32_t (*sysclk)(uint8_t k));
 void fake_icp_calib_bandgap(int bg_flip);
 uint8_t fake_icp_calib_trim(void);
+/* A fault on the pulse line: every `every`-th hal_icp_calib_pulses call (counted from the reset) the IC takes `steps`
+ * steps more than sent; `once` limits it to the first such call. every = 0: off. */
+void fake_icp_calib_extra_pulse(unsigned every, uint8_t steps, bool once);
+/* Calibration sessions started (hal_icp_calib_begin calls) since the reset. */
+unsigned fake_icp_calib_runs(void);
 void fake_icp_vdd_limit(uint16_t mV);
 
 #endif

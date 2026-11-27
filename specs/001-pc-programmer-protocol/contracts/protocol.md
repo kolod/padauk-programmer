@@ -211,6 +211,8 @@ supplies and the IC as `EVT_TRACE` events. It is off after `HELLO` and on every 
 | 5 `ACK` | the FLASH command answer | family | expected ID | bits | raw answer |
 | 6 `GETID` | the OTP ID answer | family | expected ID | bits | raw answer (last 32 bits) |
 | 7 `PROBE` | one probe attempt | family | — | bits | raw answer |
+| 8 `CALIB` | one calibration reading (the start, then every step of the search) | trim value | counted edges | the same edges by an independent counter (0 — none) | SYSCLK, Hz |
+| 9 `CALIB_CHECK` | the value found, on a fresh run of the loop | attempt (1…3) | trim value | deviation from the search's reading, 0.01 % (≤ 100 — accepted) | SYSCLK, Hz |
 
 Unknown `kind` values may appear in later minor versions: a client shows them raw.
 
